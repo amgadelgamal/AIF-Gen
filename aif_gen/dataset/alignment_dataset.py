@@ -51,14 +51,17 @@ class AlignmentDataset:
 
     def to_json(self, file_path: str) -> None:
         r"""Save the AlignmentDataset to a json file."""
+        dataset_dict = self.to_dict()
+        with open(file_path, 'w') as f:
+            json.dump(dataset_dict, f)
+
+    def to_dict(self) -> Dict[str, Any]:
         dataset_dict: Dict[str, Any] = {}
         dataset_dict['task'] = self.task.to_dict()
         dataset_dict['samples'] = []
         for sample in self.samples:
             dataset_dict['samples'].append(asdict(sample))
-
-        with open(file_path, 'w') as f:
-            json.dump(dataset_dict, f)
+        return dataset_dict
 
     @classmethod
     def from_json(cls, file_path: str) -> 'AlignmentDataset':
@@ -66,6 +69,10 @@ class AlignmentDataset:
         with open(file_path, 'r') as f:
             dataset_dict = json.load(f)
 
+        return cls.from_dict(dataset_dict)
+
+    @classmethod
+    def from_dict(cls, dataset_dict: Dict[str, Any]) -> 'AlignmentDataset':
         task = AlignmentTask.from_dict(dataset_dict['task'])
         samples = []
         for sample in dataset_dict['samples']:

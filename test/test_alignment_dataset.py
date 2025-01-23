@@ -119,6 +119,35 @@ def test_slice():
     assert dataset[:] == samples[:]
 
 
+def test_dict_conversion():
+    domain = Domain('Mock Domain')
+    objective = 'Mock Objective'
+    preference = 'Mock Preference'
+    task = AlignmentTask(domain, objective, preference)
+
+    samples = [
+        AlignmentDatasetSample(
+            'Mock prompt A', 'Winning Response A', 'Losing Response A'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt B', 'Winning Response B', 'Losing Response B'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt C', 'Winning Response C', 'Losing Response C'
+        ),
+    ]
+
+    dataset = AlignmentDataset(task, samples)
+
+    dataset_dict = dataset.to_dict()
+    recovered_dataset = AlignmentDataset.from_dict(dataset_dict)
+
+    assert str(recovered_dataset.task.domain) == str(domain)
+    assert recovered_dataset.task.objective == objective
+    assert recovered_dataset.task.preference == preference
+    assert recovered_dataset.samples == dataset.samples
+
+
 def test_json_conversion():
     domain = Domain('Mock Domain')
     objective = 'Mock Objective'
