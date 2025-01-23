@@ -29,8 +29,12 @@ class AlignmentDataset:
     def samples(self) -> List[AlignmentDatasetSample]:
         return self._samples
 
-    def __len__(self) -> int:
+    @property
+    def num_samples(self) -> int:
         return len(self.samples)
+
+    def __len__(self) -> int:
+        return self.num_samples
 
     def __getitem__(
         self, key: Union[slice, int]

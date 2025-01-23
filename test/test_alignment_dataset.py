@@ -27,6 +27,7 @@ def test_init_():
     dataset = AlignmentDataset(task, samples)
     assert dataset.task == task
     assert dataset.samples == samples
+    assert dataset.num_samples == len(samples)
     assert len(dataset) == len(samples)
 
 
@@ -53,6 +54,7 @@ def test_append():
     for i in range(len(samples)):
         assert dataset.task == task
         assert dataset.samples == samples[:i]
+        assert dataset.num_samples == i
         assert len(dataset) == i
         dataset.append(samples[i])
 
@@ -91,6 +93,7 @@ def test_extend():
 
     assert dataset.task == task
     assert dataset.samples == samples
+    assert dataset.num_samples == len(samples)
     assert len(dataset) == len(samples)
 
 
