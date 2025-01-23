@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class DomainComponent:
@@ -25,6 +25,18 @@ class DomainComponent:
         self._name = name
         self._seed_words = seed_words
         self._description = description
+
+    @classmethod
+    def from_dict(cls, component_dict: Dict[str, Any]) -> 'DomainComponent':
+        expected_keys = {'name', 'seed_words'}
+        missing_keys = expected_keys - set(component_dict)
+        if len(missing_keys):
+            raise ValueError(f'Missing required keys: {missing_keys}')
+
+        name = component_dict['name']
+        seed_words = component_dict['seed_words']
+        description = component_dict.get('description')
+        return cls(name, seed_words, description)
 
     def __str__(self) -> str:
         s = f'{self._name} '
