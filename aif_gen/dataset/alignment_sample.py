@@ -1,22 +1,16 @@
-from abc import ABC, abstractmethod
-from typing import Tuple
+from dataclasses import dataclass
 
 
-class AlignmentDatasetSampleBase(ABC):
-    r"""Base class for Alignment Dataset Sample."""
+@dataclass
+class AlignmentDatasetSample:
+    r"""Container for a single Alignment Dataset Sample.
 
-    @abstractmethod
-    def prompt(self) -> str:
-        r"""Get the prompt associated with this sample."""
+    Args:
+        prompt (str): The prompt associated with the sample.
+        winning_response (str): The winning response associated with the sample.
+        losing_response (str): The losing response associated with the sample.
+    """
 
-    @abstractmethod
-    def response(self) -> Tuple[str, str]:
-        r"""Get the responses associated with this sample."""
-
-    @abstractmethod
-    def winning_response(self) -> str:
-        r"""Get the winning response associated with this sample."""
-
-    @abstractmethod
-    def losing_response(self) -> str:
-        r"""Get the losing response associated with this sample."""
+    prompt: str
+    winning_response: str
+    losing_response: str

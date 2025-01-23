@@ -1,2 +1,2 @@
-from .sample import AlignmentDatasetSampleBase
-from .alignment_dataset import AlignmentDataset
+from aif_gen.dataset.alignment_sample import AlignmentDatasetSample
+from aif_gen.dataset.alignment_dataset import AlignmentDataset
