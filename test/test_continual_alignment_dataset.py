@@ -52,10 +52,14 @@ def test_slice():
     datasets = [_generate_dataset(i) for i in range(3)]
     ca_dataset = ContinualAlignmentDataset(datasets)
 
-    assert ca_dataset[0] == datasets[0]
-    assert ca_dataset[-1] == datasets[-1]
-    assert ca_dataset[1:2] == datasets[1:2]
-    assert ca_dataset[:] == datasets[:]
+    all_samples = []
+    for dataset in ca_dataset.datasets:
+        all_samples.extend(dataset.samples)
+    assert ca_dataset[0] == all_samples[0]
+    assert ca_dataset[-1] == all_samples[-1]
+    assert ca_dataset[1:2] == all_samples[1:2]
+    assert ca_dataset[2:7] == all_samples[2:7]
+    assert ca_dataset[:] == all_samples[:]
 
 
 @pytest.mark.skip(reason='Not implemented, waiting for Domain PR')

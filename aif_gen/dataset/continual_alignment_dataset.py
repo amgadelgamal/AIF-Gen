@@ -1,6 +1,8 @@
 import json
 from typing import Any, Dict, List, Union
 
+from aif_gen.dataset.alignment_sample import AlignmentDatasetSample
+
 from .alignment_dataset import AlignmentDataset
 
 
@@ -31,8 +33,11 @@ class ContinualAlignmentDataset:
 
     def __getitem__(
         self, key: Union[slice, int]
-    ) -> Union[AlignmentDataset, List[AlignmentDataset]]:
-        return self.datasets[key]
+    ) -> Union[AlignmentDatasetSample, List[AlignmentDatasetSample]]:
+        all_samples = []  # This should probably be cached
+        for dataset in self.datasets:
+            all_samples.extend(dataset.samples)
+        return all_samples[key]
 
     def append(self, dataset: AlignmentDataset) -> None:
         if isinstance(dataset, AlignmentDataset):
