@@ -33,3 +33,15 @@ def test_init_from_dict_missing_keys():
 
     with pytest.raises(ValueError):
         _ = AlignmentTask.from_dict(task_dict)
+
+
+@pytest.mark.skip(reason='Not implemented, waiting for Domain PR')
+def test_to_dict():
+    task_dict = {
+        'domain': 'Mock Domain',
+        'objective': 'Mock Objective',
+        'preference': 'Mock Preference',
+    }
+
+    task = AlignmentTask.from_dict(task_dict)
+    assert task.to_dict() == task_dict

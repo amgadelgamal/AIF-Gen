@@ -29,6 +29,13 @@ class AlignmentTask:
         preference = task_dict['preference']
         return cls(domain, objective, preference)
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'domain': self.domain.to_dict(),
+            'objective': self.objective,
+            'preference': self.preference,
+        }
+
     def __str__(self) -> str:
         return f'AlignmentTask({self.domain}, Objective: {self.objective}, Preference: {self.preference})'
 
