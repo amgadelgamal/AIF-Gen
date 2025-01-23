@@ -1,2 +1,3 @@
 from aif_gen.dataset.alignment_sample import AlignmentDatasetSample
 from aif_gen.dataset.alignment_dataset import AlignmentDataset
+from aif_gen.dataset.continual_alignment_dataset import ContinualAlignmentDataset
