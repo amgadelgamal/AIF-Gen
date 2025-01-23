@@ -23,16 +23,24 @@ class AlignmentDataset:
         return self._task
 
     @property
-    def __len__(self) -> int:
-        return len(self._samples)
+    def samples(self) -> List[AlignmentDatasetSample]:
+        return self._samples
 
-    def __getitem__(self, key: Union[slice, int]) -> AlignmentDatasetSample:
-        raise NotImplementedError()
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(
+        self, key: Union[slice, int]
+    ) -> Union[AlignmentDatasetSample, List[AlignmentDatasetSample]]:
+        return self.samples[key]
 
     def append(self, sample: AlignmentDatasetSample) -> None:
         if isinstance(sample, AlignmentDatasetSample):
-            self._samples.append(sample)
-        raise TypeError(f'Sample: {sample} must be of type AlignmentDatasetSample')
+            self.samples.append(sample)
+        else:
+            raise TypeError(
+                f'Sample: {sample} must be of type AlignmentDatasetSample but got {sample.__class__.__name__}'
+            )
 
     def extend(self, samples: List[AlignmentDatasetSample]) -> None:
         for sample in samples:
