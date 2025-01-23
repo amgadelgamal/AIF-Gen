@@ -59,6 +59,17 @@ def test_init_weight_component_shape_mismatch():
         _ = Domain(components, weights)
 
 
+def test_init_negative_weight():
+    component_a = DomainComponent('Component A', ['a_foo', 'a_bar', 'a_baz'])
+    component_b = DomainComponent('Component B', ['b_foo', 'b_bar'])
+
+    components = [component_a, component_b]
+    weights = [0.25, -0.75]
+
+    with pytest.raises(ValueError):
+        _ = Domain(components, weights)
+
+
 def test_init_from_dict():
     component_dict = {
         'Component A': {

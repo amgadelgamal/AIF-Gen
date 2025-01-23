@@ -26,6 +26,11 @@ class Domain:
             raise ValueError(
                 f'Number of components and weights must match, but got {len(components)} components and {len(weights)} weights'
             )
+        for i, weight in enumerate(weights):
+            if weight < 0:
+                raise ValueError(
+                    f'Got a negative weight for component: {components[i]}'
+                )
 
         self._components = components
         self._weights = weights
