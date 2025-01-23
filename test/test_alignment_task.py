@@ -1,13 +1,17 @@
-from aif_gen.task import AlignmentTask, Domain, Objective, Preference
+from aif_gen.task import AlignmentTask, Domain
 
 
 def test_init():
-    domain = Domain()
-    objective = Objective()
-    preference = Preference()
+    domain = Domain('Mock Domain')
+    objective = 'Mock Objective'
+    preference = 'Mock Preference'
 
     task = AlignmentTask(domain, objective, preference)
     assert (
         str(task)
-        == 'Domain: Mock Domain, Objective: Mock Objective, Preference: Mock Preference'
+        == 'AlignmentTask(Domain: Mock Domain, Objective: Mock Objective, Preference: Mock Preference)'
     )
+
+
+def test_init_from_dict():
+    pass
