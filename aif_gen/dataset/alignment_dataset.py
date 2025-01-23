@@ -1,4 +1,7 @@
-from typing import List, Union
+import csv
+import json
+from dataclasses import asdict
+from typing import Any, Dict, List, Union
 
 from aif_gen.task import AlignmentTask
 
@@ -48,18 +51,59 @@ class AlignmentDataset:
 
     def to_csv(self, file_path: str) -> None:
         r"""Save the AlignmentDataset to a csv file."""
-        raise NotImplementedError()
+        with open(file_path, 'w', newline='') as f:
+            fieldnames = ['task', 'prompt', 'winning_response', 'losing_response']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for sample in self.samples:
+                row_dict = asdict(sample)
+                row_dict['task'] = str(self.task)
+                writer.writerow(row_dict)
 
     def to_json(self, file_path: str) -> None:
         r"""Save the AlignmentDataset to a json file."""
-        raise NotImplementedError()
+        dataset_dict: Dict[str, Any] = {}
+        dataset_dict['task'] = str(self.task)
+        dataset_dict['samples'] = []
+        for sample in self.samples:
+            dataset_dict['samples'].append(asdict(sample))
+
+        with open(file_path, 'w') as f:
+            json.dump(dataset_dict, f)
 
     @classmethod
     def from_csv(cls, file_path: str) -> 'AlignmentDataset':
         r"""Load the AlignmentDataset from a csv file."""
-        raise NotImplementedError()
+        task = None
+        samples = []
+        with open(file_path, 'r', newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                row_task = row.pop('task')
+                if task is None:
+                    task = row_task
+                if task != row_task:
+                    raise ValueError(
+                        f'Found multiple different AlignmentTasks within a single AlignmentDataset file: {task} != {row_task}'
+                    )
+
+                sample = AlignmentDatasetSample(**row)
+                samples.append(sample)
+
+        # TODO: Need a way to construct AlignmentTask from str
+        return cls(task, samples)  # type: ignore
 
     @classmethod
     def from_json(cls, file_path: str) -> 'AlignmentDataset':
         r"""Load the AlignmentDataset to a json file."""
-        raise NotImplementedError()
+        with open(file_path, 'r') as f:
+            dataset_dict = json.load(f)
+
+        task = dataset_dict['task']
+        samples = []
+        for sample in dataset_dict['samples']:
+            sample = AlignmentDatasetSample(**sample)
+            samples.append(sample)
+
+        # TODO: Need a way to construct AlignmentTask from str
+        return cls(task, samples)
