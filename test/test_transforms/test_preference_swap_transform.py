@@ -2,6 +2,7 @@ import pytest
 
 from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
 from aif_gen.dataset.transforms import PreferenceSwapTransform
+from aif_gen.dataset.transforms import functional as F
 from aif_gen.util.seed import seed_everything
 
 
@@ -18,7 +19,7 @@ def test_apply_preference_swap_bad_swap_probability():
     with pytest.raises(ValueError):
         _ = PreferenceSwapTransform(swap_probability=2)
 
-    # Check failure when using the setter as well
+    # Check failure when using the setter method
     transform = PreferenceSwapTransform(swap_probability=0.3)
 
     with pytest.raises(ValueError):
@@ -26,6 +27,15 @@ def test_apply_preference_swap_bad_swap_probability():
 
     with pytest.raises(ValueError):
         transform.swap_probability = 2
+
+    # Check failure when using the functional API
+    mock_dataset = None
+
+    with pytest.raises(ValueError):
+        F.preference_swap_transform(mock_dataset, swap_probability=-1)
+
+    with pytest.raises(ValueError):
+        F.preference_swap_transform(mock_dataset, swap_probability=2)
 
 
 def test_apply_preference_swap_to_static_dataset():
@@ -186,6 +196,10 @@ def test_apply_preference_swap_to_static_dataset_full_swap():
 
     assert transform(dataset).to_dict() == expected_dataset_dict
     assert transform.apply(dataset).to_dict() == expected_dataset_dict
+    assert (
+        F.preference_swap_transform(dataset, swap_probability=1).to_dict()
+        == expected_dataset_dict
+    )
 
 
 def test_apply_preference_swap_to_continual_dataset_full_swap():
@@ -345,6 +359,10 @@ def test_apply_preference_swap_to_continual_dataset_full_swap():
 
     assert transform(dataset).to_dict() == expected_dataset_dict
     assert transform.apply(dataset).to_dict() == expected_dataset_dict
+    assert (
+        F.preference_swap_transform(dataset, swap_probability=1).to_dict()
+        == expected_dataset_dict
+    )
 
 
 def test_apply_preference_swap_to_static_dataset_no_swap():
@@ -392,6 +410,10 @@ def test_apply_preference_swap_to_static_dataset_no_swap():
 
     assert transform(dataset).to_dict() == expected_dataset_dict
     assert transform.apply(dataset).to_dict() == expected_dataset_dict
+    assert (
+        F.preference_swap_transform(dataset, swap_probability=0).to_dict()
+        == expected_dataset_dict
+    )
 
 
 def test_apply_preference_swap_to_continual_dataset_no_swap():
@@ -478,3 +500,7 @@ def test_apply_preference_swap_to_continual_dataset_no_swap():
 
     assert transform(dataset).to_dict() == expected_dataset_dict
     assert transform.apply(dataset).to_dict() == expected_dataset_dict
+    assert (
+        F.preference_swap_transform(dataset, swap_probability=0).to_dict()
+        == expected_dataset_dict
+    )
