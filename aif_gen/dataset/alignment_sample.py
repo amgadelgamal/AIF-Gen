@@ -5,12 +5,15 @@ from dataclasses import dataclass
 class AlignmentDatasetSample:
     r"""Container for a single Alignment Dataset Sample.
 
+    This representation is faithful to the "TRL Preference Format with explicit prompt".
+    See: https://huggingface.co/docs/trl/en/dataset_formats.
+
     Args:
         prompt (str): The prompt associated with the sample.
-        winning_response (str): The winning response associated with the sample.
-        losing_response (str): The losing response associated with the sample.
+        chosen (str): The winning response associated with the sample.
+        rejected (str): The losing response associated with the sample.
     """
 
     prompt: str
-    winning_response: str
-    losing_response: str
+    chosen: str
+    rejected: str
