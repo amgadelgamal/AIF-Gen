@@ -132,3 +132,65 @@ def test_init_from_dict_no_weights():
         assert component_dict[component.name]['seed_words'] == component.seed_words
         assert component_dict[component.name]['description'] == component.description
     assert domain.weights == [1 / len(component_dict)] * len(component_dict)
+
+
+def test_to_dict_no_weights():
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+        },
+        'Component C': {
+            'seed_words': ['c_foo', 'c_bar', 'c_baz'],
+            'description': 'C Mock Domain Component',
+        },
+    }
+
+    domain = Domain.from_dict(component_dict)
+
+    # Note: We automatically add uniform weights to the domain if they were not specified
+    expected_dict = component_dict
+    expected_dict['Component A']['weight'] = 1 / 3
+    expected_dict['Component B']['weight'] = 1 / 3
+    expected_dict['Component C']['weight'] = 1 / 3
+    assert expected_dict == domain.to_dict()
+
+
+def test_to_dict_with_weights():
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+            'weight': 1.5,
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+            'weight': 0.7,
+        },
+        'Component C': {
+            'seed_words': ['c_foo', 'c_bar', 'c_baz'],
+            'description': 'C Mock Domain Component',
+            'weight': 0.3,
+        },
+    }
+
+    components, weights = [], []
+    for component_name, component_args in component_dict.items():
+        components.append(
+            DomainComponent(
+                component_name,
+                component_args['seed_words'],
+                component_args['description'],
+            )
+        )
+        weights.append(component_args['weight'])
+
+    domain = Domain.from_dict(component_dict)
+
+    expected_dict = component_dict
+    assert expected_dict == domain.to_dict()

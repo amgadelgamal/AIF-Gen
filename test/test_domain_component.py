@@ -67,3 +67,14 @@ def test_init_from_dict_missing_keys():
 
     with pytest.raises(ValueError):
         _ = DomainComponent.from_dict(component_dict)
+
+
+def test_init_to_dict():
+    component_dict = {
+        'name': 'TestComponent',
+        'seed_words': ['foo', 'bar', 'baz'],
+        'description': 'Mock Domain Component',
+    }
+
+    component = DomainComponent.from_dict(component_dict)
+    assert component_dict == component.to_dict()
