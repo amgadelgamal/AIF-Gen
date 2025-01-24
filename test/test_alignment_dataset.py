@@ -7,7 +7,17 @@ from aif_gen.task import AlignmentTask, Domain
 
 
 def test_init_():
-    domain = Domain('Mock Domain')
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+        },
+    }
+    domain = Domain.from_dict(component_dict)
     objective = 'Mock Objective'
     preference = 'Mock Preference'
     task = AlignmentTask(domain, objective, preference)
@@ -32,7 +42,17 @@ def test_init_():
 
 
 def test_append():
-    domain = Domain('Mock Domain')
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+        },
+    }
+    domain = Domain.from_dict(component_dict)
     objective = 'Mock Objective'
     preference = 'Mock Preference'
     task = AlignmentTask(domain, objective, preference)
@@ -60,7 +80,17 @@ def test_append():
 
 
 def test_append_bad_type():
-    domain = Domain('Mock Domain')
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+        },
+    }
+    domain = Domain.from_dict(component_dict)
     objective = 'Mock Objective'
     preference = 'Mock Preference'
     task = AlignmentTask(domain, objective, preference)
@@ -71,7 +101,17 @@ def test_append_bad_type():
 
 
 def test_extend():
-    domain = Domain('Mock Domain')
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+        },
+    }
+    domain = Domain.from_dict(component_dict)
     objective = 'Mock Objective'
     preference = 'Mock Preference'
     task = AlignmentTask(domain, objective, preference)
@@ -98,7 +138,17 @@ def test_extend():
 
 
 def test_slice():
-    domain = Domain('Mock Domain')
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+        },
+    }
+    domain = Domain.from_dict(component_dict)
     objective = 'Mock Objective'
     preference = 'Mock Preference'
     task = AlignmentTask(domain, objective, preference)
@@ -123,7 +173,17 @@ def test_slice():
 
 
 def test_dict_conversion():
-    domain = Domain('Mock Domain')
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+        },
+    }
+    domain = Domain.from_dict(component_dict)
     objective = 'Mock Objective'
     preference = 'Mock Preference'
     task = AlignmentTask(domain, objective, preference)
@@ -152,7 +212,17 @@ def test_dict_conversion():
 
 
 def test_json_conversion():
-    domain = Domain('Mock Domain')
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+        },
+    }
+    domain = Domain.from_dict(component_dict)
     objective = 'Mock Objective'
     preference = 'Mock Preference'
     task = AlignmentTask(domain, objective, preference)
