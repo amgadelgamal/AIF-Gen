@@ -24,7 +24,7 @@ class DatasetTransform(ABC):
         """
 
     def __call__(self, dataset: Dataset, *args: Any, **kwargs: Any) -> Dataset:
-        return self.apply(dataset, args, kwargs)
+        return self.apply(dataset, *args, **kwargs)
 
     def __str__(self) -> str:
         r"""Returns summary properties of the dynamic graph."""
