@@ -63,10 +63,10 @@ def _entropy_validation(dataset: AlignmentDataset) -> Dict[str, float]:
 
 def _compute_entropy(word_freq: Counter) -> float:
     # Normalize frequency counts to probabilities
-    norm_counts = []
+    norm_counts_ = []
     total = sum(word_freq.values(), 0.0)
     for word in word_freq:
-        norm_counts.append(word_freq[word] / total)
+        norm_counts_.append(word_freq[word] / total)
 
-    norm_counts = np.array(norm_counts)
+    norm_counts = np.array(norm_counts_)
     return float(-(norm_counts * np.log(norm_counts)).sum())
