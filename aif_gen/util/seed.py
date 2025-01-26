@@ -5,7 +5,7 @@ import torch
 
 
 def seed_everything(seed: int) -> None:
-    r"""Sets the seed for generating random number inf Pytorch, Numpy and Python.
+    r"""Sets the seed for generating random number in Pytorch, Numpy and Python.
 
     Args:
         seed(int): The desired seed.
