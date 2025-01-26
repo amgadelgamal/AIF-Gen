@@ -1,4 +1,4 @@
-AIF-Gen
+aif_gen
 =======
 
 .. toctree::
