@@ -61,7 +61,7 @@ jobs:
           git config --local user.name "GitHub Action"
           git add .
           git commit -m "Upload new documentation"
-          git push origin HEAD:${{ github.ref }}
+          git push
 
       - name: Minimize uv cache
         run: uv cache prune --ci
