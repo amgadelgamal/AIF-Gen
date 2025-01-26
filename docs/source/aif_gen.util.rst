@@ -12,14 +12,6 @@ aif\_gen.util.seed module
    :undoc-members:
    :show-inheritance:
 
-aif\_gen.util.test module
--------------------------
-
-.. automodule:: aif_gen.util.test
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Module contents
 ---------------
 
