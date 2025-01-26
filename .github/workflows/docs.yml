@@ -46,7 +46,7 @@ jobs:
         run: cd docs && uv run sphinx-apidoc -o ./source ../aif_gen/ -f
 
       - name: Run Documentation build
-        run: cd docs && uv run make html
+        run: uv run make html
 
       - name: Check for changes
         id: changes
@@ -61,7 +61,7 @@ jobs:
           git config --local user.name "GitHub Action"
           git add .
           git commit -m "Upload new documentation"
-          git push
+          git push origin HEAD:${{ github.ref }}
 
       - name: Minimize uv cache
         run: uv cache prune --ci
