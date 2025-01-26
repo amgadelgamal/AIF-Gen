@@ -19,8 +19,4 @@ def preference_swap_transform(
         ValueError: If the swap probability is not in the range [0, 1].
     """
     transform = PreferenceSwapTransform(swap_probability)
-    if in_place:
-        transform(dataset)
-    else:
-        dataset = transform(dataset)
-    return dataset
+    return transform(dataset, in_place=in_place)

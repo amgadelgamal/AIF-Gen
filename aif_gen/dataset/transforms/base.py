@@ -26,10 +26,8 @@ class DatasetTransform(ABC):
             Union[ContinualAlignmentDataset, AlignmentDataset]: The transformed dataset.
         """
 
-    def __call__(
-        self, dataset: Dataset, in_place: bool = False, *args: Any, **kwargs: Any
-    ) -> Dataset:
-        return self.apply(dataset, in_place, *args, **kwargs)
+    def __call__(self, dataset: Dataset, *args: Any, **kwargs: Any) -> Dataset:
+        return self.apply(dataset, *args, **kwargs)
 
     def __str__(self) -> str:
         r"""Returns the type of Dataset transform."""

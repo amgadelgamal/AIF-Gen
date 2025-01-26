@@ -52,18 +52,42 @@ class PreferenceSwapTransform(DatasetTransform):
         if self._is_dataset_continual(dataset):
             # This assert is here to make mypy happy
             assert isinstance(dataset, ContinualAlignmentDataset)
-            return ContinualAlignmentDataset(
-                [self._apply(data) for data in dataset.datasets]
-            )
+            if in_place:
+                for i in range(dataset.num_datasets):
+                    dataset.datasets[i] = self._apply(dataset.datasets[i], in_place)
+                return dataset
+            else:
+                return ContinualAlignmentDataset(
+                    [self._apply(data, in_place) for data in dataset.datasets]
+                )
         else:
             # This assert is here to make mypy happy
             assert isinstance(dataset, AlignmentDataset)
-            return self._apply(dataset)
+            return self._apply(dataset, in_place)
 
-    def _apply(self, dataset: AlignmentDataset) -> AlignmentDataset:
+    def _apply(self, dataset: AlignmentDataset, in_place: bool) -> AlignmentDataset:
         swap_outcomes = np.random.binomial(
             n=1, p=self.swap_probability, size=len(dataset)
         )
+        if in_place:
+            return self._apply_inplace(dataset, swap_outcomes)
+        else:
+            return self._apply_copy(dataset, swap_outcomes)
+
+    def _apply_inplace(
+        self, dataset: AlignmentDataset, swap_outcomes: np.ndarray
+    ) -> AlignmentDataset:
+        for i in range(len(dataset)):
+            if swap_outcomes[i]:
+                chosen = dataset.samples[i].chosen
+                rejected = dataset.samples[i].rejected
+                dataset.samples[i].chosen = rejected
+                dataset.samples[i].rejected = chosen
+        return dataset
+
+    def _apply_copy(
+        self, dataset: AlignmentDataset, swap_outcomes: np.ndarray
+    ) -> AlignmentDataset:
         transformed_samples = []
         for i, sample in enumerate(dataset.samples):
             if swap_outcomes[i]:
