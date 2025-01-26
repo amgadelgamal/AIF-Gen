@@ -41,10 +41,7 @@ jobs:
         run: uv sync --all-extras --dev --frozen
 
       - name: "Run documentation build"
-        uses: ammaraskar/sphinx-action@master
-        with:
-          docs-folder: "docs/"
-          build-command: "uv run make html"
+        run: cd docs && uv run make html
 
       - name: Minimize uv cache
         run: uv cache prune --ci
