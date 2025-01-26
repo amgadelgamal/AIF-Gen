@@ -12,50 +12,36 @@ def run_seed_before_tests():
     yield
 
 
-def test_apply_preference_swap_bad_swap_probability():
-    with pytest.raises(ValueError):
-        _ = PreferenceSwapTransform(swap_probability=-1)
+@pytest.fixture(params=[True, False])
+def is_in_place(request):
+    return request.param
 
+
+@pytest.fixture(params=['call, apply, functional'])
+def application_type(request):
+    return request.param
+
+
+@pytest.mark.parametrize('bad_swap_probability', [-1, 2])
+def test_apply_preference_swap_bad_swap_probability(bad_swap_probability):
     with pytest.raises(ValueError):
-        _ = PreferenceSwapTransform(swap_probability=2)
+        _ = PreferenceSwapTransform(swap_probability=bad_swap_probability)
 
     # Check failure when using the setter method
     transform = PreferenceSwapTransform(swap_probability=0.3)
-
     with pytest.raises(ValueError):
-        transform.swap_probability = -1
-
-    with pytest.raises(ValueError):
-        transform.swap_probability = 2
+        transform.swap_probability = bad_swap_probability
 
     # Check failure when using the functional API
     mock_dataset = None
-
     with pytest.raises(ValueError):
-        F.preference_swap_transform(mock_dataset, swap_probability=-1)
-
-    with pytest.raises(ValueError):
-        F.preference_swap_transform(mock_dataset, swap_probability=2)
+        F.preference_swap_transform(mock_dataset, swap_probability=bad_swap_probability)
 
 
 def test_apply_preference_swap_to_static_dataset():
+    # This test is outcome is rng dependent which makes it flaky
     dataset_dict = {
-        'task': {
-            'domain': {
-                'Component A': {
-                    'name': 'Component A',
-                    'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                    'weight': 0.5,
-                },
-                'Component B': {
-                    'name': 'Component B',
-                    'seed_words': ['b_foo', 'b_bar'],
-                    'weight': 0.5,
-                },
-            },
-            'objective': 'Mock Objective 1',
-            'preference': 'Mock Preference 1',
-        },
+        'task': _mock_task(),
         'samples': [
             {
                 'prompt': 'Mock prompt A 1',
@@ -76,22 +62,7 @@ def test_apply_preference_swap_to_static_dataset():
     }
 
     expected_dataset_dict = {
-        'task': {
-            'domain': {
-                'Component A': {
-                    'name': 'Component A',
-                    'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                    'weight': 0.5,
-                },
-                'Component B': {
-                    'name': 'Component B',
-                    'seed_words': ['b_foo', 'b_bar'],
-                    'weight': 0.5,
-                },
-            },
-            'objective': 'Mock Objective 1',
-            'preference': 'Mock Preference 1',
-        },
+        'task': _mock_task(),
         'samples': [
             {
                 'prompt': 'Mock prompt A 1',
@@ -117,24 +88,9 @@ def test_apply_preference_swap_to_static_dataset():
     assert transform(dataset).to_dict() == expected_dataset_dict
 
 
-def test_apply_preference_swap_to_static_dataset_full_swap():
+def test_apply_preference_swap_to_static_dataset_full_swap(application_type):
     dataset_dict = {
-        'task': {
-            'domain': {
-                'Component A': {
-                    'name': 'Component A',
-                    'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                    'weight': 0.5,
-                },
-                'Component B': {
-                    'name': 'Component B',
-                    'seed_words': ['b_foo', 'b_bar'],
-                    'weight': 0.5,
-                },
-            },
-            'objective': 'Mock Objective 1',
-            'preference': 'Mock Preference 1',
-        },
+        'task': _mock_task(),
         'samples': [
             {
                 'prompt': 'Mock prompt A 1',
@@ -155,22 +111,7 @@ def test_apply_preference_swap_to_static_dataset_full_swap():
     }
 
     expected_dataset_dict = {
-        'task': {
-            'domain': {
-                'Component A': {
-                    'name': 'Component A',
-                    'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                    'weight': 0.5,
-                },
-                'Component B': {
-                    'name': 'Component B',
-                    'seed_words': ['b_foo', 'b_bar'],
-                    'weight': 0.5,
-                },
-            },
-            'objective': 'Mock Objective 1',
-            'preference': 'Mock Preference 1',
-        },
+        'task': _mock_task(),
         'samples': [
             {
                 'prompt': 'Mock prompt A 1',
@@ -194,34 +135,21 @@ def test_apply_preference_swap_to_static_dataset_full_swap():
     transform = PreferenceSwapTransform(0.5)
     transform.swap_probability = 1  # Setter overrides swap probability
 
-    assert transform(dataset).to_dict() == expected_dataset_dict
-    assert transform.apply(dataset).to_dict() == expected_dataset_dict
-    assert (
-        F.preference_swap_transform(dataset, swap_probability=1).to_dict()
-        == expected_dataset_dict
-    )
+    if application_type == 'call':
+        assert transform(dataset).to_dict() == expected_dataset_dict
+    elif application_type == 'apply':
+        assert transform.apply(dataset).to_dict() == expected_dataset_dict
+    elif application_type == 'functional':
+        assert (
+            F.preference_swap_transform(dataset, swap_probability=1)
+        ).to_dict() == expected_dataset_dict
 
 
-def test_apply_preference_swap_to_continual_dataset_full_swap():
+def test_apply_preference_swap_to_continual_dataset_full_swap(application_type):
     dataset_dict = {
         'datasets': [
             {
-                'task': {
-                    'domain': {
-                        'Component A': {
-                            'name': 'Component A',
-                            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                            'weight': 0.5,
-                        },
-                        'Component B': {
-                            'name': 'Component B',
-                            'seed_words': ['b_foo', 'b_bar'],
-                            'weight': 0.5,
-                        },
-                    },
-                    'objective': 'Mock Objective 1',
-                    'preference': 'Mock Preference 1',
-                },
+                'task': _mock_task(),
                 'samples': [
                     {
                         'prompt': 'Mock prompt A 1',
@@ -241,22 +169,7 @@ def test_apply_preference_swap_to_continual_dataset_full_swap():
                 ],
             },
             {
-                'task': {
-                    'domain': {
-                        'Component C': {
-                            'name': 'Component C',
-                            'seed_words': ['c_foo', 'c_bar', 'c_baz'],
-                            'weight': 0.7,
-                        },
-                        'Component D': {
-                            'name': 'Component D',
-                            'seed_words': ['d_foo', 'd_bar'],
-                            'weight': 0.3,
-                        },
-                    },
-                    'objective': 'Mock Objective 2',
-                    'preference': 'Mock Preference 2',
-                },
+                'task': _mock_task(),
                 'samples': [
                     {
                         'prompt': 'Mock prompt A 2',
@@ -281,22 +194,7 @@ def test_apply_preference_swap_to_continual_dataset_full_swap():
     expected_dataset_dict = {
         'datasets': [
             {
-                'task': {
-                    'domain': {
-                        'Component A': {
-                            'name': 'Component A',
-                            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                            'weight': 0.5,
-                        },
-                        'Component B': {
-                            'name': 'Component B',
-                            'seed_words': ['b_foo', 'b_bar'],
-                            'weight': 0.5,
-                        },
-                    },
-                    'objective': 'Mock Objective 1',
-                    'preference': 'Mock Preference 1',
-                },
+                'task': _mock_task(),
                 'samples': [
                     {
                         'prompt': 'Mock prompt A 1',
@@ -316,22 +214,7 @@ def test_apply_preference_swap_to_continual_dataset_full_swap():
                 ],
             },
             {
-                'task': {
-                    'domain': {
-                        'Component C': {
-                            'name': 'Component C',
-                            'seed_words': ['c_foo', 'c_bar', 'c_baz'],
-                            'weight': 0.7,
-                        },
-                        'Component D': {
-                            'name': 'Component D',
-                            'seed_words': ['d_foo', 'd_bar'],
-                            'weight': 0.3,
-                        },
-                    },
-                    'objective': 'Mock Objective 2',
-                    'preference': 'Mock Preference 2',
-                },
+                'task': _mock_task(),
                 'samples': [
                     {
                         'prompt': 'Mock prompt A 2',
@@ -357,32 +240,19 @@ def test_apply_preference_swap_to_continual_dataset_full_swap():
     transform = PreferenceSwapTransform(0.5)
     transform.swap_probability = 1  # Setter overrides swap probability
 
-    assert transform(dataset).to_dict() == expected_dataset_dict
-    assert transform.apply(dataset).to_dict() == expected_dataset_dict
-    assert (
-        F.preference_swap_transform(dataset, swap_probability=1).to_dict()
-        == expected_dataset_dict
-    )
+    if application_type == 'call':
+        assert transform(dataset).to_dict() == expected_dataset_dict
+    elif application_type == 'apply':
+        assert transform.apply(dataset).to_dict() == expected_dataset_dict
+    elif application_type == 'functional':
+        assert (
+            F.preference_swap_transform(dataset, swap_probability=1)
+        ).to_dict() == expected_dataset_dict
 
 
-def test_apply_preference_swap_to_static_dataset_no_swap():
+def test_apply_preference_swap_to_static_dataset_no_swap(application_type):
     dataset_dict = {
-        'task': {
-            'domain': {
-                'Component A': {
-                    'name': 'Component A',
-                    'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                    'weight': 0.5,
-                },
-                'Component B': {
-                    'name': 'Component B',
-                    'seed_words': ['b_foo', 'b_bar'],
-                    'weight': 0.5,
-                },
-            },
-            'objective': 'Mock Objective 1',
-            'preference': 'Mock Preference 1',
-        },
+        'task': _mock_task(),
         'samples': [
             {
                 'prompt': 'Mock prompt A 1',
@@ -408,34 +278,21 @@ def test_apply_preference_swap_to_static_dataset_no_swap():
     transform = PreferenceSwapTransform(0.5)
     transform.swap_probability = 0  # Setter overrides swap probability
 
-    assert transform(dataset).to_dict() == expected_dataset_dict
-    assert transform.apply(dataset).to_dict() == expected_dataset_dict
-    assert (
-        F.preference_swap_transform(dataset, swap_probability=0).to_dict()
-        == expected_dataset_dict
-    )
+    if application_type == 'call':
+        assert transform(dataset).to_dict() == expected_dataset_dict
+    elif application_type == 'apply':
+        assert transform.apply(dataset).to_dict() == expected_dataset_dict
+    elif application_type == 'functional':
+        assert (
+            F.preference_swap_transform(dataset, swap_probability=0)
+        ).to_dict() == expected_dataset_dict
 
 
-def test_apply_preference_swap_to_continual_dataset_no_swap():
+def test_apply_preference_swap_to_continual_dataset_no_swap(application_type):
     dataset_dict = {
         'datasets': [
             {
-                'task': {
-                    'domain': {
-                        'Component A': {
-                            'name': 'Component A',
-                            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                            'weight': 0.5,
-                        },
-                        'Component B': {
-                            'name': 'Component B',
-                            'seed_words': ['b_foo', 'b_bar'],
-                            'weight': 0.5,
-                        },
-                    },
-                    'objective': 'Mock Objective 1',
-                    'preference': 'Mock Preference 1',
-                },
+                'task': _mock_task(),
                 'samples': [
                     {
                         'prompt': 'Mock prompt A 1',
@@ -455,22 +312,7 @@ def test_apply_preference_swap_to_continual_dataset_no_swap():
                 ],
             },
             {
-                'task': {
-                    'domain': {
-                        'Component C': {
-                            'name': 'Component C',
-                            'seed_words': ['c_foo', 'c_bar', 'c_baz'],
-                            'weight': 0.7,
-                        },
-                        'Component D': {
-                            'name': 'Component D',
-                            'seed_words': ['d_foo', 'd_bar'],
-                            'weight': 0.3,
-                        },
-                    },
-                    'objective': 'Mock Objective 2',
-                    'preference': 'Mock Preference 2',
-                },
+                'task': _mock_task(),
                 'samples': [
                     {
                         'prompt': 'Mock prompt A 2',
@@ -493,14 +335,34 @@ def test_apply_preference_swap_to_continual_dataset_no_swap():
     }
 
     expected_dataset_dict = dataset_dict
-
     dataset = ContinualAlignmentDataset.from_dict(dataset_dict)
     transform = PreferenceSwapTransform(0.5)
     transform.swap_probability = 0  # Setter overrides swap probability
 
-    assert transform(dataset).to_dict() == expected_dataset_dict
-    assert transform.apply(dataset).to_dict() == expected_dataset_dict
-    assert (
-        F.preference_swap_transform(dataset, swap_probability=0).to_dict()
-        == expected_dataset_dict
-    )
+    if application_type == 'call':
+        assert transform(dataset).to_dict() == expected_dataset_dict
+    elif application_type == 'apply':
+        assert transform.apply(dataset).to_dict() == expected_dataset_dict
+    elif application_type == 'functional':
+        assert (
+            F.preference_swap_transform(dataset, swap_probability=0)
+        ).to_dict() == expected_dataset_dict
+
+
+def _mock_task():
+    return {
+        'domain': {
+            'Component A': {
+                'name': 'Component A',
+                'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+                'weight': 0.5,
+            },
+            'Component B': {
+                'name': 'Component B',
+                'seed_words': ['b_foo', 'b_bar'],
+                'weight': 0.5,
+            },
+        },
+        'objective': 'Mock Objective 1',
+        'preference': 'Mock Preference 1',
+    }
