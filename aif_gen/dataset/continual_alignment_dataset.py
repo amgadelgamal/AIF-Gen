@@ -18,21 +18,21 @@ class ContinualAlignmentDataset:
 
     @property
     def datasets(self) -> List[AlignmentDataset]:
-        """List[AlignmentDataset]: The list of AlignmentDataset constituents."""
+        r"""List[AlignmentDataset]: The list of AlignmentDataset constituents."""
         return self._datasets
 
     @property
     def num_datasets(self) -> int:
-        """int: The number of AlignmentDataset constituents."""
+        r"""int: The number of AlignmentDataset constituents."""
         return len(self.datasets)
 
     @property
     def num_samples(self) -> int:
-        """int: The total number of samples acros all AlignmentDataset constituents."""
+        r"""int: The total number of samples acros all AlignmentDataset constituents."""
         return sum(len(dataset) for dataset in self.datasets)
 
     def __len__(self) -> int:
-        """int: The total number of samples acros all AlignmentDataset constituents."""
+        r"""int: The total number of samples acros all AlignmentDataset constituents."""
         return self.num_samples
 
     def __getitem__(

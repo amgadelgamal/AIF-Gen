@@ -23,17 +23,17 @@ class AlignmentDataset:
 
     @property
     def task(self) -> AlignmentTask:
-        """AlignmentTask: The task associated with the AlignmentDataset."""
+        r"""AlignmentTask: The task associated with the AlignmentDataset."""
         return self._task
 
     @property
     def samples(self) -> List[AlignmentDatasetSample]:
-        """List[AlignmentDatasetSample]: The list of samples associated with the AlignmentDataset."""
+        r"""List[AlignmentDatasetSample]: The list of samples associated with the AlignmentDataset."""
         return self._samples
 
     @property
     def num_samples(self) -> int:
-        """int: The number of samples associated with the AlignmentDataset."""
+        r"""int: The number of samples associated with the AlignmentDataset."""
         return len(self.samples)
 
     def __len__(self) -> int:

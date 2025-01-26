@@ -28,7 +28,7 @@ class PreferenceSwapTransform(DatasetTransform):
 
     @property
     def swap_probability(self) -> float:
-        """float: The swap probability associated with the transform."""
+        r"""float: The swap probability associated with the transform."""
         return self._swap_probability
 
     @swap_probability.setter

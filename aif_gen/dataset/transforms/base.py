@@ -27,7 +27,7 @@ class DatasetTransform(ABC):
         return self.apply(dataset, *args, **kwargs)
 
     def __str__(self) -> str:
-        r"""Returns summary properties of the dynamic graph."""
+        r"""Returns the type of Dataset transform."""
         return self.__class__.__name__
 
     def _is_dataset_continual(self, dataset: Dataset) -> bool:

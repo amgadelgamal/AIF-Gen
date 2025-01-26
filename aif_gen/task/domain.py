@@ -98,15 +98,15 @@ class Domain:
 
     @property
     def components(self) -> List[DomainComponent]:
-        """List[DomainComponent]: The list of components associated with this Domain."""
+        r"""List[DomainComponent]: The list of components associated with this Domain."""
         return self._components
 
     @property
     def num_components(self) -> int:
-        """int: The number of components associated with this Domain."""
+        r"""int: The number of components associated with this Domain."""
         return len(self.components)
 
     @property
     def weights(self) -> List[float]:
-        """List[float]: The weights associated with this Domain."""
+        r"""List[float]: The weights associated with this Domain."""
         return self._weights
