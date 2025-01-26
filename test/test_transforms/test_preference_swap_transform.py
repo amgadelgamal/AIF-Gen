@@ -4,45 +4,7 @@ from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
 from aif_gen.dataset.transforms import PreferenceSwapTransform
 from aif_gen.dataset.transforms import functional as F
 
-
-@pytest.fixture(params=['call', 'apply', 'functional'])
-def application_type(request):
-    return request.param
-
-
-@pytest.mark.parametrize('bad_swap_probability', [-1, 2])
-def test_apply_preference_swap_bad_swap_probability(bad_swap_probability):
-    with pytest.raises(ValueError):
-        _ = PreferenceSwapTransform(swap_probability=bad_swap_probability)
-
-    # Check failure when using the setter method
-    transform = PreferenceSwapTransform(swap_probability=0.3)
-    with pytest.raises(ValueError):
-        transform.swap_probability = bad_swap_probability
-
-    # Check failure when using the functional API
-    mock_dataset = None
-    with pytest.raises(ValueError):
-        F.preference_swap_transform(mock_dataset, swap_probability=bad_swap_probability)
-
-
-def mock_task():
-    return {
-        'domain': {
-            'Component A': {
-                'name': 'Component A',
-                'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                'weight': 0.5,
-            },
-            'Component B': {
-                'name': 'Component B',
-                'seed_words': ['b_foo', 'b_bar'],
-                'weight': 0.5,
-            },
-        },
-        'objective': 'Mock Objective 1',
-        'preference': 'Mock Preference 1',
-    }
+from .conftest import mock_task
 
 
 def mock_dataset_dict(continual):
@@ -112,6 +74,22 @@ def mock_dataset_dict(continual):
                 },
             ],
         }
+
+
+@pytest.mark.parametrize('bad_swap_probability', [-1, 2])
+def test_apply_preference_swap_bad_swap_probability(bad_swap_probability):
+    with pytest.raises(ValueError):
+        _ = PreferenceSwapTransform(swap_probability=bad_swap_probability)
+
+    # Check failure when using the setter method
+    transform = PreferenceSwapTransform(swap_probability=0.3)
+    with pytest.raises(ValueError):
+        transform.swap_probability = bad_swap_probability
+
+    # Check failure when using the functional API
+    mock_dataset = None
+    with pytest.raises(ValueError):
+        F.preference_swap_transform(mock_dataset, swap_probability=bad_swap_probability)
 
 
 @pytest.mark.parametrize('dataset_dict', [mock_dataset_dict(continual=False)])
