@@ -46,7 +46,7 @@ jobs:
         run: cd docs && uv run sphinx-apidoc -o ./source ../aif_gen/ -f
 
       - name: Run Documentation build
-        run: uv run make html
+        run: cd docs && uv run make html
 
       - name: Check for changes
         id: changes
