@@ -36,18 +36,18 @@ class PreferenceSwapTransform(DatasetTransform):
         self._validate_swap_probability(swap_probability)
         self._swap_probability = swap_probability
 
-    def apply(self, dataset: Dataset) -> Dataset:
+    def apply(self, dataset: Dataset, in_place: bool = False) -> Dataset:
         r"""Swap the 'chosen' and 'rejected' responses for each sample in the dataset.
 
         Args:
             dataset (Union[ContinualAlignmentDataset, AlignmentDataset]): The dataset to transform.
+            in_place: Whether to apply the transform in-place or return a new dataset.
 
         Returns:
             Union[ContinualAlignmentDataset, AlignmentDataset]: The transformed dataset.
         """
         if self.swap_probability == 0:
-            # Return a copy for consistent functional behavior
-            return copy.deepcopy(dataset)
+            return dataset if in_place else copy.deepcopy(dataset)
 
         if self._is_dataset_continual(dataset):
             # This assert is here to make mypy happy
