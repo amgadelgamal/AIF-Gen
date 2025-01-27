@@ -2,7 +2,7 @@
 
 
 def remove_stop_words(s: str) -> str:
-    return ' '.join([word for word in s.split() if word not in STOP_WORDS])
+    return ' '.join([word for word in s.split() if word.lower() not in STOP_WORDS])
 
 
 STOP_WORDS = {
@@ -10,6 +10,7 @@ STOP_WORDS = {
     'about',
     'above',
     'after',
+    'before',
     'again',
     'against',
     'ain',
@@ -26,7 +27,6 @@ STOP_WORDS = {
     'be',
     'because',
     'been',
-    'before',
     'being',
     'below',
     'between',
