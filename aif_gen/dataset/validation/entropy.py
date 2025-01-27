@@ -7,12 +7,17 @@ import numpy as np
 from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
 from aif_gen.typing import Dataset
 
+from ._stop_words import remove_stop_words as rsw
 
-def entropy_validation(dataset: Dataset) -> List[Dict[str, float]]:
+
+def entropy_validation(
+    dataset: Dataset, remove_stop_words: bool = True
+) -> List[Dict[str, float]]:
     r"""Report various entropy measures on tokens in the dataset samples.
 
     Args:
         dataset (Union[ContinualAlignmentDataset, AlignmentDataset]): The dataset to validate.
+        remove_stop_words (bool): If true, applies stop word removal before computing dataset counts.
 
     Returns:
         List[Dict[str, int]]: For every AligmentDataset, returns a dictionary with the following entries:
@@ -35,23 +40,28 @@ def entropy_validation(dataset: Dataset) -> List[Dict[str, float]]:
 
     results = []
     for dataset in datasets:
-        results.append(_entropy_validation(dataset))
+        results.append(_entropy_validation(dataset, remove_stop_words))
     return results
 
 
-def _entropy_validation(dataset: AlignmentDataset) -> Dict[str, float]:
+def _entropy_validation(
+    dataset: AlignmentDataset, remove_stop_words: bool
+) -> Dict[str, float]:
     token_freq: typing.Counter[str] = Counter()
     prompts_freq: typing.Counter[str] = Counter()
     chosen_freq: typing.Counter[str] = Counter()
     rejected_freq: typing.Counter[str] = Counter()
 
     for sample in dataset.samples:
-        prompt, chosen, rejected = sample.prompt, sample.chosen, sample.rejected
+        sample_str = rsw(str(sample)) if remove_stop_words else str(sample)
+        prompt_str = rsw(sample.prompt) if remove_stop_words else sample.prompt
+        chosen_str = rsw(sample.chosen) if remove_stop_words else sample.chosen
+        rejected_str = rsw(sample.rejected) if remove_stop_words else sample.rejected
 
-        token_freq.update(str(sample).split())
-        prompts_freq.update(prompt.split())
-        chosen_freq.update(chosen.split())
-        rejected_freq.update(rejected.split())
+        token_freq.update(sample_str.split())
+        prompts_freq.update(prompt_str.split())
+        chosen_freq.update(chosen_str.split())
+        rejected_freq.update(rejected_str.split())
 
     return {
         'token_entropy': _compute_entropy(token_freq),

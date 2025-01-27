@@ -3,12 +3,17 @@ from typing import Dict, List
 from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
 from aif_gen.typing import Dataset
 
+from ._stop_words import remove_stop_words as rsw
 
-def count_validation(dataset: Dataset) -> List[Dict[str, int]]:
+
+def count_validation(
+    dataset: Dataset, remove_stop_words: bool = True
+) -> List[Dict[str, int]]:
     r"""Count the number of 'unique' samples in the dataset.
 
     Args:
         dataset (Union[ContinualAlignmentDataset, AlignmentDataset]): The dataset to validate.
+        remove_stop_words (bool): If true, applies stop word removal before computing dataset counts.
 
     Returns:
         List[Dict[str, int]]: For every AligmentDataset, returns a dictionary with the following entries:
@@ -32,17 +37,25 @@ def count_validation(dataset: Dataset) -> List[Dict[str, int]]:
 
     results = []
     for dataset in datasets:
-        results.append(_count_validation(dataset))
+        results.append(_count_validation(dataset, remove_stop_words))
     return results
 
 
-def _count_validation(dataset: AlignmentDataset) -> Dict[str, int]:
+def _count_validation(
+    dataset: AlignmentDataset, remove_stop_words: bool
+) -> Dict[str, int]:
     samples, prompts, chosen, rejected = set(), set(), set(), set()
+
     for sample in dataset.samples:
-        samples.add(str(sample))
-        prompts.add(sample.prompt)
-        chosen.add(sample.chosen)
-        rejected.add(sample.rejected)
+        sample_str = rsw(str(sample)) if remove_stop_words else str(sample)
+        prompt_str = rsw(sample.prompt) if remove_stop_words else sample.prompt
+        chosen_str = rsw(sample.chosen) if remove_stop_words else sample.chosen
+        rejected_str = rsw(sample.rejected) if remove_stop_words else sample.rejected
+
+        samples.add(sample_str)
+        prompts.add(prompt_str)
+        chosen.add(chosen_str)
+        rejected.add(rejected_str)
 
     return {
         'sample': dataset.num_samples,
