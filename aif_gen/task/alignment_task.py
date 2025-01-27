@@ -63,15 +63,15 @@ class AlignmentTask:
 
     @property
     def domain(self) -> Domain:
-        """Domain: The domain in the current AlignmentTask."""
+        r"""Domain: The domain in the current AlignmentTask."""
         return self._domain
 
     @property
     def objective(self) -> str:
-        """str: The objective in the current AlignmentTask."""
+        r"""str: The objective in the current AlignmentTask."""
         return self._objective
 
     @property
     def preference(self) -> str:
-        """str: The preference in the current AlignmentTask."""
+        r"""str: The preference in the current AlignmentTask."""
         return self._preference

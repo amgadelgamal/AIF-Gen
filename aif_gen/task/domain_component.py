@@ -83,20 +83,20 @@ class DomainComponent:
 
     @property
     def name(self) -> str:
-        """str: The name of this DomainComponent."""
+        r"""str: The name of this DomainComponent."""
         return self._name
 
     @property
     def seed_words(self) -> List[str]:
-        """List[str]: The list of seed words aliased by this DomainComponent."""
+        r"""List[str]: The list of seed words aliased by this DomainComponent."""
         return self._seed_words
 
     @property
     def num_seed_words(self) -> int:
-        """int: The number of seed words aliased by this DomainComponent."""
+        r"""int: The number of seed words aliased by this DomainComponent."""
         return len(self.seed_words)
 
     @property
     def description(self) -> Optional[str]:
-        """Optional[str]: The description in the current DomainComponent, if it exists."""
+        r"""Optional[str]: The description in the current DomainComponent, if it exists."""
         return self._description

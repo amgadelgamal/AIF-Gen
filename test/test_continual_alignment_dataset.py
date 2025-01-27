@@ -1,13 +1,11 @@
 import tempfile
 
-import pytest
-
 from aif_gen.dataset import (
     AlignmentDataset,
     AlignmentDatasetSample,
     ContinualAlignmentDataset,
 )
-from aif_gen.task import AlignmentTask, Domain
+from aif_gen.task import AlignmentTask, Domain, DomainComponent
 
 
 def test_init_():
@@ -62,7 +60,6 @@ def test_slice():
     assert ca_dataset[:] == all_samples[:]
 
 
-@pytest.mark.skip(reason='Not implemented, waiting for Domain PR')
 def test_dict_conversion():
     datasets = [_generate_dataset(i) for i in range(3)]
     ca_dataset = ContinualAlignmentDataset(datasets)
@@ -77,11 +74,10 @@ def test_dict_conversion():
     for i, dataset in enumerate(recovered_ca_dataset.datasets):
         assert str(ca_dataset.datasets[i].task.domain) == str(dataset.task.domain)
         assert ca_dataset.datasets[i].task.objective == dataset.task.objective
-        assert ca_dataset.datasets[i].task.preference == dataset.preference
-        assert ca_dataset.samples == dataset.samples
+        assert ca_dataset.datasets[i].task.preference == dataset.task.preference
+        assert ca_dataset.datasets[i].samples == dataset.samples
 
 
-@pytest.mark.skip(reason='Not implemented, waiting for Domain PR')
 def test_json_conversion():
     datasets = [_generate_dataset(i) for i in range(3)]
     ca_dataset = ContinualAlignmentDataset(datasets)
@@ -97,12 +93,18 @@ def test_json_conversion():
     for i, dataset in enumerate(recovered_ca_dataset.datasets):
         assert str(ca_dataset.datasets[i].task.domain) == str(dataset.task.domain)
         assert ca_dataset.datasets[i].task.objective == dataset.task.objective
-        assert ca_dataset.datasets[i].task.preference == dataset.preference
-        assert ca_dataset.samples == dataset.samples
+        assert ca_dataset.datasets[i].task.preference == dataset.task.preference
+        assert ca_dataset.datasets[i].samples == dataset.samples
 
 
 def _generate_dataset(dataset_id: int) -> AlignmentDataset:
-    domain = Domain(f'Mock Domain {dataset_id}')
+    component_a = DomainComponent('Component A', ['a_foo', 'a_bar', 'a_baz'])
+    component_b = DomainComponent('Component B', ['b_foo', 'b_bar'])
+    component_c = DomainComponent('Component C', ['c_foo', 'c_bar', 'c_baz', 'c_bat'])
+    components = [component_a, component_b, component_c]
+    weights = [1.5, 0.7, 0.3]  # Need not be normalized
+
+    domain = Domain(components, weights)
     objective = f'Mock Objective {dataset_id}'
     preference = f'Mock Preference {dataset_id}'
     task = AlignmentTask(domain, objective, preference)
