@@ -11,7 +11,7 @@ from ._stop_words import remove_stop_words as rsw
 
 
 def entropy_validation(
-    dataset: Dataset, remove_stop_words: bool = True
+    dataset: Dataset, remove_stop_words: bool = False
 ) -> List[Dict[str, float]]:
     r"""Report various entropy measures on tokens in the dataset samples.
 

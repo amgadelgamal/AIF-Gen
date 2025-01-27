@@ -7,7 +7,7 @@ from ._stop_words import remove_stop_words as rsw
 
 
 def count_validation(
-    dataset: Dataset, remove_stop_words: bool = True
+    dataset: Dataset, remove_stop_words: bool = False
 ) -> List[Dict[str, int]]:
     r"""Count the number of 'unique' samples in the dataset.
 
