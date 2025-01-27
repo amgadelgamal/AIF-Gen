@@ -202,3 +202,29 @@ def test_count_countinual_dataset():
         },
     ]
     assert count_validation(dataset) == expected_counts
+
+
+def test_count_validation_stop_words_removed():
+    samples = [
+        AlignmentDatasetSample(
+            'i Mock prompt A 4', 'me Winning Response A 4', 'you Losing Response A 4'
+        ),
+        AlignmentDatasetSample(
+            'be Mock prompt A 4', 'a Winning Response A 4', 'or Losing Response A 4'
+        ),
+        AlignmentDatasetSample(
+            'with Mock prompt A 4', 'by Winning Response A 4', 'is Losing Response A 4'
+        ),
+    ]
+    mock_task = None
+    dataset = AlignmentDataset(task=mock_task, samples=samples)
+    expected_counts = [
+        {
+            'sample': 3,
+            'unique_samples': 1,
+            'unique_prompts': 1,
+            'unique_chosen': 1,
+            'unique_rejected': 1,
+        }
+    ]
+    assert count_validation(dataset, remove_stop_words=True) == expected_counts

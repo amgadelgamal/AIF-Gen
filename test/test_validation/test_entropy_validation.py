@@ -280,3 +280,28 @@ def test_entropy_countinual_dataset():
         },
     ]
     assert entropy_validation(dataset) == expected_entropy
+
+
+def test_entropy_validation_stop_words_removed():
+    samples = [
+        AlignmentDatasetSample(
+            'i Mock prompt A 4', 'me Winning Response A 4', 'you Losing Response A 4'
+        ),
+        AlignmentDatasetSample(
+            'be Mock prompt A 4', 'a Winning Response A 4', 'or Losing Response A 4'
+        ),
+        AlignmentDatasetSample(
+            'with Mock prompt A 4', 'by Winning Response A 4', 'is Losing Response A 4'
+        ),
+    ]
+    mock_task = None
+    dataset = AlignmentDataset(task=mock_task, samples=samples)
+    expected_entropy = [
+        {
+            'chosen_entropy': 1.0986122886681096,
+            'prompt_entropy': 1.0986122886681096,
+            'rejected_entropy': 1.0986122886681096,
+            'token_entropy': 2.253857589601352,
+        }
+    ]
+    assert entropy_validation(dataset, remove_stop_words=True) == expected_entropy
