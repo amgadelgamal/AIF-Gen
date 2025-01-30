@@ -33,8 +33,9 @@ class PromptMapper(PromptMapperBase):
     def generate_prompt(self, task: AlignmentTask) -> str:
         seed_words = self._sample_seed_words(task)
         prompt = f"""\
-        Generate a prompt for an RLHF task. Using the following words in your prompt: {','.join(seed_words)}.\n
+        Generate a prompt for an RLHF task using the following words in your prompt: {','.join(seed_words)}.\n
         The prompt should describe a common scenario or situation or state in the world.
+        The goal of the RLHF task is: '{task.objective}'.
         You don't need to start your prompt by saying 'User asks'.
         {self.ETHICAL_GUIDELINES}
         """
