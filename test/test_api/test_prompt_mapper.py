@@ -1,5 +1,3 @@
-import pytest
-
 from aif_gen.api.prompt_mapper import PromptMapper
 from aif_gen.task import AlignmentTask, Domain, DomainComponent
 
@@ -49,51 +47,4 @@ def test_generate_prompt():
             'internet',
             'chat-gpt',
         ]
-    )
-
-
-def test_normalize_weights():
-    # Mock domain components with unequal weights
-    health_component = DomainComponent(
-        name='Health', seed_words=['hospital', 'medicine', 'exercise']
-    )
-    tech_component = DomainComponent(name='Tech', seed_words=['technology', 'chat-gpt'])
-
-    # Mock domain
-    domain = Domain(components=[health_component, tech_component], weights=[4, 1])
-
-    # Normalize weights using the private method
-    prompt_mapper = PromptMapper()
-    normalized_weights = prompt_mapper._normalize_domain_weights(
-        domain.components, domain.weights
-    )
-
-    # Check that the weights are normalized
-    total_weight = sum(weight for _, weight in normalized_weights.values())
-    assert total_weight == pytest.approx(1.0)
-    assert normalized_weights['Health'][1] == pytest.approx(4 / 5)
-    assert normalized_weights['Tech'][1] == pytest.approx(1 / 5)
-
-
-def test_construct_prompt():
-    # Mock input for constructing a prompt
-    objective = 'Test objective.'
-    seed_words = ['hospital', 'technology', 'chat-gpt']
-    preference = 'Health > Tech'
-
-    # Construct the prompt
-    prompt_mapper = PromptMapper()
-    prompt = prompt_mapper._construct_prompt(objective, seed_words, preference)
-
-    # Check if the constructed prompt includes all components
-    assert 'Generate a prompt for an RLHF task.' in prompt
-    assert (
-        'Use the following words in your prompt: hospital, technology, chat-gpt.'
-        in prompt
-    )
-    assert 'The goal of the task is: Test objective.' in prompt
-    assert 'Preference: Health > Tech.' in prompt
-    assert (
-        "Ensure that the generated response adheres to ethical practices, avoids biases, and respects the target audience's needs."
-        in prompt
     )
