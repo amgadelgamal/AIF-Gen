@@ -1,10 +1,6 @@
 from typing import Dict, List, Tuple
 
-from aif_gen.task import (  # Ensure correct imports
-    AlignmentTask,
-    Domain,
-    DomainComponent,
-)
+from aif_gen.task import AlignmentTask, DomainComponent
 
 
 class PromptMapper:
@@ -28,9 +24,6 @@ class PromptMapper:
 
         # Sample seed words from each domain component
         sampled_words = self._sample_seed_words(normalized_components)
-
-        # Apply seed word usage rules
-        # sampled_words = self._apply_seed_word_usage_rules(sampled_words)
 
         # Generate the final prompt, including preferences, ethical guidelines, and seed word rules
         return self._construct_prompt(task.objective, sampled_words, task.preference)
@@ -63,7 +56,7 @@ class PromptMapper:
             List[str]: A list of sampled seed words.
         """
         sampled_words = []
-        for component_name, (component, normalized_weight) in components.items():
+        for _, (component, normalized_weight) in components.items():
             # Assume each domain component has an attribute `seed_words`
             seed_words = component.seed_words
             num_words_to_sample = max(1, int(len(seed_words) * normalized_weight))

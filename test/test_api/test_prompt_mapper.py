@@ -50,6 +50,8 @@ def test_generate_prompt():
             'chat-gpt',
         ]
     )
+
+
 def test_normalize_weights():
     # Mock domain components with unequal weights
     health_component = DomainComponent(
@@ -59,13 +61,6 @@ def test_normalize_weights():
 
     # Mock domain
     domain = Domain(components=[health_component, tech_component], weights=[4, 1])
-
-    # Mock task
-    task = AlignmentTask(
-        domain=domain,
-        objective='Test weight normalization.',
-        preference='Health > Tech',
-    )
 
     # Normalize weights using the private method
     prompt_mapper = PromptMapper()
