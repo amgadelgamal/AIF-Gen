@@ -1,3 +1,4 @@
+from textwrap import dedent
 from typing import List, Optional
 
 import numpy as np
@@ -31,17 +32,17 @@ class PromptMapper(PromptMapperBase):
 
     def generate_prompt(self, task: AlignmentTask) -> str:
         seed_words = self._sample_seed_words(task)
-        seed_words_str = ', '.join(seed_words)
+        prompt = f"""\
+        Generate a prompt for an RLHF task. Using the following words in your prompt: {','.join(seed_words)}.\n
+        The prompt should describe a common scenario or situation or state in the world.
+        You don't need to start your prompt by saying 'User asks'.
+        {self.ETHICAL_GUIDELINES}
+        """
+        if self.suffix_context:
+            prompt += self.suffix_context
 
-        # Define ethical guidelines as an additional part of the prompt
-        ethical_guidelines = "Ensure that the generated response adheres to ethical practices, avoids biases, and respects the target audience's needs."
-
-        return (
-            f'Generate a prompt for an RLHF task. Use the following words in your prompt: {seed_words_str}.\n'
-            f'The goal of the task is: {task.objective}.\n'
-            f'Preference: {task.preference}.\n'
-            f'{ethical_guidelines}'
-        )
+        prompt = dedent(prompt)
+        return prompt
 
     @property
     def max_seed_word_samples(self) -> int:
