@@ -15,6 +15,7 @@ class PromptMapper(PromptMapperBase):
     The sampling is parameterized by the weight of each component of the domain.
 
     Args:
+        num_sample_responses (int): The number of (chosen response, rejected response) pairs to generate.
         max_seed_word_samples (int): Maximum number of seed words to sample across all domain components (default=10)
         suffix_context (Optional[str]=None): Optionally add arbitrary context at the end of the generated prompt.
     """
