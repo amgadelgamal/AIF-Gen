@@ -50,39 +50,6 @@ def test_generate_prompt():
             'chat-gpt',
         ]
     )
-
-
-# def test_seed_word_usage_rules():
-# Mock domain components with fewer seed words
-# health_component = DomainComponent(
-#    name='Health', seed_words=['hospital', 'medicine']
-# )
-# tech_component = DomainComponent(
-#    name='Tech', seed_words=['technology', 'chat-gpt']
-# )
-
-# Mock domain
-# domain = Domain(components=[health_component,tech_component], weights=[3,3])
-
-# Mock task
-# objective = 'Test seed word usage rules.'
-# preference = 'Tech > Health'
-# task = AlignmentTask(domain=domain, objective=objective, preference=preference)
-
-# Create PromptMapper and generate prompt
-# prompt_mapper = PromptMapper()
-# prompt = prompt_mapper.generate_prompt(task)
-
-# Check seed word usage rules: Minimum 3 words, maximum 5
-# words_in_prompt = [
-# word
-#  for word in ['hospital', 'medicine', 'technology', 'chat-gpt']
-#   if word in prompt
-# ]
-# assert len(words_in_prompt) >= 3
-# assert len(words_in_prompt) <= 5
-
-
 def test_normalize_weights():
     # Mock domain components with unequal weights
     health_component = DomainComponent(
