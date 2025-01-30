@@ -4,11 +4,8 @@ from aif_gen.task import AlignmentTask, DomainComponent
 
 
 class PromptMapper:
-    def __init__(self) -> None:
-        """Initialize the PromptMapper."""
-
     def generate_prompt(self, task: AlignmentTask) -> str:
-        """Generate a single prompt based on the AlignmentTask, including task preferences, ethical guidelines,
+        r"""Generate a single prompt based on the AlignmentTask, including task preferences, ethical guidelines,
         and seed word usage rules.
 
         Args:
@@ -31,7 +28,7 @@ class PromptMapper:
     def _normalize_domain_weights(
         self, components: List[DomainComponent], weights: List[float]
     ) -> Dict[str, Tuple]:
-        """Normalize the weights of the domain components.
+        r"""Normalize the weights of the domain components.
 
         Args:
             components (dict): A dictionary of domain components with their weights.
@@ -47,7 +44,7 @@ class PromptMapper:
         }
 
     def _sample_seed_words(self, components: dict) -> List[str]:
-        """Sample seed words from each domain component based on normalized weights.
+        r"""Sample seed words from each domain component based on normalized weights.
 
         Args:
             components (dict): A dictionary of domain components with normalized weights.
@@ -67,7 +64,7 @@ class PromptMapper:
     def _construct_prompt(
         self, objective: str, seed_words: List[str], preference: str
     ) -> str:
-        """Construct the final prompt string, including preferences, ethical guidelines, and seed word rules.
+        r"""Construct the final prompt string, including preferences, ethical guidelines, and seed word rules.
 
         Args:
             objective (str): The objective of the alignment task.
