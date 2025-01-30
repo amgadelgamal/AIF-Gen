@@ -1,97 +1,137 @@
-import unittest
-from aif_gen.dataset.continual_alignment_dataset import ContinualAlignmentDataset
-from aif_gen.dataset.alignment_dataset import AlignmentDataset
-from aif_gen.dataset.alignment_sample import AlignmentDatasetSample
-from aif_gen.task import AlignmentTask
-from aif_gen.task.domain import Domain
-from aif_gen.task.domain_component import DomainComponent
+import pytest
+
 from aif_gen.api.prompt_mapper import PromptMapper
+from aif_gen.task import AlignmentTask, Domain, DomainComponent
 
-class TestPromptMapper(unittest.TestCase):
-    def setUp(self):
-        """
-        Set up a mock ContinualAlignmentDataset with one AlignmentDataset.
-        """
-        # Define domain components
-        science = DomainComponent(
-            name="Science",
-            seed_words=["physics", "biology", "chemistry"],
-            description="Scientific concepts"
-        )
-        communication = DomainComponent(
-            name="Communication",
-            seed_words=["email", "writing", "speaking"],
-            description="Communication skills"
-        )
 
-        # Define domain
-        domain = Domain([science, communication], [0.7, 0.3])
+def test_generate_prompt():
+    # Mock domain components
+    health_component = DomainComponent(
+        name='Health', seed_words=['hospital', 'medicine', 'exercise']
+    )
+    tech_component = DomainComponent(
+        name='Tech',
+        seed_words=['technology', 'iPhone', 'Bluetooth', 'internet', 'chat-gpt'],
+    )
 
-        # Define alignment task
-        self.task = AlignmentTask(
-            domain=domain,
-            objective="Explain scientific concepts clearly.",
-            preference="Clarity over technical detail."
-        )
+    # Mock domain
+    domain = Domain(components=[health_component, tech_component], weights=[3, 3])
 
-        # Define alignment samples
-        self.samples = [
-            AlignmentDatasetSample(
-                prompt="Explain photosynthesis in simple terms.",
-                chosen="Plants use sunlight to make food.",
-                rejected="Photosynthesis is the biochemical process in plants that converts light energy to chemical energy."
-            ),
-            AlignmentDatasetSample(
-                prompt="What is the speed of light?",
-                chosen="The speed of light is approximately 300,000 km/s.",
-                rejected="The speed of light is 299,792,458 m/s."
-            )
+    # Mock task
+    objective = 'Align LLM outputs with ethical healthcare practices.'
+    preference = 'Health > Tech'
+    task = AlignmentTask(domain=domain, objective=objective, preference=preference)
+
+    # Create PromptMapper and generate prompt
+    prompt_mapper = PromptMapper()
+    prompt = prompt_mapper.generate_prompt(task)
+
+    # Check if the prompt contains required elements
+    assert 'Generate a prompt for an RLHF task.' in prompt
+    assert (
+        'The goal of the task is: Align LLM outputs with ethical healthcare practices.'
+        in prompt
+    )
+    assert 'Preference: Health > Tech.' in prompt
+    assert (
+        "Ensure that the generated response adheres to ethical practices, avoids biases, and respects the target audience's needs."
+        in prompt
+    )
+    assert any(
+        word in prompt
+        for word in [
+            'hospital',
+            'medicine',
+            'exercise',
+            'technology',
+            'iPhone',
+            'Bluetooth',
+            'internet',
+            'chat-gpt',
         ]
-
-        # Create alignment dataset
-        self.alignment_dataset = AlignmentDataset(self.task, self.samples)
-
-        # Create continual alignment dataset
-        self.continual_dataset = ContinualAlignmentDataset([self.alignment_dataset])
-
-    def test_generate_prompts(self):
-        """
-        Test that the PromptMapper generates the correct prompts.
-        """
-        prompt_mapper = PromptMapper()
-        prompts = prompt_mapper.generate_prompts(self.continual_dataset)
-
-        expected_prompts = [
-            (
-                "Objective: Explain scientific concepts clearly.\n"
-                "Prompt: Explain photosynthesis in simple terms.\n"
-                "Option 1: Plants use sunlight to make food.\n"
-                "Option 2: Photosynthesis is the biochemical process in plants that converts light energy to chemical energy.\n"
-                "Which option better aligns with the objective and why?"
-            ),
-            (
-                "Objective: Explain scientific concepts clearly.\n"
-                "Prompt: What is the speed of light?\n"
-                "Option 1: The speed of light is approximately 300,000 km/s.\n"
-                "Option 2: The speed of light is 299,792,458 m/s.\n"
-                "Which option better aligns with the objective and why?"
-            )
-        ]
-
-        # Assert the generated prompts match the expected prompts
-        self.assertEqual(prompts, expected_prompts)
-
-    def test_empty_continual_dataset(self):
-        """
-        Test that the PromptMapper returns an empty list when given an empty dataset.
-        """
-        empty_dataset = ContinualAlignmentDataset([])
-        prompt_mapper = PromptMapper()
-        prompts = prompt_mapper.generate_prompts(empty_dataset)
-
-        # Assert that the output is an empty list
-        self.assertEqual(prompts, [])
+    )
 
 
-if __name__ == "__main__":
-    unittest.main()
+# def test_seed_word_usage_rules():
+# Mock domain components with fewer seed words
+# health_component = DomainComponent(
+#    name='Health', seed_words=['hospital', 'medicine']
+# )
+# tech_component = DomainComponent(
+#    name='Tech', seed_words=['technology', 'chat-gpt']
+# )
+
+# Mock domain
+# domain = Domain(components=[health_component,tech_component], weights=[3,3])
+
+# Mock task
+# objective = 'Test seed word usage rules.'
+# preference = 'Tech > Health'
+# task = AlignmentTask(domain=domain, objective=objective, preference=preference)
+
+# Create PromptMapper and generate prompt
+# prompt_mapper = PromptMapper()
+# prompt = prompt_mapper.generate_prompt(task)
+
+# Check seed word usage rules: Minimum 3 words, maximum 5
+# words_in_prompt = [
+# word
+#  for word in ['hospital', 'medicine', 'technology', 'chat-gpt']
+#   if word in prompt
+# ]
+# assert len(words_in_prompt) >= 3
+# assert len(words_in_prompt) <= 5
+
+
+def test_normalize_weights():
+    # Mock domain components with unequal weights
+    health_component = DomainComponent(
+        name='Health', seed_words=['hospital', 'medicine', 'exercise']
+    )
+    tech_component = DomainComponent(name='Tech', seed_words=['technology', 'chat-gpt'])
+
+    # Mock domain
+    domain = Domain(components=[health_component, tech_component], weights=[4, 1])
+
+    # Mock task
+    task = AlignmentTask(
+        domain=domain,
+        objective='Test weight normalization.',
+        preference='Health > Tech',
+    )
+
+    # Normalize weights using the private method
+    prompt_mapper = PromptMapper()
+    normalized_weights = prompt_mapper._normalize_domain_weights(
+        domain.components, domain.weights
+    )
+
+    # Check that the weights are normalized
+    total_weight = sum(weight for _, weight in normalized_weights.values())
+    assert total_weight == pytest.approx(1.0)
+    assert normalized_weights['Health'][1] == pytest.approx(4 / 5)
+    assert normalized_weights['Tech'][1] == pytest.approx(1 / 5)
+
+
+def test_construct_prompt():
+    # Mock input for constructing a prompt
+    objective = 'Test objective.'
+    seed_words = ['hospital', 'technology', 'chat-gpt']
+    preference = 'Health > Tech'
+
+    # Construct the prompt
+    prompt_mapper = PromptMapper()
+    prompt = prompt_mapper._construct_prompt(objective, seed_words, preference)
+
+    # Check if the constructed prompt includes all components
+    assert 'Generate a prompt for an RLHF task.' in prompt
+    assert (
+        'Use the following words in your prompt: hospital, technology, chat-gpt.'
+        in prompt
+    )
+    assert 'The goal of the task is: Test objective.' in prompt
+    assert 'Preference: Health > Tech.' in prompt
+    assert (
+        "Ensure that the generated response adheres to ethical practices, avoids biases, and respects the target audience's needs."
+        in prompt
+    )
