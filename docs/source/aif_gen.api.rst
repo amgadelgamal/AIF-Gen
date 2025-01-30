@@ -1,16 +1,13 @@
 aif\_gen.api package
 ====================
 
-Submodules
-----------
+Subpackages
+-----------
 
-aif\_gen.api.prompt\_mapper module
-----------------------------------
+.. toctree::
+   :maxdepth: 4
 
-.. automodule:: aif_gen.api.prompt_mapper
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   aif_gen.api.prompt_mapper
 
 Module contents
 ---------------
