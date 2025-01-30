@@ -1,9 +1,49 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from aif_gen.task import AlignmentTask, DomainComponent
 
 
 class PromptMapper:
+    r"""Generate a prompt that, when given to a language model, produces a prompt for a given AlignmentTask.
+
+    Args:
+        min_words_per_domain_component (int): Minimum number of seed words to add to the prompt for each domain component (default=1)
+        max_words_per_domain_component (int): Maximum number of seed words to add to the prompt for each domain component (default=10)
+        prefix_context (Optional[str]=None): Optionally added prefix context into the generated prompt.
+    """
+
+    def __init__(
+        self,
+        min_words_per_domain_component: int = 1,
+        max_words_per_domain_component: int = 10,
+        prefix_context: Optional[str] = None,
+    ) -> None:
+        if min_words_per_domain_component < 0:
+            raise ValueError(
+                f'Min words per domain component must be non-negative, got: {min_words_per_domain_component}'
+            )
+        if max_words_per_domain_component < min_words_per_domain_component:
+            raise ValueError(
+                f'Max words per domain compoment ({max_words_per_domain_component}) '
+                f'must be >= Min words per domain component ({min_words_per_domain_component})'
+            )
+
+        self._min_words_per_domain_component = min_words_per_domain_component
+        self._max_words_per_domain_component = max_words_per_domain_component
+        self._prefix_context = prefix_context
+
+    @property
+    def min_words_per_domain_component(self) -> int:
+        return self._min_words_per_domain_component
+
+    @property
+    def max_words_per_domain_component(self) -> int:
+        return self._max_words_per_domain_component
+
+    @property
+    def prefix_context(self) -> Optional[str]:
+        return self._prefix_context
+
     def generate_prompt(self, task: AlignmentTask) -> str:
         r"""Generate a single prompt based on the AlignmentTask, including task preferences, ethical guidelines,
         and seed word usage rules.
