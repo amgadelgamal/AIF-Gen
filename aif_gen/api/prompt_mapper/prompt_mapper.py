@@ -11,12 +11,12 @@ from .base import PromptMapperBase
 class PromptMapper(PromptMapperBase):
     r"""Generate a prompt that, when given to a language model, produces a prompt for a given AlignmentTask.
 
-    Samples domain component seed words (withotu replacement) from the AlignmentTask to contextualize the prompt.
+    Samples domain component seed words (without replacement) from the AlignmentTask to contextualize the prompt.
     The sampling is parameterized by the weight of each component of the domain.
 
     Args:
         max_seed_word_samples (int): Maximum number of seed words to sample across all domain components (default=10)
-        suffix_context (Optional[str]=None): Optionally added suffix context into the generated prompt.
+        suffix_context (Optional[str]=None): Optionally add arbitrary context at the end of the generated prompt.
     """
 
     def __init__(
