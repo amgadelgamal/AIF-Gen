@@ -1,0 +1,45 @@
+from textwrap import dedent
+from typing import Optional
+
+from aif_gen.task import AlignmentTask
+
+from .base import ResponseMapperBase
+
+
+class ResponseMapper(ResponseMapperBase):
+    r"""Generate a prompt that, when given to a language model, produces a winning and losing response to the task_prompt.
+
+    Args:
+        suffix_context (Optional[str]=None): Optionally add arbitrary context at the end of the generated prompt.
+    """
+
+    def __init__(self, suffix_context: Optional[str] = None) -> None:
+        self._suffix_context = suffix_context
+
+    def generate_prompt(
+        self, task: AlignmentTask, task_prompt: str, num_samples: int
+    ) -> str:
+        if num_samples <= 0:
+            raise ValueError(f'Num samples must be positive, got: {num_samples}')
+
+        prompt = f"""\
+        Generate a 'chosen' and 'rejected' response to the following prompt: '{task_prompt}'.\n
+
+        The 'chosen' response should better respond to the prompt according to the following preference: '{task.preference}'.
+        The 'rejected' response should be a worse response to the prompt according to the following preference: '{task.preference}'.
+
+        Give me {num_samples} such examples of 'chosen' and 'rejected' response pairs. Ensure each example is unique.
+
+        You don't need to start your prompt by saying 'User asks'.
+        {self.ETHICAL_GUIDELINES}
+        """
+        if self.suffix_context:
+            prompt += self.suffix_context
+
+        prompt = dedent(prompt)
+        return prompt
+
+    @property
+    def suffix_context(self) -> Optional[str]:
+        f"""Optional added suffix context into the generated prompt."""
+        return self._suffix_context

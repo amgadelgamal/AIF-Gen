@@ -17,3 +17,8 @@ def suffix_context(request):
 @pytest.fixture(params=[1, 10, 20])
 def max_seed_word_samples(request):
     return request.param
+
+
+@pytest.fixture(params=[1, 100])
+def num_samples(request):
+    return request.param
