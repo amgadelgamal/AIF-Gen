@@ -1,12 +1,13 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from trl import DPOConfig, DPOTrainer, AutoModelForCausalLMWithValueHead
-from peft import LoraConfig
-from dataclasses import dataclass
 import tyro
 import torch
 import random
 import numpy as np
 import wandb
+
+from transformers import AutoTokenizer
+from trl import DPOConfig, DPOTrainer, AutoModelForCausalLMWithValueHead
+from peft import LoraConfig
+from dataclasses import dataclass
 
 from aif_gen.dataset import DebugContinualDataset, ContinualUltrafeedback2AnthropicDataset
 
@@ -17,20 +18,24 @@ class Args:
     """base model to start to finetune with"""
     output_dir: str = "~/scratch/DPO"
     """output directory"""
+    dataset: str = "debug"
+    """dataset to use, current options are: debug and ultrafeedback2anthropic"""
+    exp_name: str = "default"
+    """experiment name"""
     torch_deterministic: bool = False
-    """if toggled, `torch.backends.cudnn.deterministic=False`"""
+    """if toggled, `torch.backends.cudnn.deterministic=True`"""
     seed: int = 1
     """seed of the experiment"""
-    wandb_project_name: str = "conitnual_finetuning_baselines"
+    wandb_project_name: str = "AIF-Gen-Training"
     """the wandb's project name"""
-    wandb_entity: str = 'irina-rish'
+    wandb_entity: str = ''
     """the entity (team) of wandb's project"""
     num_train_epochs: int = 1
     """number of training epochs"""
     per_device_train_batch_size: int = 4
     """batch size per device"""
-    dataset: str = "debug"
-    """dataset to use, current options are: debug and ultrafeedback2anthropic"""
+    wandb_mode: str = "online"
+    """wandb mode, either online or offline"""
 
 
 if __name__ == "__main__":
@@ -41,7 +46,7 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    group_name = f"{args.model_name}-DPO"
+    group_name = f"{args.model_name}-DPO-{args.exp_name}"
     run_name = f"{group_name}-{args.seed}"
 
     # LoRA configuration
@@ -79,7 +84,8 @@ if __name__ == "__main__":
                               lr_scheduler_type="constant",
                               )
 
-    wandb.init(project=args.wandb_project_name, entity=args.wandb_entity, group=group_name, name=run_name, config=vars(training_args))
+    wandb.init(project=args.wandb_project_name, entity=args.wandb_entity, group=group_name, name=run_name,
+               config=vars(training_args), mode=args.wandb_mode)
 
     for i, dataset in enumerate(continual_dataset.datasets):
         trainer = DPOTrainer(model=model, args=training_args,
@@ -90,7 +96,7 @@ if __name__ == "__main__":
 
         print('running evaluation on dataset', i)
         eval_results = trainer.evaluate()
-        eval_results = {"f_"+k: v for k, v in eval_results.items()}
+        eval_results = {"f/"+k: v for k, v in eval_results.items()}
         # ToDo: maybe it's better to log the dataset name or index, that should come from the dataset itself
         eval_results['dataset'] = i
         wandb.log(eval_results)
@@ -104,8 +110,8 @@ if __name__ == "__main__":
 
     print('running evaluation on dataset', i)
     eval_results = trainer.evaluate()
-    eval_results = {"f_" + k: v for k, v in eval_results.items()}
-    eval_results['dataset'] = i
+    eval_results = {"f/" + k: v for k, v in eval_results.items()}
+    eval_results['dataset'] = i + 1
     wandb.log(eval_results)
 
     wandb.finish()

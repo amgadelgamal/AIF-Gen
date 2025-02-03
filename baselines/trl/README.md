@@ -14,10 +14,15 @@ pip install git+https://github.com/huggingface/transformers.git@main
 pip install wandb
 ```
 
+
+```bash
+export PYTHONPATH=$PYTHONPATH:/path/to/AIF-Gen
+```
+
 To train continually with DPO use:
 
 ```bash 
-python dpo_continual.py
+python baselines/trl/dpo_continual.py --num_train_epochs 1 --dataset ultrafeedback2anthropic
 ```
 
 

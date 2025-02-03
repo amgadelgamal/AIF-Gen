@@ -7,6 +7,7 @@ __pycache__/
 # C extensions
 *.so
 
+
 # Distribution / packaging
 .Python
 build/
@@ -19,6 +20,7 @@ lib/
 lib64/
 parts/
 sdist/
+scripts/
 var/
 wheels/
 share/python-wheels/
