@@ -20,21 +20,6 @@ To train continually with DPO use:
 python dpo_continual.py
 ```
 
-To train continually with PPO, first train all rewards models with:
-
-```bash 
-python train_reward.py
-```
-
-and then fine-tune the model with PPO:
-
-```bash
-python ppo_continual.py
-```
-
-Todo: 1) check if model weights are changing while training in between datasets (done) 2) check if logits are logits when output is a tuple 3) check if the model is saved
-
-
 
 ```bash
 <div style="text-align: center">

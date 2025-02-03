@@ -1,4 +1,3 @@
-from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import DPOConfig, DPOTrainer, AutoModelForCausalLMWithValueHead
 from peft import LoraConfig
@@ -7,37 +6,9 @@ import tyro
 import torch
 import random
 import numpy as np
-
 import wandb
 
-# ToDo: dummy data, delete later
-from datasets import Dataset
-data = {
-    "prompt": [
-        "What is the capital of France?",
-        "Explain quantum computing in simple terms.",
-        "Tell me a joke.",
-        "What is the capital of France?",
-        "Explain quantum computing in simple terms.",
-        "Tell me a joke."
-    ],
-    "chosen": [
-        "The capital of France is Paris.",
-        "Quantum computing uses quantum bits (qubits) that can exist in multiple states at once, allowing for complex calculations.",
-        "Why don’t skeletons fight each other? Because they don’t have the guts!",
-        "The capital of France is Paris.",
-        "Quantum computing uses quantum bits (qubits) that can exist in multiple states at once, allowing for complex calculations.",
-        "Why don’t skeletons fight each other? Because they don’t have the guts!"
-    ],
-    "rejected": [
-        "France is a country in Europe.",
-        "It's a way of using computers differently.",
-        "I don't know any jokes.",
-        "France is a country in Europe.",
-        "It's a way of using computers differently.",
-        "I don't know any jokes."
-    ],
-}
+from aif_gen.dataset import DebugContinualDataset, ContinualUltrafeedback2AnthropicDataset
 
 
 @dataclass
@@ -58,6 +29,8 @@ class Args:
     """number of training epochs"""
     per_device_train_batch_size: int = 4
     """batch size per device"""
+    dataset: str = "debug"
+    """dataset to use, current options are: debug and ultrafeedback2anthropic"""
 
 
 if __name__ == "__main__":
@@ -81,8 +54,6 @@ if __name__ == "__main__":
     )
 
     model = AutoModelForCausalLMWithValueHead.from_pretrained(args.model_name, peft_config=lora_config,)
-    # print('model:', list(model.pretrained_model.model.base_model.layers[-1].self_attn.q_proj.lora_A.parameters()))
-
     model.warnings_issued = {}
     model.config.return_dict = True
 
@@ -93,42 +64,34 @@ if __name__ == "__main__":
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # ToDo: replace with our actual datasets, define the eval datasets as well
-    train_datasets = [
-        # Dataset.from_dict(data),
-        # Dataset.from_dict(data),
-        # load_dataset("trl-lib/ultrafeedback_binarized", split="test").select(range(10)),
-        # load_dataset("trl-lib/ultrafeedback_binarized", split="test").select(range(10, 20)),
-        # load_dataset("Anthropic/hh-rlhf", split="test").select(range(10))
-        load_dataset("trl-lib/ultrafeedback_binarized", split="train"),
-        load_dataset("Anthropic/hh-rlhf", split="train")
-                ]
-
-    test_datasets = [
-        load_dataset("trl-lib/ultrafeedback_binarized", split="test"),
-        load_dataset("Anthropic/hh-rlhf", split="test")
-                ]
+    if args.dataset == 'debug':
+        continual_dataset = DebugContinualDataset()
+    elif args.dataset == 'ultrafeedback2anthropic':
+        continual_dataset = ContinualUltrafeedback2AnthropicDataset()
+    else:
+        raise ValueError(f"Unknown dataset: {args.dataset}")
 
     training_args = DPOConfig(output_dir=args.output_dir,
                               per_device_train_batch_size=args.per_device_train_batch_size,
                               num_train_epochs=args.num_train_epochs,
                               evaluation_strategy="epoch",
                               per_device_eval_batch_size=args.per_device_train_batch_size,
+                              lr_scheduler_type="constant",
                               )
 
     wandb.init(project=args.wandb_project_name, entity=args.wandb_entity, group=group_name, name=run_name, config=vars(training_args))
 
-    for i, (train_dataset, test_dataset) in enumerate(zip(train_datasets, test_datasets)):
+    for i, dataset in enumerate(continual_dataset.datasets):
         trainer = DPOTrainer(model=model, args=training_args,
-                             train_dataset=train_dataset,
-                             eval_dataset=test_dataset,
+                             train_dataset=dataset['train'],
+                             eval_dataset=dataset['test'],
                              processing_class=tokenizer,
                              )
 
         print('running evaluation on dataset', i)
         eval_results = trainer.evaluate()
         eval_results = {"f_"+k: v for k, v in eval_results.items()}
-        # ToDo: log the dataset name or index, that should come from the dataset itself
+        # ToDo: maybe it's better to log the dataset name or index, that should come from the dataset itself
         eval_results['dataset'] = i
         wandb.log(eval_results)
 
