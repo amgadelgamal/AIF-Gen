@@ -141,21 +141,6 @@ class DebugContinualDataset(ContinualAlignmentDataset):
     def __init__(self, ) -> None:
         from datasets import load_dataset
         datasets = [
-            {"train": load_dataset("trl-lib/ultrafeedback_binarized", split="train").select(range(10)),
-             'test': load_dataset("trl-lib/ultrafeedback_binarized", split="test").select(range(10))},
-            {"train": load_dataset("trl-lib/ultrafeedback_binarized", split="train").select(range(10, 20)),
-             'test': load_dataset("trl-lib/ultrafeedback_binarized", split="test").select(range(10, 20))},
-            {"train": load_dataset("Anthropic/hh-rlhf", split="train").select(range(10, 20)),
-             'test': load_dataset("Anthropic/hh-rlhf", split="test").select(range(10, 20))},
-        ]
-        super().__init__(datasets)
-
-
-class DebugContinualDataset(ContinualAlignmentDataset):
-
-    def __init__(self, ) -> None:
-        from datasets import load_dataset
-        datasets = [
             {"train": load_dataset("trl-lib/ultrafeedback_binarized", split="train").select(range(100)),
              'test': load_dataset("trl-lib/ultrafeedback_binarized", split="test").select(range(100))},
             {"train": load_dataset("trl-lib/ultrafeedback_binarized", split="train").select(range(100, 200)),
