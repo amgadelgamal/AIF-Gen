@@ -1,5 +1,5 @@
-aif\_gen package
-================
+aif\_gen.api package
+====================
 
 Subpackages
 -----------
@@ -7,15 +7,13 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   aif_gen.api
-   aif_gen.dataset
-   aif_gen.task
-   aif_gen.util
+   aif_gen.api.prompt_mapper
+   aif_gen.api.response_mapper
 
 Module contents
 ---------------
 
-.. automodule:: aif_gen
+.. automodule:: aif_gen.api
    :members:
    :undoc-members:
    :show-inheritance:
