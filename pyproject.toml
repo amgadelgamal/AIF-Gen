@@ -12,6 +12,7 @@ authors = [
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
 ]
 dependencies = [
+    "backoff>=2.2.1",
     "numpy>=2.0.2",
     "torch>=2.5.1",
 ]
