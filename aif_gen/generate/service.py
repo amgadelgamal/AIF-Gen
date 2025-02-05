@@ -1,6 +1,6 @@
 import asyncio
 import json
-import os
+import pathlib
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
 import backoff
@@ -86,18 +86,18 @@ async def process_prompts(
 
 # TODO: replace with actual AlignmentDataset.
 def write_batch_output(
-    output_base_path: str,
+    output_base_path: pathlib.Path,
     batch_index: int,
     batch_content: List[AlignmentDatasetSample],
     extra_data: Dict[str, Union[str, int]],
 ) -> None:
     """Write data and metrics to disk."""
-    output_file_path = os.path.join(output_base_path, f'output_{batch_index:03d}.json')
+    output_file_path = output_base_path / f'output_{batch_index:03d}.json'
     with open(output_file_path, 'w') as output_file:
         output_lines = [json.dumps(item.__dict__) for item in batch_content if item]
         output_file.write('\n'.join(output_lines))
 
-    provenance_file_path = os.path.join(output_base_path, 'provenance.json')
+    provenance_file_path = output_base_path / 'provenance.json'
 
     with open(provenance_file_path, 'w') as provenance_file:
         provenance_data = {'template': TEMPLATE, 'extra_data': extra_data}

@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-import os
+import pathlib
 import time
 from typing import List
 
@@ -19,7 +19,9 @@ async def main() -> None:
     args = parser.parse_args()
     async_semaphore = asyncio.Semaphore(args.max_concurrency)
 
-    os.makedirs(args.output_path, exist_ok=True)
+    output_path = pathlib.Path(args.output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+
     print('Model:', args.model_name)
     print('Output folder:', args.output_path)
 
@@ -39,12 +41,10 @@ async def main() -> None:
             batch_content.append(sample)
 
         if (len(batch_content) + 1) % args.save_frequency == 0:
-            write_batch_output(
-                args.output_path, batch_index, batch_content, args.__dict__
-            )
+            write_batch_output(output_path, batch_index, batch_content, args.__dict__)
             batch_index += 1
 
-    write_batch_output(args.output_path, batch_index, batch_content, args.__dict__)
+    write_batch_output(output_path, batch_index, batch_content, args.__dict__)
 
 
 if __name__ == '__main__':
