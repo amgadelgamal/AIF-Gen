@@ -12,6 +12,14 @@ aif\_gen.util.logging module
    :undoc-members:
    :show-inheritance:
 
+aif\_gen.util.path module
+-------------------------
+
+.. automodule:: aif_gen.util.path
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 aif\_gen.util.seed module
 -------------------------
 
