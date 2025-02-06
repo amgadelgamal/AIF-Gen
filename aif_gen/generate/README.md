@@ -11,7 +11,7 @@ export OPENAI_API_KEY="..."
 ```
 
 ```bash
-source .env && python3 -m aif_gen.generate.entrypoint --model_name Meta-Llama-3.1-8B-Instruct
+source .env && uv run aif_gen/generate/entrypoint.py
 ```
 
 Output will be saved under the folder `data/`.
