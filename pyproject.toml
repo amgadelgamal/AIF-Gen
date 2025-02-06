@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=2.0.2",
     "openai>=1.61.1",
     "torch>=2.5.1",
+    "types-pyyaml>=6.0.12.20241230",
 ]
 
 [dependency-groups]
