@@ -60,10 +60,12 @@ async def generate(
     assert output is not None
 
     try:
-        response = _OutputModel.model_validate_json(output)
-        logging.debug(f'Received response: {response}')
+        structured_response: _OutputModel = _OutputModel.model_validate_json(output)
+        logging.debug(f'Received response: {structured_response}')
         return AlignmentDatasetSample(
-            prompt=prompt, chosen=response.chosen, rejected=response.rejected
+            prompt=prompt,
+            chosen=structured_response.chosen,
+            rejected=structured_response.rejected,
         )
     except pydantic.ValidationError as e:
         logging.exception(e)
