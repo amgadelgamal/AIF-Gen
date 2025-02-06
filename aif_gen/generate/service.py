@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import AsyncGenerator, List, Optional
 
 import backoff
@@ -16,7 +17,10 @@ class _OutputModel(pydantic.BaseModel):
     rejected: str
 
 
-client = openai.AsyncOpenAI()
+try:
+    client = openai.AsyncOpenAI()
+except Exception as e:
+    logging.exception(e)
 
 
 async def process_prompts(
@@ -57,9 +61,10 @@ async def generate(
 
     try:
         response = _OutputModel.model_validate_json(output)
+        logging.debug(f'Received response: {response}')
         return AlignmentDatasetSample(
             prompt=prompt, chosen=response.chosen, rejected=response.rejected
         )
     except pydantic.ValidationError as e:
-        print(e)
+        logging.exception(e)
         return None
