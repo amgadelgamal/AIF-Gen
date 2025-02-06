@@ -19,7 +19,7 @@ class _OutputModel(pydantic.BaseModel):
 
 try:
     client = openai.AsyncOpenAI()
-except Exception as e:
+except (openai.OpenAIError, Exception) as e:
     logging.exception(e)
 
 
