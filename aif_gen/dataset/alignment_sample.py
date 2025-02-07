@@ -17,3 +17,8 @@ class AlignmentDatasetSample:
     prompt: str
     chosen: str
     rejected: str
+
+    def __str__(self) -> str:
+        return (
+            f'Prompt: {self.prompt}, Chosen: {self.chosen}, Rejected: {self.rejected}'
+        )

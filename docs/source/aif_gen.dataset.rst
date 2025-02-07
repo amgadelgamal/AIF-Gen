@@ -8,6 +8,7 @@ Subpackages
    :maxdepth: 4
 
    aif_gen.dataset.transforms
+   aif_gen.dataset.validation
 
 Submodules
 ----------
