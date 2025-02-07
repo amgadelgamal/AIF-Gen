@@ -27,6 +27,9 @@ dev = [
     "sphinx>=7.4.7",
     "sphinx-rtd-theme>=3.0.2",
 ]
+benchmarks = [
+    "trl>=0.14.0",
+]
 
 [tool.mypy]
 files = ["aif_gen"]
