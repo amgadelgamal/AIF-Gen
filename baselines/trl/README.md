@@ -1,19 +1,6 @@
 # TRL - Transformer Reinforcement Learning
 
-use python 3.9 
-install trl and transformers from the source
-
-```bash
-pip install accelerate
-pip install datasets
-pip install rich
-pip install git+https://github.com/huggingface/trl.git
-pip install trl[peft]
-pip install bitsandbytes loralib
-pip install git+https://github.com/huggingface/transformers.git@main
-pip install wandb
-```
-
+use python 3.9
 
 ```bash
 export PYTHONPATH=$PYTHONPATH:/path/to/AIF-Gen
@@ -22,7 +9,22 @@ export PYTHONPATH=$PYTHONPATH:/path/to/AIF-Gen
 To train continually with DPO use:
 
 ```bash 
-python baselines/trl/dpo_continual.py --num_train_epochs 1 --dataset ultrafeedback2anthropic
+python baselines/trl/dpo_continual.py \
+    --dataset_name ultrafeedback2anthropic \
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --learning_rate 5.0e-6 \
+    --num_train_epochs 1 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
+    --gradient_checkpointing \
+    --logging_steps 25 \
+    --eval_strategy steps \
+    --eval_steps 50 \
+    --output_dir Qwen2-0.5B-DPO \
+    --no_remove_unused_columns \
+    --use_peft \
+    --lora_r 32 \
+    --lora_alpha 16
 ```
 
 

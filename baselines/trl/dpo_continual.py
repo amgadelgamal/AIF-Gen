@@ -1,117 +1,151 @@
-import tyro
-import torch
-import random
-import numpy as np
+# Adaptation of the DPO training script for continual learning.
+
+"""
+# Full training
+python trl/scripts/dpo.py \
+    --dataset_name trl-lib/ultrafeedback_binarized \
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --learning_rate 5.0e-7 \
+    --num_train_epochs 1 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
+    --gradient_checkpointing \
+    --logging_steps 25 \
+    --eval_strategy steps \
+    --eval_steps 50 \
+    --output_dir Qwen2-0.5B-DPO \
+    --no_remove_unused_columns
+
+# LoRA:
+python trl/scripts/dpo.py \
+    --dataset_name trl-lib/ultrafeedback_binarized \
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --learning_rate 5.0e-6 \
+    --num_train_epochs 1 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
+    --gradient_checkpointing \
+    --logging_steps 25 \
+    --eval_strategy steps \
+    --eval_steps 50 \
+    --output_dir Qwen2-0.5B-DPO \
+    --no_remove_unused_columns \
+    --use_peft \
+    --lora_r 32 \
+    --lora_alpha 16
+"""
+
+import argparse
 import wandb
 
-from transformers import AutoTokenizer
-from trl import DPOConfig, DPOTrainer, AutoModelForCausalLMWithValueHead
-from peft import LoraConfig
-from dataclasses import dataclass
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from trl import (
+    DPOConfig,
+    DPOTrainer,
+    ModelConfig,
+    ScriptArguments,
+    TrlParser,
+    get_kbit_device_map,
+    get_peft_config,
+    get_quantization_config,
+)
+from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
 from aif_gen.dataset import DebugContinualDataset, ContinualUltrafeedback2AnthropicDataset
 
 
-@dataclass
-class Args:
-    model_name: str = "Qwen/Qwen2.5-0.5B-Instruct" # facebook/opt-350m gpt2 google/flan-t5-small
-    """base model to start to finetune with"""
-    output_dir: str = "~/scratch/DPO"
-    """output directory"""
-    dataset: str = "debug"
-    """dataset to use, current options are: debug and ultrafeedback2anthropic"""
-    exp_name: str = "default"
-    """experiment name"""
-    torch_deterministic: bool = False
-    """if toggled, `torch.backends.cudnn.deterministic=True`"""
-    seed: int = 1
-    """seed of the experiment"""
-    wandb_project_name: str = "AIF-Gen-Training"
-    """the wandb's project name"""
-    wandb_entity: str = ''
-    """the entity (team) of wandb's project"""
-    num_train_epochs: int = 1
-    """number of training epochs"""
-    per_device_train_batch_size: int = 4
-    """batch size per device"""
-    wandb_mode: str = "online"
-    """wandb mode, either online or offline"""
+def main(script_args, training_args, model_args):
+    ################
+    # Model & Tokenizer
+    ###################
+    torch_dtype = (
+        model_args.torch_dtype if model_args.torch_dtype in ["auto", None] else getattr(torch, model_args.torch_dtype)
+    )
+    quantization_config = get_quantization_config(model_args)
+    model_kwargs = dict(
+        revision=model_args.model_revision,
+        attn_implementation=model_args.attn_implementation,
+        torch_dtype=torch_dtype,
+        use_cache=False if training_args.gradient_checkpointing else True,
+        device_map=get_kbit_device_map() if quantization_config is not None else None,
+        quantization_config=quantization_config,
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_args.model_name_or_path, trust_remote_code=model_args.trust_remote_code, **model_kwargs
+    )
+    peft_config = get_peft_config(model_args)
+    if peft_config is None:
+        ref_model = AutoModelForCausalLM.from_pretrained(
+            model_args.model_name_or_path, trust_remote_code=model_args.trust_remote_code, **model_kwargs
+        )
+    else:
+        ref_model = None
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path, trust_remote_code=model_args.trust_remote_code
+    )
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    if tokenizer.chat_template is None:
+        tokenizer.chat_template = SIMPLE_CHAT_TEMPLATE
+    if script_args.ignore_bias_buffers:
+        # torch distributed hack
+        model._ddp_params_and_buffers_to_ignore = [
+            name for name, buffer in model.named_buffers() if buffer.dtype == torch.bool
+        ]
+
+    ################
+    # Dataset
+    ################
+    if script_args.dataset_name == 'debug':
+        continual_dataset = DebugContinualDataset()
+    elif script_args.dataset_name == 'ultrafeedback2anthropic':
+        continual_dataset = ContinualUltrafeedback2AnthropicDataset()
+    else:
+        raise ValueError(f"Unknown dataset: {script_args.dataset_name}")
+
+    for i, dataset in enumerate(continual_dataset.datasets):
+
+        ##########
+        # Training
+        ################
+        trainer = DPOTrainer(
+            model,
+            ref_model,
+            args=training_args,
+            train_dataset=dataset[script_args.dataset_train_split],
+            eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None,
+            processing_class=tokenizer,
+            peft_config=peft_config,
+        )
+
+        trainer.train()
+
+        if training_args.eval_strategy != "no":
+            metrics = trainer.evaluate()
+            metrics['dataset'] = i + 1
+            trainer.log_metrics("eval" + f"_dataset-{i}", metrics)
+            trainer.save_metrics("eval" + f"_dataset-{i}", metrics)
+            metrics = {"last/" + k: v for k, v in metrics.items()}
+            wandb.log(metrics)
+
+        # Save and push to hub
+        trainer.save_model(training_args.output_dir + f"/dataset-{i}")
+        if training_args.push_to_hub:
+            trainer.push_to_hub(dataset_name=script_args.dataset_name + f"/dataset-{i}")
+
+
+def make_parser(subparsers: argparse._SubParsersAction = None):
+    dataclass_types = (ScriptArguments, DPOConfig, ModelConfig)
+    if subparsers is not None:
+        parser = subparsers.add_parser("dpo", help="Run the DPO training script", dataclass_types=dataclass_types)
+    else:
+        parser = TrlParser(dataclass_types)
+    return parser
 
 
 if __name__ == "__main__":
-    args = tyro.cli(Args)
-
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = args.torch_deterministic
-
-    group_name = f"{args.model_name}-DPO-{args.exp_name}"
-    run_name = f"{group_name}-{args.seed}"
-
-    # LoRA configuration
-    lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-
-    model = AutoModelForCausalLMWithValueHead.from_pretrained(args.model_name, peft_config=lora_config,)
-    model.warnings_issued = {}
-    model.config.return_dict = True
-
-    # Apply LoRA to the model
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-
-    # Set the tokenizer's pad_token to eos_token if it's not already set
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    if args.dataset == 'debug':
-        continual_dataset = DebugContinualDataset()
-    elif args.dataset == 'ultrafeedback2anthropic':
-        continual_dataset = ContinualUltrafeedback2AnthropicDataset()
-    else:
-        raise ValueError(f"Unknown dataset: {args.dataset}")
-
-    training_args = DPOConfig(output_dir=args.output_dir,
-                              per_device_train_batch_size=args.per_device_train_batch_size,
-                              num_train_epochs=args.num_train_epochs,
-                              evaluation_strategy="epoch",
-                              per_device_eval_batch_size=args.per_device_train_batch_size,
-                              lr_scheduler_type="constant",
-                              )
-
-    wandb.init(project=args.wandb_project_name, entity=args.wandb_entity, group=group_name, name=run_name,
-               config=vars(training_args), mode=args.wandb_mode)
-
-    for i, dataset in enumerate(continual_dataset.datasets):
-        trainer = DPOTrainer(model=model, args=training_args,
-                             train_dataset=dataset['train'],
-                             eval_dataset=dataset['test'],
-                             processing_class=tokenizer,
-                             )
-
-        print('running evaluation on dataset', i)
-        eval_results = trainer.evaluate()
-        eval_results = {"f/"+k: v for k, v in eval_results.items()}
-        # ToDo: maybe it's better to log the dataset name or index, that should come from the dataset itself
-        eval_results['dataset'] = i
-        wandb.log(eval_results)
-
-        print('running training on dataset', i)
-        trainer.train()
-
-        # Save the model
-        save_path = f"{args.output_dir}/dataset-{i}/{run_name}"
-        trainer.save_model(save_path)
-
-    print('running evaluation on dataset', i)
-    eval_results = trainer.evaluate()
-    eval_results = {"f/" + k: v for k, v in eval_results.items()}
-    eval_results['dataset'] = i + 1
-    wandb.log(eval_results)
-
-    wandb.finish()
+    parser = make_parser()
+    script_args, training_args, model_args = parser.parse_args_and_config()
+    main(script_args, training_args, model_args)
