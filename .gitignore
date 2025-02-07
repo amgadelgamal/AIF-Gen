@@ -20,7 +20,7 @@ lib/
 lib64/
 parts/
 sdist/
-scripts/
+slurm_scripts/
 var/
 wheels/
 share/python-wheels/

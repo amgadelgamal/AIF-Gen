@@ -1,4 +1,4 @@
-# TRL - Transformer Reinforcement Learning
+# Adaptation of TRL for Continual Learning 
 
 use python 3.9
 
@@ -10,7 +10,7 @@ To train continually with DPO use:
 
 ```bash 
 python baselines/trl/dpo_continual.py \
-    --dataset_name ultrafeedback2anthropic \
+    --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
@@ -27,6 +27,7 @@ python baselines/trl/dpo_continual.py \
     --lora_alpha 16
 ```
 
+[//]: # (ultrafeedback2anthropic)
 
 ```bash
 <div style="text-align: center">

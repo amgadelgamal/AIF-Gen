@@ -2,7 +2,7 @@
 
 """
 # Full training
-python trl/scripts/dpo.py \
+python trl/slurm_scripts/dpo.py \
     --dataset_name trl-lib/ultrafeedback_binarized \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --learning_rate 5.0e-7 \
@@ -17,7 +17,7 @@ python trl/scripts/dpo.py \
     --no_remove_unused_columns
 
 # LoRA:
-python trl/scripts/dpo.py \
+python trl/slurm_scripts/dpo.py \
     --dataset_name trl-lib/ultrafeedback_binarized \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --learning_rate 5.0e-6 \
