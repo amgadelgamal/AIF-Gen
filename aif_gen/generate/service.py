@@ -95,13 +95,13 @@ async def generate_task_prompt(
 ) -> str:
     logging.info(f'Generating task prompt for {task}')
     prompt_mapper = PromptMapper()
-    prompt = prompt_mapper.generate_prompt(task)
-    logging.debug(f'Using task prompt: {prompt}')
+    meta_prompt = prompt_mapper.generate_prompt(task)
+    logging.debug(f'Using meta prompt: {meta_prompt}')
 
     async with async_semaphore:
         response = await client.chat.completions.create(
             model=model_name,
-            messages=[{'role': 'user', 'content': prompt}],
+            messages=[{'role': 'user', 'content': meta_prompt}],
         )
     prompt = response.choices[0].message.content
     assert prompt is not None
