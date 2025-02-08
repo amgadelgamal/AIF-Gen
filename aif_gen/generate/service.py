@@ -33,59 +33,20 @@ async def process_tasks(
         yield dataset
 
 
+@backoff.on_exception(backoff.expo, (openai.RateLimitError,))
 async def generate_dataset(
     task: AlignmentTask,
     num_samples: int,
     model_name: str,
     async_semaphore: asyncio.Semaphore,
 ) -> AlignmentDataset:
-    task_prompt = await generate_task_prompt(task, model_name, async_semaphore)
-    samples = await generate_samples(
-        task, task_prompt, num_samples, model_name, async_semaphore
-    )
-    return AlignmentDataset(task, samples)
-
-
-@backoff.on_exception(backoff.expo, (openai.RateLimitError,))
-async def generate_task_prompt(
-    task: AlignmentTask,
-    model_name: str,
-    async_semaphore: asyncio.Semaphore,
-) -> str:
-    logging.info(f'Generating task prompt for {task}')
-    prompt_mapper = PromptMapper()
-    prompt = prompt_mapper.generate_prompt(task)
-    logging.debug(f'Using task prompt: {prompt}')
-
-    async with async_semaphore:
-        response = await client.chat.completions.create(
-            model=model_name,
-            messages=[{'role': 'user', 'content': prompt}],
-        )
-    output = response.choices[0].message.content
-    assert output is not None
-    logging.info(f'Generated task prompt: {output}')
-    return output
-
-
-@backoff.on_exception(backoff.expo, (openai.RateLimitError,))
-async def generate_samples(
-    task: AlignmentTask,
-    task_prompt: str,
-    num_samples: int,
-    model_name: str,
-    async_semaphore: asyncio.Semaphore,
-) -> List[AlignmentDatasetSample]:
-    logging.info(f'Generating {num_samples} response pairs for {task}')
-    response_mapper = ResponseMapper()
-    prompt = response_mapper.generate_prompt(task, task_prompt, num_samples)
-    logging.debug(f'Using response prompt: {prompt}')
-
-    class _ResponsePair(pydantic.BaseModel):
-        chosen: str
-        rejected: str
+    prompt = await generate_task_prompt(task, num_samples, model_name, async_semaphore)
 
     class _ResponsePairList(pydantic.BaseModel):
+        class _ResponsePair(pydantic.BaseModel):
+            chosen: str
+            rejected: str
+
         responses: List[_ResponsePair]
 
     async with async_semaphore:
@@ -104,6 +65,7 @@ async def generate_samples(
     output = response.choices[0].message.content
     assert output is not None
 
+    samples = []
     try:
         responses = _ResponsePairList.model_validate_json(output).responses
         logging.debug(f'Received {len(responses)} response pairs: {responses}')
@@ -111,12 +73,42 @@ async def generate_samples(
             logging.warning(
                 f'Requested {num_samples} response pairs LM generated {len(responses)}'
             )
-        return [
+
+        samples = [
             AlignmentDatasetSample(
-                prompt=task_prompt, chosen=response.chosen, rejected=response.rejected
+                prompt=prompt, chosen=response.chosen, rejected=response.rejected
             )
             for response in responses
         ]
     except pydantic.ValidationError as e:
         logging.exception(e)
-        return []
+
+    return AlignmentDataset(task, samples)
+
+
+@backoff.on_exception(backoff.expo, (openai.RateLimitError,))
+async def generate_task_prompt(
+    task: AlignmentTask,
+    num_samples: int,
+    model_name: str,
+    async_semaphore: asyncio.Semaphore,
+) -> str:
+    logging.info(f'Generating task prompt for {task}')
+    prompt_mapper = PromptMapper()
+    prompt = prompt_mapper.generate_prompt(task)
+    logging.debug(f'Using task prompt: {prompt}')
+
+    async with async_semaphore:
+        response = await client.chat.completions.create(
+            model=model_name,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+    prompt = response.choices[0].message.content
+    assert prompt is not None
+    logging.info(f'Generated prompt: {prompt}')
+
+    logging.info(f'Generating {num_samples} response pairs for {task}')
+    response_mapper = ResponseMapper()
+    task_prompt = response_mapper.generate_prompt(task, prompt, num_samples)
+    logging.debug(f'Using task prompt: {task_prompt}')
+    return task_prompt
