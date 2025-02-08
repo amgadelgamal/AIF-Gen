@@ -1,15 +1,11 @@
 import argparse
 import asyncio
 import logging
-import pathlib
 import time
 
 import yaml
 
-from aif_gen.api.prompt_mapper import PromptMapper
-from aif_gen.api.response_mapper import ResponseMapper
-from aif_gen.dataset import AlignmentDataset
-from aif_gen.generate.service import process_prompts
+from aif_gen.generate.service import process_tasks
 from aif_gen.task import AlignmentTask
 from aif_gen.util.logging import setup_basic_logging
 from aif_gen.util.path import get_root_dir
@@ -35,12 +31,6 @@ parser.add_argument(
     type=str,
     default=f'data/{time.time()}',
     help='Path to directory where to save the dataset.',
-)
-parser.add_argument(
-    '--save_frequency',
-    type=int,
-    default=500,
-    help='Number of samples to batch write to disc.',
 )
 parser.add_argument(
     '--max_concurrency',
@@ -69,54 +59,17 @@ async def main() -> None:
     logging.info(f'Generating AIF Dataset for task: {task}')
     logging.info(f'Using Model: {config_dict["model_name"]}')
 
-    # TODO: Technically these need to be done sequentially
-    task_prompt = get_task_prompt(task)
-    response_prompt = get_response_prompt(task, task_prompt, config_dict['num_samples'])
-
-    batch_index: int = 0
-    dataset = AlignmentDataset(task, [])
-    async for sample in process_prompts(
-        prompts=[task_prompt, response_prompt],
+    tasks = [task]
+    async for dataset in process_tasks(
+        tasks=tasks,
+        num_samples=config_dict['num_samples'],
         model_name=config_dict['model_name'],
         async_semaphore=async_semaphore,
     ):
-        if sample is not None:
-            dataset.append(sample)
-
-        if (len(dataset) + 1) % args.save_frequency == 0:
-            write_dataset_batch(dataset, output_path, batch_index)
-            dataset = AlignmentDataset(task, [])  # Should be able to just clear it
-            batch_index += 1
-
-    output_file_path = output_path / f'output_{batch_index:03d}.json'
-    dataset.to_json(output_file_path)
-
-
-def write_dataset_batch(
-    dataset: AlignmentDataset, output_path: pathlib.Path, batch_index: int
-) -> None:
-    output_file_path = output_path / f'output_{batch_index:03d}.json'
-    logging.info(f'Writing batch with {len(dataset)} samples to {output_file_path}')
-    dataset.to_json(output_file_path)
-    logging.info(f'Wrote batch with {len(dataset)} samples to {output_file_path}')
-
-
-def get_task_prompt(task: AlignmentTask) -> str:
-    logging.info(f'Generating task prompt for {task}')
-
-    prompt_mapper = PromptMapper()
-    prompt = prompt_mapper.generate_prompt(task)
-    logging.info(f'Using task prompt:\n\n{prompt}')
-    return prompt
-
-
-def get_response_prompt(task: AlignmentTask, task_prompt: str, num_samples: int) -> str:
-    logging.info(f'Generating response prompt ({num_samples} samples)')
-
-    response_mapper = ResponseMapper()
-    prompt = response_mapper.generate_prompt(task, task_prompt, num_samples=num_samples)
-    logging.info(f'Using response prompt:\n\n{prompt}')
-    return prompt
+        output_file_path = output_path / 'train.json'
+        logging.info(f'Writing {len(dataset)} samples to {output_file_path}')
+        dataset.to_json(output_file_path)
+        logging.info(f'Wrote {len(dataset)} samples to {output_file_path}')
 
 
 if __name__ == '__main__':
