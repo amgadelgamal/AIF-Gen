@@ -45,34 +45,6 @@ class AlignmentDataset:
         # Slicing directly on the samples
         return self.samples[key]
 
-    def append(self, sample: AlignmentDatasetSample) -> None:
-        r"""Append a single AlignmentDatasetSample to the Alignment Dataset.
-
-        Args:
-            sample (AlignmentDatasetSample): The new sample to add.
-
-        Raises:
-            TypeError: if the sample is not of type AlignmentDatasetSample.
-        """
-        if isinstance(sample, AlignmentDatasetSample):
-            self.samples.append(sample)
-        else:
-            raise TypeError(
-                f'Sample: {sample} must be of type AlignmentDatasetSample but got {sample.__class__.__name__}'
-            )
-
-    def extend(self, samples: List[AlignmentDatasetSample]) -> None:
-        r"""Add multiple AlignmentDatasetSample's to the Alignment Dataset.
-
-        Args:
-            samples (List[AlignmentDatasetSample]): The new samples to add.
-
-        Raises:
-            TypeError: if any sample is not of type AlignmentDatasetSample.
-        """
-        for sample in samples:
-            self.append(sample)
-
     def to_json(self, file_path: str) -> None:
         r"""Save the AlignmentDataset to a json file.
 
