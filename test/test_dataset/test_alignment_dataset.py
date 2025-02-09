@@ -1,10 +1,12 @@
 import tempfile
 
+import pytest
+
 from aif_gen.dataset import AlignmentDataset, AlignmentDatasetSample
 from aif_gen.task import AlignmentTask, Domain
 
 
-def test_init_():
+def test_init(train_frac):
     component_dict = {
         'Component A': {
             'seed_words': ['a_foo', 'a_bar', 'a_baz'],
@@ -32,11 +34,25 @@ def test_init_():
         ),
     ]
 
-    dataset = AlignmentDataset(task, samples)
+    dataset = AlignmentDataset(task, samples, train_frac)
     assert dataset.task == task
     assert dataset.samples == samples
     assert dataset.num_samples == len(samples)
     assert len(dataset) == len(samples)
+    assert dataset.train_frac == train_frac
+    assert dataset.test_frac == 1.0 - train_frac
+    assert dataset.num_train_samples == int(len(samples) * dataset.train_frac)
+    assert dataset.num_test_samples == len(samples) - dataset.num_train_samples
+    assert dataset.train == samples[: dataset.num_train_samples]
+    assert dataset.test == samples[dataset.num_train_samples :]
+
+
+@pytest.mark.parametrize('bad_train_frac', [-1, -0.5, 1.5])
+def test_init_bad_train_frac(bad_train_frac):
+    mock_task = None
+    mock_samples = []
+    with pytest.raises(ValueError):
+        _ = AlignmentDataset(mock_task, mock_samples, bad_train_frac)
 
 
 def test_slice():
