@@ -13,6 +13,17 @@ Subpackages
    aif_gen.task
    aif_gen.util
 
+Submodules
+----------
+
+aif\_gen.typing module
+----------------------
+
+.. automodule:: aif_gen.typing
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 
