@@ -90,7 +90,7 @@ def test_slice():
     assert dataset[:] == samples[:]
 
 
-def test_dict_conversion():
+def test_dict_conversion(train_frac):
     component_dict = {
         'Component A': {
             'seed_words': ['a_foo', 'a_bar', 'a_baz'],
@@ -118,7 +118,7 @@ def test_dict_conversion():
         ),
     ]
 
-    dataset = AlignmentDataset(task, samples)
+    dataset = AlignmentDataset(task, samples, train_frac)
 
     dataset_dict = dataset.to_dict()
     recovered_dataset = AlignmentDataset.from_dict(dataset_dict)
@@ -129,7 +129,7 @@ def test_dict_conversion():
     assert recovered_dataset.samples == dataset.samples
 
 
-def test_json_conversion():
+def test_json_conversion(train_frac):
     component_dict = {
         'Component A': {
             'seed_words': ['a_foo', 'a_bar', 'a_baz'],
@@ -157,7 +157,7 @@ def test_json_conversion():
         ),
     ]
 
-    dataset = AlignmentDataset(task, samples)
+    dataset = AlignmentDataset(task, samples, train_frac)
 
     with tempfile.NamedTemporaryFile() as f:
         dataset.to_json(f.name)
