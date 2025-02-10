@@ -1,4 +1,5 @@
 import json
+import pathlib
 from dataclasses import asdict
 from typing import Any, Dict, List, Union
 
@@ -73,13 +74,13 @@ class AlignmentDataset:
         for sample in samples:
             self.append(sample)
 
-    def to_json(self, file_path: str) -> None:
+    def to_json(self, file_path: Union[str, pathlib.Path]) -> None:
         r"""Save the AlignmentDataset to a json file.
 
         Note: Uses to_dict() under the hood to get a dictionary representation.
 
         Args:
-            file_path (str): The os.pathlike object to write to.
+            file_path (Union[str, pathlib.Path]): The os.pathlike object to write to.
         """
         dataset_dict = self.to_dict()
         with open(file_path, 'w') as f:
@@ -101,13 +102,13 @@ class AlignmentDataset:
         return dataset_dict
 
     @classmethod
-    def from_json(cls, file_path: str) -> 'AlignmentDataset':
+    def from_json(cls, file_path: Union[str, pathlib.Path]) -> 'AlignmentDataset':
         r"""Load the AlignmentDataset from a json file.
 
         Note: Uses AlignmentDataset.from_dict() under the hood to parse the representation.
 
         Args:
-            file_path (str): The os.pathlike object to read from.
+            file_path (Union[str, pathlib.Path]): The os.pathlike object to read from.
 
         Returns:
             AlignmentDataset: The newly constructed AlignmentDataset.

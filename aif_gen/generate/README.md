@@ -11,14 +11,13 @@ export OPENAI_API_KEY="..."
 ```
 
 ```bash
-source .env && python3 -m aif_gen.generate.entrypoint --model_name Meta-Llama-3.1-8B-Instruct
+source .env && uv run aif_gen/generate/entrypoint.py
 ```
 
 Output will be saved under the folder `data/`.
 
-
 ## Known Limitations
 
-Structured decoding in vLLM appears to be significantly slower than regular, unconstrained decoding. 
+Structured decoding in vLLM appears to be significantly slower than regular, unconstrained decoding.
 
 See [vllm #11908](https://github.com/vllm-project/vllm/issues/11908).

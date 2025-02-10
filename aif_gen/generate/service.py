@@ -1,104 +1,114 @@
 import asyncio
-import json
-import os
-from typing import AsyncGenerator
+import logging
+from typing import AsyncGenerator, List
 
 import backoff
 import openai
 import pydantic
 from tqdm.asyncio import tqdm
 
-from aif_gen.dataset import AlignmentDatasetSample
+from aif_gen.api.prompt_mapper import PromptMapper
+from aif_gen.api.response_mapper import ResponseMapper
+from aif_gen.dataset import AlignmentDataset, AlignmentDatasetSample
+from aif_gen.task.alignment_task import AlignmentTask
+
+try:
+    client = openai.AsyncOpenAI()
+except (openai.OpenAIError, Exception) as e:
+    logging.exception(e)
 
 
-class _OutputModel(pydantic.BaseModel):
-    """Synthetic preference based on the given principles."""
-
-    chosen: str
-    rejected: str
-
-
-TEMPLATE = """\
-Scenario: {scenario}
-
-Principles: 
-- The response should be safe and promote ethical values.
-- The response should be helpful, provided that the response is safe and ethical.
-
-Given the scenario above, create a pair of response: "chosen", and "rejected", \
-such that the "chosen" response follows the given "Principles" better than the "rejected" prompt.
-"""  # TODO: replace with actual instructions
-
-client = openai.AsyncOpenAI()
+async def process_tasks(
+    tasks: List[AlignmentTask],
+    num_samples: int,
+    model_name: str,
+    async_semaphore: asyncio.Semaphore,
+) -> AsyncGenerator[AlignmentDataset, None]:
+    coros = [
+        generate_dataset(task, num_samples, model_name, async_semaphore)
+        for task in tasks
+    ]
+    for coro in tqdm(asyncio.as_completed(coros), total=len(coros)):
+        dataset = await coro
+        yield dataset
 
 
 @backoff.on_exception(backoff.expo, (openai.RateLimitError,))
-async def generate(
-    prompt: str,
+async def generate_dataset(
+    task: AlignmentTask,
+    num_samples: int,
     model_name: str,
     async_semaphore: asyncio.Semaphore,
-) -> AlignmentDatasetSample | None:
-    """ChatCompletion generation.
+) -> AlignmentDataset:
+    prompt = await generate_task_prompt(task, num_samples, model_name, async_semaphore)
 
-    Returns None if output is not parsed.
-    """
+    class _ResponsePairList(pydantic.BaseModel):
+        class _ResponsePair(pydantic.BaseModel):
+            chosen: str
+            rejected: str
+
+        responses: List[_ResponsePair]
+
     async with async_semaphore:
         response = await client.chat.completions.create(
             model=model_name,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{'role': 'user', 'content': prompt}],
             response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "SyntheticPreference",
-                    "schema": _OutputModel.model_json_schema(),
-                    "strict": True,
+                'type': 'json_schema',
+                'json_schema': {
+                    'name': 'SyntheticPreference',
+                    'schema': _ResponsePairList.model_json_schema(),
+                    'strict': True,
                 },
             },
         )
-
     output = response.choices[0].message.content
     assert output is not None
 
+    samples = []
     try:
-        response = _OutputModel.model_validate_json(output)
-        return AlignmentDatasetSample(
-            prompt=prompt, chosen=response.chosen, rejected=response.rejected
-        )
+        responses = _ResponsePairList.model_validate_json(output).responses
+        logging.debug(f'Received {len(responses)} response pairs: {responses}')
+        if len(responses) != num_samples:
+            logging.warning(
+                f'Requested {num_samples} response pairs LM generated {len(responses)}'
+            )
+
+        samples = [
+            AlignmentDatasetSample(
+                prompt=prompt, chosen=response.chosen, rejected=response.rejected
+            )
+            for response in responses
+        ]
     except pydantic.ValidationError as e:
-        print(e)
-        return
+        logging.exception(e)
+
+    return AlignmentDataset(task, samples)
 
 
-async def process_prompts(
-    prompts: list[str],  # TODO: replace with proper input data type?
+@backoff.on_exception(backoff.expo, (openai.RateLimitError,))
+async def generate_task_prompt(
+    task: AlignmentTask,
+    num_samples: int,
     model_name: str,
     async_semaphore: asyncio.Semaphore,
-) -> AsyncGenerator[AlignmentDatasetSample | None, None]:
-    """Process prompts asynchronously and show tqdm progress bar.
+) -> str:
+    logging.info(f'Generating task prompt for {task}')
+    prompt_mapper = PromptMapper()
+    meta_prompt = prompt_mapper.generate_prompt(task)
+    logging.debug(f'Using meta prompt: {meta_prompt}')
 
-    Output might not be in the same order as input.
-    """
-    coros = [generate(prompt, model_name, async_semaphore) for prompt in prompts]
-    for task in tqdm(asyncio.as_completed(coros), total=len(coros)):
-        response = await task
-        yield response
+    async with async_semaphore:
+        response = await client.chat.completions.create(
+            model=model_name,
+            messages=[{'role': 'user', 'content': meta_prompt}],
+        )
+    prompt = response.choices[0].message.content
+    assert prompt is not None
+    logging.info(f'Generated prompt: {prompt}')
 
-
-# TODO: replace with actual AlignmentDataset.
-def write_batch_output(
-    output_base_path: str,
-    batch_index: int,
-    batch_content: list[AlignmentDatasetSample],
-    extra_data: dict[str, str | int],
-) -> None:
-    """Write data and metrics to disk."""
-    output_file_path = os.path.join(output_base_path, f"output_{batch_index:03d}.json")
-    with open(output_file_path, "w") as output_file:
-        output_lines = [json.dumps(item.__dict__) for item in batch_content if item]
-        output_file.write("\n".join(output_lines))
-
-    provenance_file_path = os.path.join(output_base_path, "provenance.json")
-
-    with open(provenance_file_path, "w") as provenance_file:
-        provenance_data = {"template": TEMPLATE, "extra_data": extra_data}
-        json.dump(provenance_data, provenance_file)
+    logging.info(f'Generating {num_samples} response pairs for {task}')
+    response_mapper = ResponseMapper()
+    task_prompt = response_mapper.generate_prompt(task, prompt, num_samples)
+    logging.debug(f'Using task prompt: {task_prompt}')
+    return task_prompt
