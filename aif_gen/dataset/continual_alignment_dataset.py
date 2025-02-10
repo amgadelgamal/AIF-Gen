@@ -134,29 +134,3 @@ class ContinualAlignmentDataset:
         for dataset in dataset_dict['datasets']:
             datasets.append(AlignmentDataset.from_dict(dataset))
         return cls(datasets)
-
-
-class DebugContinualDataset(ContinualAlignmentDataset):
-
-    def __init__(self, ) -> None:
-        from datasets import load_dataset
-        datasets = [
-            {"train": load_dataset("trl-lib/ultrafeedback_binarized", split="train").select(range(100)),
-             'test': load_dataset("trl-lib/ultrafeedback_binarized", split="test").select(range(100))},
-            {"train": load_dataset("trl-lib/ultrafeedback_binarized", split="train").select(range(100, 200)),
-             'test': load_dataset("trl-lib/ultrafeedback_binarized", split="test").select(range(100, 200))},
-            {"train": load_dataset("Anthropic/hh-rlhf", split="train").select(range(100)),
-             'test': load_dataset("Anthropic/hh-rlhf", split="test").select(range(100))},
-        ]
-        super().__init__(datasets)
-
-
-class ContinualUltrafeedback2AnthropicDataset(ContinualAlignmentDataset):
-
-    def __init__(self, ) -> None:
-        from datasets import load_dataset
-        datasets =  [
-            load_dataset("trl-lib/ultrafeedback_binarized"),
-            load_dataset("Anthropic/hh-rlhf")
-            ]
-        super().__init__(datasets)

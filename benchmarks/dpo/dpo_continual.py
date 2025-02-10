@@ -35,10 +35,8 @@ python trl/slurm_scripts/dpo.py \
     --lora_alpha 16
 """
 
-import argparse
-import wandb
-
 import torch
+import wandb
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from trl import (
@@ -53,13 +51,10 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
-from aif_gen.dataset import DebugContinualDataset, ContinualUltrafeedback2AnthropicDataset
+from .mock_data import init_mock_dataset
 
 
-def main(script_args, training_args, model_args):
-    ################
-    # Model & Tokenizer
-    ###################
+def main(script_args: ScriptArguments, training_args: DPOConfig, model_args: ModelConfig) -> None:
     torch_dtype = (
         model_args.torch_dtype if model_args.torch_dtype in ["auto", None] else getattr(torch, model_args.torch_dtype)
     )
@@ -95,21 +90,9 @@ def main(script_args, training_args, model_args):
             name for name, buffer in model.named_buffers() if buffer.dtype == torch.bool
         ]
 
-    ################
-    # Dataset
-    ################
-    if script_args.dataset_name == 'debug':
-        continual_dataset = DebugContinualDataset()
-    elif script_args.dataset_name == 'ultrafeedback2anthropic':
-        continual_dataset = ContinualUltrafeedback2AnthropicDataset()
-    else:
-        raise ValueError(f"Unknown dataset: {script_args.dataset_name}")
+    continual_dataset = init_mock_dataset(script_args.dataset_name)
 
     for i, dataset in enumerate(continual_dataset.datasets):
-
-        ##########
-        # Training
-        ################
         trainer = DPOTrainer(
             model,
             ref_model,
@@ -124,7 +107,7 @@ def main(script_args, training_args, model_args):
 
         if training_args.eval_strategy != "no":
             metrics = trainer.evaluate()
-            metrics['dataset'] = i + 1
+            metrics["dataset"] = i + 1
             trainer.log_metrics("eval" + f"_dataset-{i}", metrics)
             trainer.save_metrics("eval" + f"_dataset-{i}", metrics)
             metrics = {"last/" + k: v for k, v in metrics.items()}
@@ -136,16 +119,9 @@ def main(script_args, training_args, model_args):
             trainer.push_to_hub(dataset_name=script_args.dataset_name + f"/dataset-{i}")
 
 
-def make_parser(subparsers: argparse._SubParsersAction = None):
-    dataclass_types = (ScriptArguments, DPOConfig, ModelConfig)
-    if subparsers is not None:
-        parser = subparsers.add_parser("dpo", help="Run the DPO training script", dataclass_types=dataclass_types)
-    else:
-        parser = TrlParser(dataclass_types)
-    return parser
-
-
 if __name__ == "__main__":
-    parser = make_parser()
+    dataclass_types = (ScriptArguments, DPOConfig, ModelConfig)
+    parser = TrlParser(dataclass_types)
+
     script_args, training_args, model_args = parser.parse_args_and_config()
     main(script_args, training_args, model_args)

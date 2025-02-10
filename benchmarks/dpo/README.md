@@ -1,4 +1,4 @@
-# Adaptation of TRL for Continual Learning 
+# Adaptation of TRL for Continual Learning
 
 use python 3.9
 
@@ -8,7 +8,7 @@ export PYTHONPATH=$PYTHONPATH:/path/to/AIF-Gen
 
 To train continually with DPO use:
 
-```bash 
+```bash
 python baselines/trl/dpo_continual.py \
     --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
@@ -27,9 +27,7 @@ python baselines/trl/dpo_continual.py \
     --lora_alpha 16
 ```
 
-[//]: # (ultrafeedback2anthropic)
-
-```bash
+````bash
 <div style="text-align: center">
 <img src="https://huggingface.co/datasets/trl-lib/documentation-images/resolve/main/trl_banner_dark.png" alt="TRL Banner">
 </div>
@@ -52,7 +50,7 @@ TRL is a cutting-edge library designed for post-training foundation models using
 
 ## Highlights
 
-- **Efficient and scalable**: 
+- **Efficient and scalable**:
     - Leverages [🤗 Accelerate](https://github.com/huggingface/accelerate) to scale from single GPU to multi-node clusters using methods like DDP and DeepSpeed.
     - Full integration with [`PEFT`](https://github.com/huggingface/peft) enables training on large models with modest hardware via quantization and LoRA/QLoRA.
     - Integrates [Unsloth](https://github.com/unslothai/unsloth) for accelerating training using optimized kernels.
@@ -71,7 +69,7 @@ Install the library using `pip`:
 
 ```bash
 pip install trl
-```
+````
 
 ### From source
 
@@ -91,7 +89,7 @@ git clone https://github.com/huggingface/trl.git
 
 ## Command Line Interface (CLI)
 
-You can use the TRL Command Line Interface (CLI) to quickly get started with Supervised Fine-tuning (SFT) and Direct Preference Optimization (DPO), or vibe check your model with the chat CLI: 
+You can use the TRL Command Line Interface (CLI) to quickly get started with Supervised Fine-tuning (SFT) and Direct Preference Optimization (DPO), or vibe check your model with the chat CLI:
 
 **SFT:**
 
@@ -106,7 +104,7 @@ trl sft --model_name_or_path Qwen/Qwen2.5-0.5B \
 ```bash
 trl dpo --model_name_or_path Qwen/Qwen2.5-0.5B-Instruct \
     --dataset_name argilla/Capybara-Preferences \
-    --output_dir Qwen2.5-0.5B-DPO 
+    --output_dir Qwen2.5-0.5B-DPO
 ```
 
 **Chat:**
