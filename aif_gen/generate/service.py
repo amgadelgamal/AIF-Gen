@@ -12,6 +12,7 @@ from aif_gen.api.response_mapper import ResponseMapper
 from aif_gen.dataset import AlignmentDataset, AlignmentDatasetSample
 from aif_gen.task.alignment_task import AlignmentTask
 
+# TODO: Wrap the openAI API and integrate VLLM API
 try:
     client = openai.AsyncOpenAI()
 except (openai.OpenAIError, Exception) as e:
@@ -19,13 +20,22 @@ except (openai.OpenAIError, Exception) as e:
 
 
 async def process_tasks(
-    config_dict: Dict[str, Any],
+    config_dict: Dict[str, Any],  # TODO: Should bind this type
     async_semaphore: asyncio.Semaphore,
 ) -> AsyncGenerator[AlignmentDataset, None]:
+    r"""Generate a ContinualAlignment dataset given the AIF configuratiohn file.
+
+    Args:
+        config_dict (Dict[str, Any]): Configuration file storing tasks specifications and model info.
+        async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
+
+    Returns:
+        AsyncGenerator[AlignmentDataset, None]: Yields each slice of the ContinualAlignmentDataset.
+    """
     model_name = config_dict['model_name']
     logging.info(f'Using Model: {model_name}')
 
-    task_specs = config_dict['data']['task_specs']  # TODO: Should bind this type
+    task_specs = config_dict['data']['task_specs']
     coros = [
         generate_dataset(
             AlignmentTask.from_dict(task_spec['alignment_task']),
@@ -47,8 +57,19 @@ async def generate_dataset(
     model_name: str,
     async_semaphore: asyncio.Semaphore,
 ) -> AlignmentDataset:
+    r"""Generate a AlignmentDataset dataset given the AlignmentTask, and model.
+
+    Args:
+        task (AlignmentTask): The AlignmentTask to generate data for.
+        num_samples (int): The number of samples to generate in the dataset.
+        model_name (str): openAI model alias.
+        async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
+
+    Returns:
+        AlignmentDataset: The synthetically generated AlignmentDataset.
+    """
     logging.info(f'Generating AIF Dataset for task: {task}')
-    prompt = await generate_task_prompt(task, num_samples, model_name, async_semaphore)
+    prompt = await _generate_task_prompt(task, num_samples, model_name, async_semaphore)
 
     class _ResponsePairList(pydantic.BaseModel):
         class _ResponsePair(pydantic.BaseModel):
@@ -90,11 +111,12 @@ async def generate_dataset(
     except pydantic.ValidationError as e:
         logging.exception(e)
 
+    # TODO: May want to include data splits here directly #44
     return AlignmentDataset(task, samples)
 
 
 @backoff.on_exception(backoff.expo, (openai.RateLimitError,))
-async def generate_task_prompt(
+async def _generate_task_prompt(
     task: AlignmentTask,
     num_samples: int,
     model_name: str,

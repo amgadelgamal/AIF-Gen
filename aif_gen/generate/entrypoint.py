@@ -55,6 +55,7 @@ async def main() -> None:
 
     async_semaphore = asyncio.Semaphore(args.max_concurrency)
 
+    # TODO: Should directly construct a ContinualAlignmentDataset (or incrementally flush it to disc)
     async for dataset in process_tasks(config_dict, async_semaphore=async_semaphore):
         logging.info(f'Writing {len(dataset)} samples to {output_file_path}')
         dataset.to_json(output_file_path)
