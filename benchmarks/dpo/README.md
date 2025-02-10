@@ -1,6 +1,7 @@
 # Adaptation of TRL for Continual Learning
 
 ### Sync additional dependencies
+
 ```sh
 uv sync --group benchmarks.dpo
 ```
