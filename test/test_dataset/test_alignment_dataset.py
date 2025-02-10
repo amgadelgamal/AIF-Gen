@@ -6,7 +6,7 @@ from aif_gen.dataset import AlignmentDataset, AlignmentDatasetSample
 from aif_gen.task import AlignmentTask, Domain
 
 
-def test_init_():
+def test_init(train_frac):
     component_dict = {
         'Component A': {
             'seed_words': ['a_foo', 'a_bar', 'a_baz'],
@@ -34,107 +34,25 @@ def test_init_():
         ),
     ]
 
-    dataset = AlignmentDataset(task, samples)
+    dataset = AlignmentDataset(task, samples, train_frac)
     assert dataset.task == task
     assert dataset.samples == samples
     assert dataset.num_samples == len(samples)
     assert len(dataset) == len(samples)
+    assert dataset.train_frac == train_frac
+    assert dataset.test_frac == 1.0 - train_frac
+    assert dataset.num_train_samples == int(len(samples) * dataset.train_frac)
+    assert dataset.num_test_samples == len(samples) - dataset.num_train_samples
+    assert dataset.train == samples[: dataset.num_train_samples]
+    assert dataset.test == samples[dataset.num_train_samples :]
 
 
-def test_append():
-    component_dict = {
-        'Component A': {
-            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-            'description': 'A Mock Domain Component',
-        },
-        'Component B': {
-            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
-            'description': 'B Mock Domain Component',
-        },
-    }
-    domain = Domain.from_dict(component_dict)
-    objective = 'Mock Objective'
-    preference = 'Mock Preference'
-    task = AlignmentTask(domain, objective, preference)
-
-    samples = [
-        AlignmentDatasetSample(
-            'Mock prompt A', 'Winning Response A', 'Losing Response A'
-        ),
-        AlignmentDatasetSample(
-            'Mock prompt B', 'Winning Response B', 'Losing Response B'
-        ),
-        AlignmentDatasetSample(
-            'Mock prompt C', 'Winning Response C', 'Losing Response C'
-        ),
-    ]
-
-    dataset = AlignmentDataset(task, [])
-
-    for i in range(len(samples)):
-        assert dataset.task == task
-        assert dataset.samples == samples[:i]
-        assert dataset.num_samples == i
-        assert len(dataset) == i
-        dataset.append(samples[i])
-
-
-def test_append_bad_type():
-    component_dict = {
-        'Component A': {
-            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-            'description': 'A Mock Domain Component',
-        },
-        'Component B': {
-            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
-            'description': 'B Mock Domain Component',
-        },
-    }
-    domain = Domain.from_dict(component_dict)
-    objective = 'Mock Objective'
-    preference = 'Mock Preference'
-    task = AlignmentTask(domain, objective, preference)
-
-    dataset = AlignmentDataset(task, [])
-    with pytest.raises(TypeError):
-        dataset.append('Bad type')
-
-
-def test_extend():
-    component_dict = {
-        'Component A': {
-            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-            'description': 'A Mock Domain Component',
-        },
-        'Component B': {
-            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
-            'description': 'B Mock Domain Component',
-        },
-    }
-    domain = Domain.from_dict(component_dict)
-    objective = 'Mock Objective'
-    preference = 'Mock Preference'
-    task = AlignmentTask(domain, objective, preference)
-
-    samples = [
-        AlignmentDatasetSample(
-            'Mock prompt A', 'Winning Response A', 'Losing Response A'
-        ),
-        AlignmentDatasetSample(
-            'Mock prompt B', 'Winning Response B', 'Losing Response B'
-        ),
-        AlignmentDatasetSample(
-            'Mock prompt C', 'Winning Response C', 'Losing Response C'
-        ),
-    ]
-
-    dataset = AlignmentDataset(task, [])
-    dataset.extend(samples)
-
-    assert dataset.task == task
-    assert dataset.samples == samples
-    assert dataset.num_samples == len(samples)
-    assert len(dataset) == len(samples)
+@pytest.mark.parametrize('bad_train_frac', [-1, -0.5, 1.5])
+def test_init_bad_train_frac(bad_train_frac):
+    mock_task = None
+    mock_samples = []
+    with pytest.raises(ValueError):
+        _ = AlignmentDataset(mock_task, mock_samples, bad_train_frac)
 
 
 def test_slice():
@@ -172,7 +90,7 @@ def test_slice():
     assert dataset[:] == samples[:]
 
 
-def test_dict_conversion():
+def test_dict_conversion(train_frac):
     component_dict = {
         'Component A': {
             'seed_words': ['a_foo', 'a_bar', 'a_baz'],
@@ -200,7 +118,7 @@ def test_dict_conversion():
         ),
     ]
 
-    dataset = AlignmentDataset(task, samples)
+    dataset = AlignmentDataset(task, samples, train_frac)
 
     dataset_dict = dataset.to_dict()
     recovered_dataset = AlignmentDataset.from_dict(dataset_dict)
@@ -211,7 +129,7 @@ def test_dict_conversion():
     assert recovered_dataset.samples == dataset.samples
 
 
-def test_json_conversion():
+def test_json_conversion(train_frac):
     component_dict = {
         'Component A': {
             'seed_words': ['a_foo', 'a_bar', 'a_baz'],
@@ -239,7 +157,7 @@ def test_json_conversion():
         ),
     ]
 
-    dataset = AlignmentDataset(task, samples)
+    dataset = AlignmentDataset(task, samples, train_frac)
 
     with tempfile.NamedTemporaryFile() as f:
         dataset.to_json(f.name)
