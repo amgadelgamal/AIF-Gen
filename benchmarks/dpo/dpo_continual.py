@@ -1,44 +1,7 @@
 # Adaptation of the DPO training script for continual learning.
-
-"""
-# Full training
-python trl/slurm_scripts/dpo.py \
-    --dataset_name trl-lib/ultrafeedback_binarized \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --learning_rate 5.0e-7 \
-    --num_train_epochs 1 \
-    --per_device_train_batch_size 2 \
-    --gradient_accumulation_steps 8 \
-    --gradient_checkpointing \
-    --logging_steps 25 \
-    --eval_strategy steps \
-    --eval_steps 50 \
-    --output_dir Qwen2-0.5B-DPO \
-    --no_remove_unused_columns
-
-# LoRA:
-python trl/slurm_scripts/dpo.py \
-    --dataset_name trl-lib/ultrafeedback_binarized \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --learning_rate 5.0e-6 \
-    --num_train_epochs 1 \
-    --per_device_train_batch_size 2 \
-    --gradient_accumulation_steps 8 \
-    --gradient_checkpointing \
-    --logging_steps 25 \
-    --eval_strategy steps \
-    --eval_steps 50 \
-    --output_dir Qwen2-0.5B-DPO \
-    --no_remove_unused_columns \
-    --use_peft \
-    --lora_r 32 \
-    --lora_alpha 16
-"""
-
 import torch
 import wandb
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
 from trl import (
     DPOConfig,
     DPOTrainer,
@@ -54,9 +17,13 @@ from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 from .mock_data import init_mock_dataset
 
 
-def main(script_args: ScriptArguments, training_args: DPOConfig, model_args: ModelConfig) -> None:
+def main(
+    script_args: ScriptArguments, training_args: DPOConfig, model_args: ModelConfig
+) -> None:
     torch_dtype = (
-        model_args.torch_dtype if model_args.torch_dtype in ["auto", None] else getattr(torch, model_args.torch_dtype)
+        model_args.torch_dtype
+        if model_args.torch_dtype in ['auto', None]
+        else getattr(torch, model_args.torch_dtype)
     )
     quantization_config = get_quantization_config(model_args)
     model_kwargs = dict(
@@ -68,12 +35,16 @@ def main(script_args: ScriptArguments, training_args: DPOConfig, model_args: Mod
         quantization_config=quantization_config,
     )
     model = AutoModelForCausalLM.from_pretrained(
-        model_args.model_name_or_path, trust_remote_code=model_args.trust_remote_code, **model_kwargs
+        model_args.model_name_or_path,
+        trust_remote_code=model_args.trust_remote_code,
+        **model_kwargs,
     )
     peft_config = get_peft_config(model_args)
     if peft_config is None:
         ref_model = AutoModelForCausalLM.from_pretrained(
-            model_args.model_name_or_path, trust_remote_code=model_args.trust_remote_code, **model_kwargs
+            model_args.model_name_or_path,
+            trust_remote_code=model_args.trust_remote_code,
+            **model_kwargs,
         )
     else:
         ref_model = None
@@ -98,28 +69,30 @@ def main(script_args: ScriptArguments, training_args: DPOConfig, model_args: Mod
             ref_model,
             args=training_args,
             train_dataset=dataset[script_args.dataset_train_split],
-            eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None,
+            eval_dataset=dataset[script_args.dataset_test_split]
+            if training_args.eval_strategy != 'no'
+            else None,
             processing_class=tokenizer,
             peft_config=peft_config,
         )
 
         trainer.train()
 
-        if training_args.eval_strategy != "no":
+        if training_args.eval_strategy != 'no':
             metrics = trainer.evaluate()
-            metrics["dataset"] = i + 1
-            trainer.log_metrics("eval" + f"_dataset-{i}", metrics)
-            trainer.save_metrics("eval" + f"_dataset-{i}", metrics)
-            metrics = {"last/" + k: v for k, v in metrics.items()}
+            metrics['dataset'] = i + 1
+            trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
+            trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
+            metrics = {'last/' + k: v for k, v in metrics.items()}
             wandb.log(metrics)
 
         # Save and push to hub
-        trainer.save_model(training_args.output_dir + f"/dataset-{i}")
+        trainer.save_model(training_args.output_dir + f'/dataset-{i}')
         if training_args.push_to_hub:
-            trainer.push_to_hub(dataset_name=script_args.dataset_name + f"/dataset-{i}")
+            trainer.push_to_hub(dataset_name=script_args.dataset_name + f'/dataset-{i}')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     dataclass_types = (ScriptArguments, DPOConfig, ModelConfig)
     parser = TrlParser(dataclass_types)
 
