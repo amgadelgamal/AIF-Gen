@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, AsyncGenerator, Dict, List
+from typing import Any, AsyncGenerator, Dict
 
 import backoff
 import openai
@@ -12,21 +12,17 @@ from aif_gen.api.response_mapper import ResponseMapper
 from aif_gen.dataset import AlignmentDataset, AlignmentDatasetSample
 from aif_gen.task.alignment_task import AlignmentTask
 
-# TODO: Wrap the openAI API and integrate VLLM API
-try:
-    client = openai.AsyncOpenAI()
-except (openai.OpenAIError, Exception) as e:
-    logging.exception(e)
-
 
 async def process_tasks(
     config_dict: Dict[str, Any],  # TODO: Should bind this type
+    client: openai.AsyncOpenAI,
     async_semaphore: asyncio.Semaphore,
 ) -> AsyncGenerator[AlignmentDataset, None]:
     r"""Generate a ContinualAlignment dataset given the AIF configuratiohn file.
 
     Args:
         config_dict (Dict[str, Any]): Configuration file storing tasks specifications and model info.
+        client (openai.AsyncOpenAI): Handle to openAI client.
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
 
     Returns:
@@ -40,6 +36,7 @@ async def process_tasks(
         generate_dataset(
             AlignmentTask.from_dict(task_spec['alignment_task']),
             task_spec['num_samples'],
+            client,
             model_name,
             async_semaphore,
         )
@@ -54,6 +51,7 @@ async def process_tasks(
 async def generate_dataset(
     task: AlignmentTask,
     num_samples: int,
+    client: openai.AsyncOpenAI,
     model_name: str,
     async_semaphore: asyncio.Semaphore,
 ) -> AlignmentDataset:
@@ -62,6 +60,7 @@ async def generate_dataset(
     Args:
         task (AlignmentTask): The AlignmentTask to generate data for.
         num_samples (int): The number of samples to generate in the dataset.
+        client (openai.AsyncOpenAI): Handle to openAI client.
         model_name (str): openAI model alias.
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
 
@@ -69,75 +68,72 @@ async def generate_dataset(
         AlignmentDataset: The synthetically generated AlignmentDataset.
     """
     logging.info(f'Generating AIF Dataset for task: {task}')
-    prompt = await _generate_task_prompt(task, num_samples, model_name, async_semaphore)
 
-    class _ResponsePairList(pydantic.BaseModel):
-        class _ResponsePair(pydantic.BaseModel):
-            chosen: str
-            rejected: str
+    prompt_mapper = PromptMapper()
+    response_mapper = ResponseMapper()
 
-        responses: List[_ResponsePair]
-
-    async with async_semaphore:
-        response = await client.chat.completions.create(
-            model=model_name,
-            messages=[{'role': 'user', 'content': prompt}],
-            response_format={
-                'type': 'json_schema',
-                'json_schema': {
-                    'name': 'SyntheticPreference',
-                    'schema': _ResponsePairList.model_json_schema(),
-                    'strict': True,
-                },
-            },
-        )
-    output = response.choices[0].message.content
+    class _ResponsePair(pydantic.BaseModel):
+        chosen: str
+        rejected: str
 
     samples = []
-    try:
-        responses = _ResponsePairList.model_validate_json(output).responses
-        logging.debug(f'Received {len(responses)} response pairs: {responses}')
-        if len(responses) != num_samples:
-            logging.warning(
-                f'Requested {num_samples} response pairs LM generated {len(responses)}'
+    for _ in range(num_samples):
+        meta_prompt = prompt_mapper.generate_prompt(task)
+        logging.debug(f'Using meta prompt: {meta_prompt}')
+
+        try:
+            async with async_semaphore:
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[{'role': 'user', 'content': meta_prompt}],
+                )
+        except Exception as e:
+            logging.exception(
+                f'Exception occured while generating respone to prompt: {meta_prompt}, error: {e}'
             )
+            continue
 
-        samples = [
-            AlignmentDatasetSample(
-                prompt=prompt, chosen=response.chosen, rejected=response.rejected
+        prompt = response.choices[0].message.content
+        logging.debug(f'Generated prompt: {prompt}')
+
+        task_prompt = response_mapper.generate_prompt(task, prompt)
+        logging.debug(f'Using task prompt: {task_prompt}')
+
+        try:
+            async with async_semaphore:
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[{'role': 'user', 'content': prompt}],
+                    response_format={
+                        'type': 'json_schema',
+                        'json_schema': {
+                            'name': 'SyntheticPreference',
+                            'schema': _ResponsePair.model_json_schema(),
+                            'strict': True,
+                        },
+                    },
+                )
+
+                output = response.choices[0].message.content
+                response = _ResponsePair.model_validate_json(output)
+        except pydantic.ValidationError as e:
+            logging.exception(f'Failed to bind structured output json schema: {e}')
+            continue
+        except Exception as e:
+            logging.exception(
+                f'Exception occured while generating respone to prompt: {prompt}, error: {e}'
             )
-            for response in responses
-        ]
-    except pydantic.ValidationError as e:
-        logging.exception(e)
+            continue
 
-    # TODO: May want to include data splits here directly #44
-    return AlignmentDataset(task, samples)
-
-
-@backoff.on_exception(backoff.expo, (openai.RateLimitError,))
-async def _generate_task_prompt(
-    task: AlignmentTask,
-    num_samples: int,
-    model_name: str,
-    async_semaphore: asyncio.Semaphore,
-) -> str:
-    logging.info(f'Generating task prompt for {task}')
-    prompt_mapper = PromptMapper()
-    meta_prompt = prompt_mapper.generate_prompt(task)
-    logging.debug(f'Using meta prompt: {meta_prompt}')
-
-    async with async_semaphore:
-        response = await client.chat.completions.create(
-            model=model_name,
-            messages=[{'role': 'user', 'content': meta_prompt}],
+        logging.debug(f'Received response pairs: {response}')
+        sample = AlignmentDatasetSample(
+            prompt, chosen=response.chosen, rejected=response.rejected
         )
-    prompt = response.choices[0].message.content
-    assert prompt is not None
-    logging.info(f'Generated prompt: {prompt}')
+        samples.append(sample)
 
-    logging.info(f'Generating {num_samples} response pairs for {task}')
-    response_mapper = ResponseMapper()
-    task_prompt = response_mapper.generate_prompt(task, prompt, num_samples)
-    logging.debug(f'Using task prompt: {task_prompt}')
-    return task_prompt
+    if len(samples) != num_samples:
+        logging.warning(
+            f'Requested {num_samples} response pairs LM generated {len(samples)}'
+        )
+
+    return AlignmentDataset(task, samples)

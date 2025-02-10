@@ -3,6 +3,7 @@ import asyncio
 import logging
 import time
 
+import openai
 import yaml
 
 from aif_gen.dataset.continual_alignment_dataset import (
@@ -57,8 +58,14 @@ async def main() -> None:
 
     async_semaphore = asyncio.Semaphore(args.max_concurrency)
 
+    try:
+        client = openai.AsyncOpenAI()
+    except (openai.OpenAIError, Exception) as e:
+        logging.exception(f'Could not create openAI client: {e}')
+        return
+
     datasets = []
-    async for dataset in process_tasks(config_dict, async_semaphore=async_semaphore):
+    async for dataset in process_tasks(config_dict, client, async_semaphore):
         datasets.append(dataset)
 
     continual_dataset = ContinualAlignmentDataset(datasets)
