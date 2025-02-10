@@ -16,19 +16,12 @@ class ResponseMapper(ResponseMapperBase):
     def __init__(self, suffix_context: Optional[str] = None) -> None:
         self._suffix_context = suffix_context
 
-    def generate_prompt(
-        self, task: AlignmentTask, task_prompt: str, num_samples: int
-    ) -> str:
-        if num_samples <= 0:
-            raise ValueError(f'Num samples must be positive, got: {num_samples}')
-
+    def generate_prompt(self, task: AlignmentTask, task_prompt: str) -> str:
         prompt = f"""\
-        Generate a 'chosen' and 'rejected' response to the following prompt: '{task_prompt}'.\n
+        Generate a 'chosen' and 'rejected' response pair to the following prompt: '{task_prompt}'.\n
 
         The 'chosen' response should better respond to the prompt according to the following preference: '{task.preference}'.
         The 'rejected' response should be a worse response to the prompt according to the following preference: '{task.preference}'.
-
-        Give me {num_samples} such examples of 'chosen' and 'rejected' response pairs. Ensure each example is unique.
 
         You don't need to start your prompt by saying 'User asks'.
         {self.ETHICAL_GUIDELINES}
