@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import AsyncGenerator, List
+from typing import Any, AsyncGenerator, Dict, List
 
 import backoff
 import openai
@@ -19,14 +19,21 @@ except (openai.OpenAIError, Exception) as e:
 
 
 async def process_tasks(
-    tasks: List[AlignmentTask],
-    num_samples: int,
-    model_name: str,
+    config_dict: Dict[str, Any],
     async_semaphore: asyncio.Semaphore,
 ) -> AsyncGenerator[AlignmentDataset, None]:
+    model_name = config_dict['model_name']
+    logging.info(f'Using Model: {model_name}')
+
+    task_specs = config_dict['data']['task_specs']  # TODO: Should bind this type
     coros = [
-        generate_dataset(task, num_samples, model_name, async_semaphore)
-        for task in tasks
+        generate_dataset(
+            AlignmentTask.from_dict(task_spec['alignment_task']),
+            task_spec['num_samples'],
+            model_name,
+            async_semaphore,
+        )
+        for task_spec in task_specs
     ]
     for coro in tqdm(asyncio.as_completed(coros), total=len(coros)):
         dataset = await coro
@@ -40,6 +47,7 @@ async def generate_dataset(
     model_name: str,
     async_semaphore: asyncio.Semaphore,
 ) -> AlignmentDataset:
+    logging.info(f'Generating AIF Dataset for task: {task}')
     prompt = await generate_task_prompt(task, num_samples, model_name, async_semaphore)
 
     class _ResponsePairList(pydantic.BaseModel):

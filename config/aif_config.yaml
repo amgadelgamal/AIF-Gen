@@ -1,26 +1,100 @@
 ---
 model_name: Meta-Llama-3.1-8B-Instruct
-num_samples: 1000
-alignment_task:
-  objective: 'Generate a news article headline'
-  preference: 'Make the headline polarizing'
-  domain:
-    healthcare:
-      seed_words:
-        - hospital
-        - exercise
-        - medicine
-        - surgery
-        - blood
-        - wellness
-        - disease
-      description:
-    technology:
-      seed_words:
-        - engineering
-        - AI
-        - internet
-        - computer
-        - innovation
-        - machine learning
-      description:
+data:
+  task_specs:
+    - num_samples: 1000
+      alignment_task:
+        objective: 'Generate a news article headline'
+        preference: 'Make the headline polarizing'
+        domain:
+          healthcare:
+            seed_words:
+              - hospital
+              - exercise
+              - medicine
+              - surgery
+              - blood
+              - wellness
+              - disease
+            description:
+          technology:
+            seed_words:
+              - engineering
+              - AI
+              - internet
+              - computer
+              - innovation
+              - machine learning
+            description:
+    - num_samples: 1000
+      alignment_task:
+        objective: 'Generate a news article headline'
+        preference: 'Make the headline short and unbiased'
+        domain:
+          healthcare:
+            seed_words:
+              - hospital
+              - exercise
+              - medicine
+              - surgery
+              - blood
+              - wellness
+              - disease
+            description:
+          technology:
+            seed_words:
+              - engineering
+              - AI
+              - internet
+              - computer
+              - innovation
+              - machine learning
+            description:
+    - num_samples: 1000
+      alignment_task:
+        objective: 'Generate a news article headline'
+        preference: 'As if the headline came from a conservative news outlet'
+        domain:
+          healthcare:
+            seed_words:
+              - hospital
+              - exercise
+              - medicine
+              - surgery
+              - blood
+              - wellness
+              - disease
+            description:
+          technology:
+            seed_words:
+              - engineering
+              - AI
+              - internet
+              - computer
+              - innovation
+              - machine learning
+            description:
+    - num_samples: 1000
+      alignment_task:
+        objective: 'Generate a news article headline'
+        preference: 'As if the headline came from a liberal news outlet'
+        domain:
+          healthcare:
+            seed_words:
+              - hospital
+              - exercise
+              - medicine
+              - surgery
+              - blood
+              - wellness
+              - disease
+            description:
+          technology:
+            seed_words:
+              - engineering
+              - AI
+              - internet
+              - computer
+              - innovation
+              - machine learning
+            description:

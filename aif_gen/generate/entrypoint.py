@@ -6,7 +6,6 @@ import time
 import yaml
 
 from aif_gen.generate.service import process_tasks
-from aif_gen.task import AlignmentTask
 from aif_gen.util.logging import setup_basic_logging
 from aif_gen.util.path import get_root_dir
 
@@ -52,21 +51,11 @@ async def main() -> None:
 
     output_path = get_root_dir() / args.output_path
     output_path.mkdir(parents=True, exist_ok=True)
+    output_file_path = output_path / 'train.json'  # TODO: Waiting on merge #44
 
     async_semaphore = asyncio.Semaphore(args.max_concurrency)
 
-    task = AlignmentTask.from_dict(config_dict['alignment_task'])
-    logging.info(f'Generating AIF Dataset for task: {task}')
-    logging.info(f'Using Model: {config_dict["model_name"]}')
-
-    tasks = [task]
-    async for dataset in process_tasks(
-        tasks=tasks,
-        num_samples=config_dict['num_samples'],
-        model_name=config_dict['model_name'],
-        async_semaphore=async_semaphore,
-    ):
-        output_file_path = output_path / 'train.json'
+    async for dataset in process_tasks(config_dict, async_semaphore=async_semaphore):
         logging.info(f'Writing {len(dataset)} samples to {output_file_path}')
         dataset.to_json(output_file_path)
         logging.info(f'Wrote {len(dataset)} samples to {output_file_path}')
