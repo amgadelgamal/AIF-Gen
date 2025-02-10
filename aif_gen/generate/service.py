@@ -71,7 +71,6 @@ async def generate_dataset(
             },
         )
     output = response.choices[0].message.content
-    assert output is not None
 
     samples = []
     try:
