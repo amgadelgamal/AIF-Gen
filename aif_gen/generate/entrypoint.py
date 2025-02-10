@@ -5,6 +5,9 @@ import time
 
 import yaml
 
+from aif_gen.dataset.continual_alignment_dataset import (
+    ContinualAlignmentDataset,
+)
 from aif_gen.generate.service import process_tasks
 from aif_gen.util.logging import setup_basic_logging
 from aif_gen.util.path import get_root_dir
@@ -26,10 +29,10 @@ parser.add_argument(
     help='Name of the log file to write to within the output directory.',
 )
 parser.add_argument(
-    '--output_path',
+    '--output_file',
     type=str,
-    default=f'data/{time.time()}',
-    help='Path to directory where to save the dataset.',
+    default=f'data/{time.time()}/data.json',
+    help='Path to save the dataset.',
 )
 parser.add_argument(
     '--max_concurrency',
@@ -49,17 +52,19 @@ async def main() -> None:
     config_dict = yaml.safe_load(config_file.read_text())
     logging.info(f'Using configuration: {config_dict}')
 
-    output_path = get_root_dir() / args.output_path
-    output_path.mkdir(parents=True, exist_ok=True)
-    output_file_path = output_path / 'train.json'  # TODO: Waiting on merge #44
+    output_file = get_root_dir() / args.output_file
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
     async_semaphore = asyncio.Semaphore(args.max_concurrency)
 
-    # TODO: Should directly construct a ContinualAlignmentDataset (or incrementally flush it to disc)
+    datasets = []
     async for dataset in process_tasks(config_dict, async_semaphore=async_semaphore):
-        logging.info(f'Writing {len(dataset)} samples to {output_file_path}')
-        dataset.to_json(output_file_path)
-        logging.info(f'Wrote {len(dataset)} samples to {output_file_path}')
+        datasets.append(dataset)
+
+    continual_dataset = ContinualAlignmentDataset(datasets)
+    logging.info(f'Writing {len(continual_dataset)} samples to {output_file}')
+    continual_dataset.to_json(output_file)
+    logging.info(f'Wrote {len(continual_dataset)} samples to {output_file}')
 
 
 if __name__ == '__main__':
