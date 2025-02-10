@@ -108,14 +108,14 @@ class AlignmentDataset:
         """
         dataset_dict: Dict[str, Any] = {}
         dataset_dict['task'] = self.task.to_dict()
-        dataset_dict['train_samples'] = []
-        dataset_dict['test_samples'] = []
+        dataset_dict['train'] = []
+        dataset_dict['test'] = []
 
         for sample in self.train:
-            dataset_dict['train_samples'].append(asdict(sample))
+            dataset_dict['train'].append(asdict(sample))
 
         for sample in self.test:
-            dataset_dict['test_samples'].append(asdict(sample))
+            dataset_dict['test'].append(asdict(sample))
 
         return dataset_dict
 
@@ -141,9 +141,9 @@ class AlignmentDataset:
         r"""Construct an AlignmentDataset from dictionary representation.
 
         Note:
-            Expects 'task', and 'train_samples', 'test_samples' keys to be present in the dictionary.
+            Expects 'task', and 'train', 'test' keys to be present in the dictionary.
             The 'task' value should be parsable by AlignmentTask.from_dict().
-            The 'train_samples' and 'test_samples' value should be a list of dictionaries, each of which
+            The 'train' and 'test' value should be a list of dictionaries, each of which
             are parsable by AlignmentDatasetSample.
 
         Args:
@@ -157,13 +157,13 @@ class AlignmentDataset:
         """
         task = AlignmentTask.from_dict(dataset_dict['task'])
         samples = []
-        for sample in dataset_dict['train_samples']:
+        for sample in dataset_dict['train']:
             sample = AlignmentDatasetSample(**sample)
             samples.append(sample)
 
         num_train_samples = len(samples)
 
-        for sample in dataset_dict['test_samples']:
+        for sample in dataset_dict['test']:
             sample = AlignmentDatasetSample(**sample)
             samples.append(sample)
 

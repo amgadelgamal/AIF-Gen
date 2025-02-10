@@ -13,7 +13,7 @@ def mock_dataset_dict(continual):
             'datasets': [
                 {
                     'task': mock_task(),
-                    'train_samples': [
+                    'train': [
                         {
                             'prompt': 'Mock prompt A 1',
                             'chosen': 'Winning Response A 1',
@@ -30,11 +30,11 @@ def mock_dataset_dict(continual):
                             'rejected': 'Losing Response C 1',
                         },
                     ],
-                    'test_samples': [],
+                    'test': [],
                 },
                 {
                     'task': mock_task(),
-                    'train_samples': [
+                    'train': [
                         {
                             'prompt': 'Mock prompt A 2',
                             'chosen': 'Winning Response A 2',
@@ -51,14 +51,14 @@ def mock_dataset_dict(continual):
                             'rejected': 'Losing Response C 2',
                         },
                     ],
-                    'test_samples': [],
+                    'test': [],
                 },
             ]
         }
     else:
         return {
             'task': mock_task(),
-            'train_samples': [
+            'train': [
                 {
                     'prompt': 'Mock prompt A 1',
                     'chosen': 'Winning Response A 1',
@@ -75,7 +75,7 @@ def mock_dataset_dict(continual):
                     'rejected': 'Losing Response C 1',
                 },
             ],
-            'test_samples': [],
+            'test': [],
         }
 
 
@@ -101,7 +101,7 @@ def test_apply_preference_swap_to_static_dataset(
 ):
     expected_dataset_dict = {
         'task': mock_task(),
-        'train_samples': [
+        'train': [
             {
                 'prompt': 'Mock prompt A 1',
                 'chosen': 'Winning Response A 1',
@@ -118,7 +118,7 @@ def test_apply_preference_swap_to_static_dataset(
                 'rejected': 'Losing Response C 1',
             },
         ],
-        'test_samples': [],
+        'test': [],
     }
 
     dataset = AlignmentDataset.from_dict(dataset_dict)
@@ -145,7 +145,7 @@ def test_apply_preference_swap_to_static_dataset_full_swap(
 ):
     expected_dataset_dict = {
         'task': mock_task(),
-        'train_samples': [
+        'train': [
             {
                 'prompt': 'Mock prompt A 1',
                 'chosen': 'Losing Response A 1',
@@ -162,7 +162,7 @@ def test_apply_preference_swap_to_static_dataset_full_swap(
                 'rejected': 'Winning Response C 1',
             },
         ],
-        'test_samples': [],
+        'test': [],
     }
 
     dataset = AlignmentDataset.from_dict(dataset_dict)
@@ -192,7 +192,7 @@ def test_apply_preference_swap_to_continual_dataset_full_swap(
         'datasets': [
             {
                 'task': mock_task(),
-                'train_samples': [
+                'train': [
                     {
                         'prompt': 'Mock prompt A 1',
                         'chosen': 'Losing Response A 1',
@@ -209,11 +209,11 @@ def test_apply_preference_swap_to_continual_dataset_full_swap(
                         'rejected': 'Winning Response C 1',
                     },
                 ],
-                'test_samples': [],
+                'test': [],
             },
             {
                 'task': mock_task(),
-                'train_samples': [
+                'train': [
                     {
                         'prompt': 'Mock prompt A 2',
                         'chosen': 'Losing Response A 2',
@@ -230,7 +230,7 @@ def test_apply_preference_swap_to_continual_dataset_full_swap(
                         'rejected': 'Winning Response C 2',
                     },
                 ],
-                'test_samples': [],
+                'test': [],
             },
         ]
     }
