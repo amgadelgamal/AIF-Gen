@@ -15,6 +15,8 @@ dependencies = [
     "backoff>=2.2.1",
     "numpy>=2.0.2",
     "openai>=1.61.1",
+    "pytest-asyncio>=0.25.3",
+    "pytest-mock>=3.14.0",
     "torch>=2.5.1",
     "types-pyyaml>=6.0.12.20241230",
 ]
