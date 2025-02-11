@@ -50,8 +50,9 @@ async def main() -> None:
     setup_basic_logging(log_file)
 
     config_file = get_root_dir() / args.config_file
+    logging.info(f'Using configuration file: {config_file}')
     config_dict = yaml.safe_load(config_file.read_text())
-    logging.info(f'Using configuration: {config_dict}')
+    logging.debug(f'Configuration: {config_dict}')
 
     output_file = get_root_dir() / args.output_file
     output_file.parent.mkdir(parents=True, exist_ok=True)

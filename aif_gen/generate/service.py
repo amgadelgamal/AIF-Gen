@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, AsyncGenerator, Dict
+from typing import Any, AsyncGenerator, Dict, Optional
 
 import backoff
 import openai
@@ -44,7 +44,8 @@ async def process_tasks(
     ]
     for coro in tqdm(asyncio.as_completed(coros), total=len(coros)):
         dataset = await coro
-        yield dataset
+        if dataset is not None:
+            yield dataset
 
 
 @backoff.on_exception(backoff.expo, (openai.RateLimitError,))
@@ -54,7 +55,7 @@ async def generate_dataset(
     client: openai.AsyncOpenAI,
     model_name: str,
     async_semaphore: asyncio.Semaphore,
-) -> AlignmentDataset:
+) -> Optional[AlignmentDataset]:
     r"""Generate a AlignmentDataset dataset given the AlignmentTask, and model.
 
     Args:
@@ -65,7 +66,7 @@ async def generate_dataset(
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
 
     Returns:
-        AlignmentDataset: The synthetically generated AlignmentDataset.
+        Optional[AlignmentDataset]: The synthetically generated AlignmentDataset.
     """
     logging.info(f'Generating AIF Dataset for task: {task}')
 
@@ -83,25 +84,22 @@ async def generate_dataset(
 
         try:
             async with async_semaphore:
-                response = client.chat.completions.create(
+                response = await client.chat.completions.create(
                     model=model_name,
                     messages=[{'role': 'user', 'content': meta_prompt}],
                 )
-        except Exception as e:
-            logging.exception(
-                f'Exception occured while generating respone to prompt: {meta_prompt}, error: {e}'
-            )
-            continue
 
-        prompt = response.choices[0].message.content
-        logging.debug(f'Generated prompt: {prompt}')
+            prompt = response.choices[0].message.content
+            if prompt is None:
+                raise ValueError(f'Received None response to prompt: {meta_prompt}')
+            assert prompt is not None  # This is for mypy
+            logging.debug(f'Generated prompt: {prompt}')
 
-        task_prompt = response_mapper.generate_prompt(task, prompt)
-        logging.debug(f'Using task prompt: {task_prompt}')
+            task_prompt = response_mapper.generate_prompt(task, prompt)
+            logging.debug(f'Using task prompt: {task_prompt}')
 
-        try:
             async with async_semaphore:
-                response = client.chat.completions.create(
+                response = await client.chat.completions.create(
                     model=model_name,
                     messages=[{'role': 'user', 'content': prompt}],
                     response_format={
@@ -114,20 +112,27 @@ async def generate_dataset(
                     },
                 )
 
-                output = response.choices[0].message.content
-                response = _ResponsePair.model_validate_json(output)
-        except pydantic.ValidationError as e:
-            logging.exception(f'Failed to bind structured output json schema: {e}')
-            continue
-        except Exception as e:
-            logging.exception(
-                f'Exception occured while generating respone to prompt: {prompt}, error: {e}'
-            )
-            continue
+            output = response.choices[0].message.content
+            if prompt is None:
+                raise ValueError(f'Received None response to prompt: {prompt}')
+            assert output is not None  # This is for mypy
+            structured_response = _ResponsePair.model_validate_json(output)
 
-        logging.debug(f'Received response pairs: {response}')
+        except pydantic.ValidationError as e:
+            logging.error(f'Failed to bind structured output json schema: {e}')
+            continue
+        except openai.NotFoundError as e:
+            logging.error(f'Could not connect to openAI model: error: {e}')
+            return None
+        except Exception as e:
+            logging.exception(f'Exception occured while generating sample: {e}')
+            return None
+
+        logging.debug(f'Received response pairs: {structured_response}')
         sample = AlignmentDatasetSample(
-            prompt, chosen=response.chosen, rejected=response.rejected
+            prompt,
+            chosen=structured_response.chosen,
+            rejected=structured_response.rejected,
         )
         samples.append(sample)
 
