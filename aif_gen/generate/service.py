@@ -60,7 +60,9 @@ async def generate_continual_dataset(
             futures.append(asyncio.create_task(coro))
 
     try:
-        samples: List[List[AlignmentDatasetSample]] = [[] for _ in range(len(futures))]
+        samples: List[List[AlignmentDatasetSample]] = [
+            [] for _ in range(len(dataset_sizes))
+        ]
         for fut in tqdm.as_completed(futures, total=len(futures)):
             result = await fut
             if result is not None:
@@ -68,7 +70,7 @@ async def generate_continual_dataset(
                 samples[dataset_idx].append(sample)
 
         continual_dataset = ContinualAlignmentDataset(datasets=[])
-        for i in range(len(futures)):
+        for i in range(len(samples)):
             if len(samples[i]) != dataset_sizes[i]:
                 logging.warning(
                     f'Dataset {i} requested {dataset_sizes[i]} samples but LM generated {len(samples[i])}'
