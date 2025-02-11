@@ -1,7 +1,6 @@
 import asyncio
 import json
 
-import openai
 import pytest
 
 from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
@@ -31,7 +30,7 @@ def mock_client(mocker):
 
 
 @pytest.fixture
-def mock_client_openai_exception(mocker):
+def mock_client_uncaught_exception(mocker):
     mock_response = mocker.MagicMock(name='response')
     mock_response.choices[0].message.content = json.dumps(
         {
@@ -40,9 +39,8 @@ def mock_client_openai_exception(mocker):
         }
     )
     mock_client = mocker.MagicMock(name='client')
-    mock_client.chat.completions.create.side_effect = openai.NotFoundError(
-        response=mock_response, body='mock', message='mock'
-    )
+    # Some uncaught exception (e.g. openai.NotFound)
+    mock_client.chat.completions.create.side_effect = Exception
     return mock_client
 
 
@@ -156,16 +154,14 @@ async def test_generate_continual_dataset_schema_parse_exception(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip('TODO: Proper cleanup')
 async def test_generate_continual_dataset_uncaught_exception(
-    mock_config_dict, mock_client_openai_exception, mock_semaphore
+    mock_config_dict, mock_client_uncaught_exception, mock_semaphore
 ):
-    with pytest.raises(openai.NotFoundError):
+    with pytest.raises(Exception):
         continual_dataset = await generate_continual_dataset(
-            mock_config_dict, mock_client_openai_exception, mock_semaphore
+            mock_config_dict, mock_client_uncaught_exception, mock_semaphore
         )
         assert continual_dataset is None
-        # assert not mock_client.called  # Cannot make this assertion since some requests might have been attempted
 
 
 @pytest.mark.asyncio
