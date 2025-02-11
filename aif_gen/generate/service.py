@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import backoff
 import openai
@@ -35,89 +35,48 @@ async def generate_continual_dataset(
     model_name = config_dict['model_name']
     logging.info(f'Using Model: {model_name}')
 
-    task_specs = config_dict['data']['task_specs']
-    coros = [
-        generate_dataset(
-            AlignmentTask.from_dict(task_spec['alignment_task']),
-            task_spec['num_samples'],
-            client,
-            model_name,
-            async_semaphore,
-        )
-        for task_spec in task_specs
-    ]
-    futures = [asyncio.create_task(coro) for coro in coros]
-
-    try:
-        datasets = []
-        for fut in tqdm.as_completed(futures, total=len(futures)):
-            dataset = await fut
-            if dataset is not None:
-                datasets.append(dataset)
-        return ContinualAlignmentDataset(datasets)
-    except BaseException as e:
-        logging.exception(f'Exception occured while generating continual dataset: {e}')
-        for fut in futures:
-            fut.cancel()
-        await tqdm.gather(*futures)
-        return None
-
-
-async def generate_dataset(
-    task: AlignmentTask,
-    num_samples: int,
-    client: openai.AsyncOpenAI,
-    model_name: str,
-    async_semaphore: asyncio.Semaphore,
-) -> Optional[AlignmentDataset]:
-    r"""Generate a AlignmentDataset dataset given the AlignmentTask, and model.
-
-    Args:
-        task (AlignmentTask): The AlignmentTask to generate data for.
-        num_samples (int): The number of samples to generate in the dataset.
-        client (openai.AsyncOpenAI): Handle to openAI client.
-        model_name (str): openAI model alias.
-        async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
-
-    Returns:
-        Optional[AlignmentDataset]: The synthetically generated AlignmentDataset.
-
-    Raises:
-        pydantic.ValidationError: If the response cannot be parsed according to the structured json schema.
-        openai.NotFoundError: If the openAI model cannot be accessed at the configured endpoint.
-    """
-    logging.info(f'Generating AIF Dataset for task: {task}')
-
     prompt_mapper = PromptMapper()
     response_mapper = ResponseMapper()
 
-    coros = [
-        generate_sample(
-            task, client, model_name, prompt_mapper, response_mapper, async_semaphore
-        )
-        for _ in range(num_samples)
-    ]
-    futures = [asyncio.create_task(coro) for coro in coros]
+    task_specs = config_dict['data']['task_specs']
+    futures, tasks, dataset_sizes = [], [], []
+    for dataset_idx, task_spec in enumerate(task_specs):
+        task = AlignmentTask.from_dict(task_spec['alignment_task'])
+        dataset_size = task_spec['num_samples']
+        logging.info(f'Generating Dataset ({dataset_size} samples) for task: {task}')
+
+        tasks.append(task)
+        dataset_sizes.append(dataset_size)
+        for _ in range(dataset_size):
+            coro = generate_sample(
+                task,
+                client,
+                model_name,
+                prompt_mapper,
+                response_mapper,
+                async_semaphore,
+                dataset_idx=dataset_idx,
+            )
+            futures.append(asyncio.create_task(coro))
 
     try:
-        samples = []
+        samples: List[List[AlignmentDatasetSample]] = [[] for _ in range(len(futures))]
         for fut in tqdm.as_completed(futures, total=len(futures)):
-            sample = await fut
-            if sample is not None:
-                samples.append(sample)
-        if len(samples) != num_samples:
-            logging.warning(
-                f'Requested {num_samples} response pairs LM generated {len(samples)}'
-            )
-        return AlignmentDataset(task, samples)
-    except openai.NotFoundError as e:
-        logging.error(f'Could not connect to openAI model: error: {e}')
-        for fut in futures:
-            fut.cancel()
-        await tqdm.gather(*futures)
-        return None
+            result = await fut
+            if result is not None:
+                dataset_idx, sample = result
+                samples[dataset_idx].append(sample)
+
+        continual_dataset = ContinualAlignmentDataset(datasets=[])
+        for i in range(len(futures)):
+            if len(samples[i]) != dataset_sizes[i]:
+                logging.warning(
+                    f'Dataset {i} requested {dataset_sizes[i]} response pairs but LM generated {len(samples[i])}'
+                )
+            continual_dataset.append(AlignmentDataset(tasks[i], samples[i]))
+        return continual_dataset
     except BaseException as e:
-        logging.exception(f'Exception occured while generating dataset: {e}')
+        logging.exception(f'Exception occured while generating continual dataset: {e}')
         for fut in futures:
             fut.cancel()
         await tqdm.gather(*futures)
@@ -132,7 +91,8 @@ async def generate_sample(
     prompt_mapper: PromptMapper,
     response_mapper: ResponseMapper,
     async_semaphore: asyncio.Semaphore,
-) -> Optional[AlignmentDatasetSample]:
+    dataset_idx: int,
+) -> Optional[Tuple[AlignmentDatasetSample, int]]:
     r"""Generate a AlignmentDataset dataset given the AlignmentTask, and model.
 
     Args:
@@ -142,9 +102,10 @@ async def generate_sample(
         prompt_mapper (PromptMapper): Creates the 'meta-prompt' for this sample's task prompt.
         response_mapper (ResponseMapper): Created the 'meta-prompt' for this sample's response prompt.
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
+        dataset_idx (int): The idx of the dataset that the sample is requested for to align out-of-order asyn execution.
 
     Returns:
-        Optional[AlignmentDatasetSample]: A single sample of the dataset (None if pydantic.ValidationError occurred).
+        Optional[Tuple[AlignmentDatasetSample, int]]: A single sample of the dataset, and the dataset idx (None if pydantic.ValidationError occurred).
 
     Raises:
         openai.NotFoundError: If the openAI model cannot be accessed at the configured endpoint.
@@ -196,7 +157,7 @@ async def generate_sample(
             rejected=structured_response.rejected,
         )
         logging.debug(f'Meta Prompt: {meta_prompt}, Sample: {sample}')
-        return sample
+        return sample, dataset_idx
     except pydantic.ValidationError as e:
         logging.error(f'Failed to bind structured output json schema: {e}')
         return None
