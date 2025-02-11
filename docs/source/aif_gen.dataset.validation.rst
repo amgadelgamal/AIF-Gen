@@ -20,6 +20,14 @@ aif\_gen.dataset.validation.entropy module
    :undoc-members:
    :show-inheritance:
 
+aif\_gen.dataset.validation.metrics\_evaluator module
+-----------------------------------------------------
+
+.. automodule:: aif_gen.dataset.validation.metrics_evaluator
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 
