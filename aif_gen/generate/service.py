@@ -39,6 +39,24 @@ async def generate_continual_dataset(
     response_mapper = ResponseMapper()
 
     task_specs = config_dict['data']['task_specs']
+
+    logging.info(f'Doing dry-run data generation on a single sample...')
+    mock_task = AlignmentTask.from_dict(task_specs[0]['alignment_task'])
+    coro = _generate_sample(
+        mock_task,
+        client,
+        model_name,
+        prompt_mapper,
+        response_mapper,
+        async_semaphore,
+        dataset_idx=-1,
+    )
+    try:
+        _ = await coro
+    except BaseException as e:
+        logging.exception(f'Exception occured on dry-run, skipping generation: {e}')
+        raise e
+
     futures, tasks, dataset_sizes = [], [], []
     for dataset_idx, task_spec in enumerate(task_specs):
         task = AlignmentTask.from_dict(task_spec['alignment_task'])
