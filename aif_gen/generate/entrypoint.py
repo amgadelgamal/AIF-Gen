@@ -6,10 +6,7 @@ import time
 import openai
 import yaml
 
-from aif_gen.dataset.continual_alignment_dataset import (
-    ContinualAlignmentDataset,
-)
-from aif_gen.generate.service import process_tasks
+from aif_gen.generate.service import generate_continual_dataset
 from aif_gen.util.logging import setup_basic_logging
 from aif_gen.util.path import get_root_dir
 
@@ -65,14 +62,11 @@ async def main() -> None:
         logging.exception(f'Could not create openAI client: {e}')
         return
 
-    datasets = []
-    async for dataset in process_tasks(config_dict, client, async_semaphore):
-        datasets.append(dataset)
-
-    continual_dataset = ContinualAlignmentDataset(datasets)
-    logging.info(f'Writing {len(continual_dataset)} samples to {output_file}')
-    continual_dataset.to_json(output_file)
-    logging.info(f'Wrote {len(continual_dataset)} samples to {output_file}')
+    dataset = await generate_continual_dataset(config_dict, client, async_semaphore)
+    if dataset is not None:
+        logging.info(f'Writing {len(dataset)} samples to {output_file}')
+        dataset.to_json(output_file)
+        logging.info(f'Wrote {len(dataset)} samples to {output_file}')
 
 
 if __name__ == '__main__':
