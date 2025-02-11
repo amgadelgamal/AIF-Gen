@@ -64,19 +64,19 @@ async def generate_continual_dataset(
         for fut in tqdm.as_completed(futures, total=len(futures)):
             result = await fut
             if result is not None:
-                dataset_idx, sample = result
+                sample, dataset_idx = result
                 samples[dataset_idx].append(sample)
 
         continual_dataset = ContinualAlignmentDataset(datasets=[])
         for i in range(len(futures)):
             if len(samples[i]) != dataset_sizes[i]:
                 logging.warning(
-                    f'Dataset {i} requested {dataset_sizes[i]} response pairs but LM generated {len(samples[i])}'
+                    f'Dataset {i} requested {dataset_sizes[i]} samples but LM generated {len(samples[i])}'
                 )
             continual_dataset.append(AlignmentDataset(tasks[i], samples[i]))
         return continual_dataset
     except BaseException as e:
-        logging.exception(f'Exception occured while generating continual dataset: {e}')
+        logging.exception(f'Exception occured while generating dataset: {e}')
         for fut in futures:
             fut.cancel()
         await tqdm.gather(*futures)
