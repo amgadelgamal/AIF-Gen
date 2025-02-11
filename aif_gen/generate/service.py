@@ -48,7 +48,7 @@ async def generate_continual_dataset(
         tasks.append(task)
         dataset_sizes.append(dataset_size)
         for _ in range(dataset_size):
-            coro = generate_sample(
+            coro = _generate_sample(
                 task,
                 client,
                 model_name,
@@ -84,7 +84,7 @@ async def generate_continual_dataset(
 
 
 @backoff.on_exception(backoff.expo, (openai.RateLimitError,))
-async def generate_sample(
+async def _generate_sample(
     task: AlignmentTask,
     client: openai.AsyncOpenAI,
     model_name: str,
