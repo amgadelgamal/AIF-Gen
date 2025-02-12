@@ -15,11 +15,9 @@ from aif_gen.generate.service import generate_continual_dataset
     'data_config_name',
     type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
 )
-@click.option(
-    '--model',
+@click.argument(
+    'model',
     type=click.STRING,
-    help='vLLM-compatible model to use for data generation',
-    default='Meta-Llama-3.1-8B-Instruct',
 )
 @click.option(
     '--output_file',
@@ -50,6 +48,7 @@ def generate(
     r"""Generate a new ContinualAlignmentDataset.
 
     DATA_CONFIG_NAME: Path to the dataset configuration file to use for dataset generation.
+    MODEL: vLLM-compatible model to use for data generation.
     """
     logging.info(f'Using data configuration file: {data_config_name}')
     logging.info(f'Using model: {model}')

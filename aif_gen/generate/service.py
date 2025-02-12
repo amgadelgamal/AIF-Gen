@@ -156,7 +156,9 @@ async def _generate_sample(
         assert prompt is not None  # This is for mypy
 
         task_prompt = response_mapper.generate_prompt(task, prompt)
-
+        logging.debug(
+            f'Meta Prompt: {meta_prompt}, Task Prompt: {task_prompt}, Prompt: {prompt}, Task: {task}'
+        )
         async with async_semaphore:
             response = await client.chat.completions.create(
                 model=model_name,

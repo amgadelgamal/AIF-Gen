@@ -35,7 +35,7 @@ dev = [
     "sphinx-rtd-theme>=3.0.2",
 ]
 benchmarks = [
-    "vllm>=0.5.0.post1",
+    "setuptools>=75.8.0",
 ]
 
 [tool.mypy]
