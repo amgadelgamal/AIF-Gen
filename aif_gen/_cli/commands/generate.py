@@ -12,7 +12,7 @@ from aif_gen.generate.service import generate_continual_dataset
 
 @click.command(context_settings={'show_default': True})
 @click.argument(
-    'data_config_file',
+    'data_config_name',
     type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
 )
 @click.option(
@@ -49,7 +49,7 @@ def generate(
 ) -> None:
     r"""Generate a new ContinualAlignmentDataset.
 
-    DATA_CONFIG: Path to the dataset configuration file to use for dataset generation.
+    DATA_CONFIG_NAME: Path to the dataset configuration file to use for dataset generation.
     """
     logging.info(f'Using data configuration file: {data_config_name}')
     logging.info(f'Using model: {model}')
