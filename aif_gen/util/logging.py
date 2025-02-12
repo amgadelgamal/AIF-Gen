@@ -1,9 +1,10 @@
 import logging
-from typing import List, Optional
+import pathlib
+from typing import List, Optional, Union
 
 
 def setup_basic_logging(
-    log_file_path: Optional[str] = None,
+    log_file_path: Optional[Union[str, pathlib.Path]] = None,
     log_file_logging_level: int = logging.DEBUG,
     stream_logging_level: int = logging.INFO,
 ) -> None:
