@@ -13,6 +13,7 @@ authors = [
 ]
 dependencies = [
     "backoff>=2.2.1",
+    "click>=8.1.8",
     "numpy>=2.0.2",
     "openai>=1.61.1",
     "pytest-asyncio>=0.25.3",

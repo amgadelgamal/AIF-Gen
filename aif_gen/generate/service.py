@@ -18,44 +18,50 @@ from aif_gen.task.alignment_task import AlignmentTask
 
 
 async def generate_continual_dataset(
-    config_dict: Dict[str, Any],  # TODO: Should bind this type
+    data_config: Dict[str, Any],  # TODO: Should bind this type
+    model_name: str,
     client: openai.AsyncOpenAI,
     async_semaphore: asyncio.Semaphore,
+    dry_run: bool = False,
 ) -> Optional[ContinualAlignmentDataset]:
     r"""Generate a ContinualAlignmentDataset dataset given the AlignmentTask, and model.
 
     Args:
-        config_dict (Dict[str, Any]): Configuration file storing tasks specifications and model info.
+        data_config (Dict[str, Any]): Configuration file storing tasks specifications and model info.
+        model_name (str): The vLLM-compatible model alias to use for generation synthetic samples.
         client (openai.AsyncOpenAI): Handle to openAI client.
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
+        dry_run (bool): If True, ignore the config and generate a dummy sample to ensure the model is setup correctly.
 
     Returns:
         Optional[ContinualAlignmentDataset]: The synthetically generated dataset.
     """
-    model_name = config_dict['model_name']
     logging.info(f'Using Model: {model_name}')
 
     prompt_mapper = PromptMapper()
     response_mapper = ResponseMapper()
 
-    task_specs = config_dict['data']['task_specs']
+    task_specs = data_config['task_specs']
 
-    logging.info(f'Doing dry-run data generation on a single sample...')
-    mock_task = AlignmentTask.from_dict(task_specs[0]['alignment_task'])
-    coro = _generate_sample(
-        mock_task,
-        client,
-        model_name,
-        prompt_mapper,
-        response_mapper,
-        async_semaphore,
-        dataset_idx=-1,
-    )
-    try:
-        _ = await coro
-    except BaseException as e:
-        logging.exception(f'Exception occured on dry-run, skipping generation: {e}')
-        raise e
+    if dry_run:
+        logging.info(f'Doing dry-run data generation on a single sample...')
+        mock_task = AlignmentTask.from_dict(task_specs[0]['alignment_task'])
+        coro = _generate_sample(
+            mock_task,
+            client,
+            model_name,
+            prompt_mapper,
+            response_mapper,
+            async_semaphore,
+            dataset_idx=-1,
+        )
+        try:
+            _ = await coro
+        except BaseException as e:
+            logging.exception(f'Exception occured on dry-run, skipping generation: {e}')
+            raise e
+        logging.info('Dry run was a success.')
+        return None
 
     futures, tasks, dataset_sizes = [], [], []
     for dataset_idx, task_spec in enumerate(task_specs):

@@ -88,55 +88,57 @@ def mock_semaphore(mocker):
 
 
 @pytest.fixture
-def mock_config_dict():
+def mock_model():
+    return 'GPT-1337'
+
+
+@pytest.fixture
+def mock_data_config():
     return {
-        'model_name': 'mock',
-        'data': {
-            'task_specs': [
-                {
-                    'num_samples': 5,
-                    'alignment_task': {
-                        'domain': {
-                            'Component A': {
-                                'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                            },
-                            'Component B': {
-                                'seed_words': ['b_foo', 'b_bar', 'b_baz'],
-                            },
+        'task_specs': [
+            {
+                'num_samples': 5,
+                'alignment_task': {
+                    'domain': {
+                        'Component A': {
+                            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
                         },
-                        'objective': 'Mock Objective 1',
-                        'preference': 'Mock Preference 1',
-                    },
-                },
-                {
-                    'num_samples': 5,
-                    'alignment_task': {
-                        'domain': {
-                            'Component A': {
-                                'seed_words': ['a_foo', 'a_bar', 'a_baz'],
-                            },
-                            'Component B': {
-                                'seed_words': ['b_foo', 'b_bar', 'b_baz'],
-                            },
+                        'Component B': {
+                            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
                         },
-                        'objective': 'Mock Objective 2',
-                        'preference': 'Mock Preference 2',
                     },
+                    'objective': 'Mock Objective 1',
+                    'preference': 'Mock Preference 1',
                 },
-            ]
-        },
+            },
+            {
+                'num_samples': 5,
+                'alignment_task': {
+                    'domain': {
+                        'Component A': {
+                            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+                        },
+                        'Component B': {
+                            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+                        },
+                    },
+                    'objective': 'Mock Objective 2',
+                    'preference': 'Mock Preference 2',
+                },
+            },
+        ]
     }
 
 
 @pytest.mark.asyncio
 async def test_generate_continual_dataset_schema_parse_exception(
-    mock_config_dict, mock_client_schema_parse_exception, mock_semaphore
+    mock_data_config, mock_model, mock_client_schema_parse_exception, mock_semaphore
 ):
     continual_dataset = await generate_continual_dataset(
-        mock_config_dict, mock_client_schema_parse_exception, mock_semaphore
+        mock_data_config, mock_model, mock_client_schema_parse_exception, mock_semaphore
     )
 
-    task_specs = mock_config_dict['data']['task_specs']
+    task_specs = mock_data_config['task_specs']
     assert isinstance(continual_dataset, ContinualAlignmentDataset)
     assert len(task_specs) == len(continual_dataset.datasets)
 
@@ -155,27 +157,28 @@ async def test_generate_continual_dataset_schema_parse_exception(
 
 @pytest.mark.asyncio
 async def test_generate_continual_dataset_uncaught_exception(
-    mock_config_dict, mock_client_uncaught_exception, mock_semaphore
+    mock_data_config, mock_model, mock_client_uncaught_exception, mock_semaphore
 ):
     with pytest.raises(Exception):
         continual_dataset = await generate_continual_dataset(
-            mock_config_dict, mock_client_uncaught_exception, mock_semaphore
+            mock_data_config, mock_model, mock_client_uncaught_exception, mock_semaphore
         )
         assert continual_dataset is None
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('pop_key', ['model_name', 'data'])
+@pytest.mark.parametrize('pop_key', ['task_specs'])
 async def test_generate_continual_dataset_bad_config_dict(
-    mock_config_dict,
+    mock_data_config,
+    mock_model,
     mock_client,
     mock_semaphore,
     pop_key,
 ):
-    mock_config_dict.pop(pop_key)  # Remove required key
+    mock_data_config.pop(pop_key)  # Remove required key
     with pytest.raises(KeyError):
         continual_dataset = await generate_continual_dataset(
-            mock_config_dict, mock_client, mock_semaphore
+            mock_data_config, mock_model, mock_client, mock_semaphore
         )
         assert continual_dataset is None
         assert not mock_client.called  # Make sure we didn't hit the model endpoint
@@ -183,12 +186,12 @@ async def test_generate_continual_dataset_bad_config_dict(
 
 @pytest.mark.asyncio
 async def test_generate_continual_dataset(
-    mock_config_dict, mock_client, mock_semaphore
+    mock_data_config, mock_model, mock_client, mock_semaphore
 ):
     continual_dataset = await generate_continual_dataset(
-        mock_config_dict, mock_client, mock_semaphore
+        mock_data_config, mock_model, mock_client, mock_semaphore
     )
-    task_specs = mock_config_dict['data']['task_specs']
+    task_specs = mock_data_config['task_specs']
     assert isinstance(continual_dataset, ContinualAlignmentDataset)
     assert len(task_specs) == len(continual_dataset.datasets)
 
