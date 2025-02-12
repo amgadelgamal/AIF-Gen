@@ -7,10 +7,13 @@ import click
 import openai
 import yaml
 
+from aif_gen.generate.service import generate_continual_dataset
+
 
 @click.command(context_settings={'show_default': True})
 @click.argument(
-    'data_config', type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path)
+    'data_config_file',
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
 )
 @click.option(
     '--model',
@@ -30,34 +33,43 @@ import yaml
     help='Max number of concurrent inference requests to send to the vLLM model',
     default=256,
 )
+@click.option(
+    '-n',
+    '--dry-run',
+    is_flag=True,
+    default=False,
+    help='Ignore the input config and generate a dummy sample ensuring the model endpoint is setup.',
+)
 def generate(
-    data_config: pathlib.Path,
+    data_config_name: pathlib.Path,
     model: str,
     output_file: pathlib.Path,
     max_concurrency: int,
+    dry_run: bool,
 ) -> None:
     r"""Generate a new ContinualAlignmentDataset.
 
     DATA_CONFIG: Path to the dataset configuration file to use for dataset generation.
     """
-    logging.info(f'Using data configuration file: {data_config}')
+    logging.info(f'Using data configuration file: {data_config_name}')
     logging.info(f'Using model: {model}')
 
-    config_dict = yaml.safe_load(data_config.read_text())
-    logging.debug(f'Configuration: {config_dict}')
+    data_config = yaml.safe_load(data_config_name.read_text())
+    logging.debug(f'Configuration: {data_config}')
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        _ = openai.AsyncOpenAI()
+        client = openai.AsyncOpenAI()
     except (openai.OpenAIError, Exception) as e:
         logging.exception(f'Could not create openAI client: {e}')
         return
 
-    _ = asyncio.Semaphore(max_concurrency)
-    # TODO: Setup async click
-    # dataset = await generate_continual_dataset(config_dict, client, async_semaphore)
-    dataset = None
+    async_semaphore = asyncio.Semaphore(max_concurrency)
+    future = generate_continual_dataset(
+        data_config, model, client, async_semaphore, dry_run
+    )
+    dataset = asyncio.get_event_loop().run_until_complete(future)
     if dataset is not None:
         logging.info(f'Writing {len(dataset)} samples to {output_file}')
         dataset.to_json(output_file)
