@@ -5,6 +5,7 @@
 python benchmarks/dpo/continual_eval_checkpoints.py \
     --dataset_name  debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --checkpoint_dir Qwen2-0.5B-DPO-test \
     --learning_rate 0 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
@@ -25,6 +26,8 @@ import torch
 import glob
 import wandb
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from dataclasses import dataclass, field
+from typing import Optional
 from trl import (
     DPOConfig,
     DPOTrainer,
@@ -38,6 +41,15 @@ from trl import (
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
 from mock_data import init_mock_dataset
+
+@dataclass
+class EvalScriptArguments(ScriptArguments):
+    checkpoint_dir: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The directory containing the checkpoints to evaluate."
+        },
+    )
 
 
 def main(
@@ -87,9 +99,8 @@ def main(
 
     continual_dataset = init_mock_dataset(script_args.dataset_name)
     output_dir = training_args.output_dir
-    checkpoint_dir = 'Qwen2-0.5B-DPO-test'
 
-    checkpoint_paths = glob.glob(f'{checkpoint_dir}/*/*')
+    checkpoint_paths = glob.glob(f'{script_args.checkpoint_dir}/*/*')
     checkpoint_paths = sorted([ch for ch in checkpoint_paths if 'checkpoint' in ch])
 
     for checkpoint_path in checkpoint_paths:
@@ -118,7 +129,7 @@ def main(
 
 
 if __name__ == '__main__':
-    dataclass_types = (ScriptArguments, DPOConfig, ModelConfig)
+    dataclass_types = (EvalScriptArguments, DPOConfig, ModelConfig)
     parser = TrlParser(dataclass_types)
 
     script_args, training_args, model_args = parser.parse_args_and_config()
