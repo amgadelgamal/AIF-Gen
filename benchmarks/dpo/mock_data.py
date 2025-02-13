@@ -10,6 +10,8 @@ def init_mock_dataset(dataset_name: str) -> ContinualAlignmentDataset:
         datasets = get_debug_datasets()
     elif dataset_name == 'ultrafeedback2anthropic':
         datasets = get_ultrafeedback2anthropic_datasets()
+    elif dataset_name == 'ultrafeedback2anthropic_reduced':
+        datasets = get_ultrafeedback2anthropic_datasets_reduced()
     else:
         raise ValueError(f'Unknown dataset: {dataset_name}')
     return ContinualAlignmentDataset(datasets)
@@ -42,6 +44,27 @@ def get_debug_datasets() -> List[AlignmentDataset]:
     ]
     return datasets
 
+
+def get_ultrafeedback2anthropic_datasets_reduced() -> List[AlignmentDataset]:
+    datasets = [
+        {
+            'train': load_dataset(
+                'trl-lib/ultrafeedback_binarized', split='train'
+            ).select(range(35200)),
+            'test': load_dataset(
+                'trl-lib/ultrafeedback_binarized', split='test'
+            ).select(range(1000)),
+        },
+        {
+            'train': load_dataset(
+                'Anthropic/hh-rlhf', split='train'
+            ).select(range(35200)),
+            'test': load_dataset(
+                'Anthropic/hh-rlhf', split='test'
+            ).select(range(1000)),
+        },
+    ]
+    return datasets
 
 def get_ultrafeedback2anthropic_datasets() -> List[AlignmentDataset]:
     datasets = [

@@ -1,4 +1,42 @@
-# Adaptation of the DPO training script for continual learning.
+# Adaptation of the DPO TRL training script for continual learning.
+
+"""
+# Full training
+python benchmarks/dpo/dpo_continual.py \
+    --dataset_name debug \
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --learning_rate 5.0e-7 \
+    --num_train_epochs 1 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
+    --gradient_checkpointing \
+    --logging_steps 25 \
+    --eval_strategy steps \
+    --eval_steps 50 \
+    --output_dir Qwen2-0.5B-DPO \
+    --no_remove_unused_columns
+
+# LoRA:
+python benchmarks/dpo/dpo_continual.py \
+    --dataset_name  debug \
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --learning_rate 5.0e-6 \
+    --num_train_epochs 1 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
+    --gradient_checkpointing \
+    --logging_steps 25 \
+    --eval_strategy steps \
+    --eval_steps 50 \
+    --save_steps 3 \
+    --bf16 \
+    --output_dir Qwen2-0.5B-DPO-test \
+    --no_remove_unused_columns \
+    --use_peft \
+    --lora_r 32 \
+    --lora_alpha 16
+"""
+
 import torch
 import wandb
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -14,7 +52,7 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
-from .mock_data import init_mock_dataset
+from mock_data import init_mock_dataset
 
 
 def main(
@@ -64,6 +102,7 @@ def main(
     continual_dataset = init_mock_dataset(script_args.dataset_name)
 
     for i, dataset in enumerate(continual_dataset.datasets):
+        training_args.output_dir = f'{training_args.output_dir}/dataset-{i}'
         trainer = DPOTrainer(
             model,
             ref_model,
@@ -87,7 +126,7 @@ def main(
             wandb.log(metrics)
 
         # Save and push to hub
-        trainer.save_model(training_args.output_dir + f'/dataset-{i}')
+        trainer.save_model(training_args.output_dir + '/last')
         if training_args.push_to_hub:
             trainer.push_to_hub(dataset_name=script_args.dataset_name + f'/dataset-{i}')
 
