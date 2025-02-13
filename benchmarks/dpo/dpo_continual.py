@@ -35,6 +35,26 @@ python benchmarks/dpo/dpo_continual.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
+
+accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero3.yaml \
+    benchmarks/dpo/dpo_continual.py \
+    --dataset_name  debug \
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --learning_rate 5.0e-6 \
+    --num_train_epochs 1 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
+    --gradient_checkpointing \
+    --logging_steps 25 \
+    --eval_strategy steps \
+    --eval_steps 50 \
+    --save_steps 3 \
+    --bf16 \
+    --output_dir Qwen2-0.5B-DPO-test \
+    --no_remove_unused_columns \
+    --use_peft \
+    --lora_r 32 \
+    --lora_alpha 16
 """
 
 import torch
@@ -100,9 +120,6 @@ def main(
         ]
 
     continual_dataset = init_mock_dataset(script_args.dataset_name)
-    print('training_args', training_args)
-    print('model_args', model_args)
-    print('script_args', script_args)
     output_dir = training_args.output_dir
     for i, dataset in enumerate(continual_dataset.datasets):
         training_args.output_dir = f'{output_dir}/dataset-{i}'
