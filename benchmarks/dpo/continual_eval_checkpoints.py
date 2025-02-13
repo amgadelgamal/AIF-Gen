@@ -1,36 +1,20 @@
 # Adaptation of the DPO TRL training script for continual learning.
 
 """
-# Full training
-python benchmarks/dpo/dpo_continual.py \
-    --dataset_name debug \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --learning_rate 5.0e-7 \
-    --num_train_epochs 1 \
-    --per_device_train_batch_size 2 \
-    --gradient_accumulation_steps 8 \
-    --gradient_checkpointing \
-    --logging_steps 25 \
-    --eval_strategy steps \
-    --eval_steps 50 \
-    --run_output_dir Qwen2-0.5B-DPO \
-    --no_remove_unused_columns
-
 # LoRA:
-python benchmarks/dpo/dpo_continual.py \
+python benchmarks/dpo/continual_eval_checkpoints.py \
     --dataset_name  debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --learning_rate 5.0e-6 \
+    --learning_rate 0 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 8 \
     --gradient_checkpointing \
-    --logging_steps 25 \
+    --logging_steps 1000 \
     --eval_strategy steps \
-    --eval_steps 50 \
-    --save_steps 3 \
+    --eval_steps 1000 \
     --bf16 \
-    --output_dir Qwen2-0.5B-DPO-test \
+    --output_dir Qwen2-0.5B-DPO-test-eval \
     --no_remove_unused_columns \
     --use_peft \
     --lora_r 32 \
@@ -38,6 +22,7 @@ python benchmarks/dpo/dpo_continual.py \
 """
 
 import torch
+import glob
 import wandb
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import (
@@ -86,6 +71,7 @@ def main(
         )
     else:
         ref_model = None
+
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path, trust_remote_code=model_args.trust_remote_code
     )
@@ -100,38 +86,35 @@ def main(
         ]
 
     continual_dataset = init_mock_dataset(script_args.dataset_name)
-    print('training_args', training_args)
-    print('model_args', model_args)
-    print('script_args', script_args)
     output_dir = training_args.output_dir
-    for i, dataset in enumerate(continual_dataset.datasets):
-        training_args.output_dir = f'{output_dir}/dataset-{i}'
-        trainer = DPOTrainer(
-            model,
-            ref_model,
-            args=training_args,
-            train_dataset=dataset[script_args.dataset_train_split],
-            eval_dataset=dataset[script_args.dataset_test_split]
-            if training_args.eval_strategy != 'no'
-            else None,
-            processing_class=tokenizer,
-            peft_config=peft_config,
-        )
+    checkpoint_dir = 'Qwen2-0.5B-DPO-test'
 
-        trainer.train()
+    checkpoint_paths = glob.glob(f'{checkpoint_dir}/*/*')
+    checkpoint_paths = sorted([ch for ch in checkpoint_paths if 'checkpoint' in ch])
 
-        if training_args.eval_strategy != 'no':
-            metrics = trainer.evaluate()
-            metrics['dataset'] = i + 1
-            trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
-            trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
-            metrics = {'last/' + k: v for k, v in metrics.items()}
-            wandb.log(metrics)
+    for checkpoint_path in checkpoint_paths:
+        dataset_name = checkpoint_path.split('/')[-2]
+        checkpoint_step = checkpoint_path.split('/')[-1]
+        adapter_name = dataset_name + checkpoint_step
+        model.load_adapter(checkpoint_path, adapter_name=adapter_name)
+        metrics = {}
+        for i, dataset in enumerate(continual_dataset.datasets):
+            training_args.output_dir = f'{output_dir}/dataset-{i}'
+            trainer = DPOTrainer(
+                model,
+                ref_model,
+                args=training_args,
+                train_dataset=dataset[script_args.dataset_test_split],
+                eval_dataset=dataset[script_args.dataset_test_split],
+                processing_class=tokenizer,
+                peft_config=peft_config,
+            )
 
-        # Save and push to hub
-        trainer.save_model(training_args.output_dir + '/last')
-        if training_args.push_to_hub:
-            trainer.push_to_hub(dataset_name=script_args.dataset_name + f'/dataset-{i}')
+            ev_metrics = trainer.evaluate()
+            ev_metrics = {f'dataset-{i}/' + k: v for k, v in ev_metrics.items()}
+            metrics.update(ev_metrics)
+
+        wandb.log(metrics)
 
 
 if __name__ == '__main__':
