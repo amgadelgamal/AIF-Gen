@@ -1,6 +1,14 @@
 aif\_gen.task package
 =====================
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   aif_gen.task.seed_words
+
 Submodules
 ----------
 
