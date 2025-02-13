@@ -36,8 +36,6 @@ async def generate_continual_dataset(
     Returns:
         Optional[ContinualAlignmentDataset]: The synthetically generated dataset.
     """
-    logging.info(f'Using Model: {model_name}')
-
     prompt_mapper = PromptMapper()
     response_mapper = ResponseMapper()
 
@@ -67,7 +65,7 @@ async def generate_continual_dataset(
     for dataset_idx, task_spec in enumerate(task_specs):
         task = AlignmentTask.from_dict(task_spec['alignment_task'])
         dataset_size = task_spec['num_samples']
-        logging.info(f'Generating Dataset ({dataset_size} samples) for task: {task}')
+        logging.info(f'Generating Dataset ({dataset_size} samples) {task}')
 
         tasks.append(task)
         dataset_sizes.append(dataset_size)
@@ -156,6 +154,7 @@ async def _generate_sample(
         assert prompt is not None  # This is for mypy
 
         task_prompt = response_mapper.generate_prompt(task, prompt)
+        logging.debug(f'Meta Prompt: {meta_prompt}, Model Response: {prompt}')
 
         async with async_semaphore:
             response = await client.chat.completions.create(
@@ -182,7 +181,7 @@ async def _generate_sample(
             chosen=structured_response.chosen,
             rejected=structured_response.rejected,
         )
-        logging.debug(f'Meta Prompt: {meta_prompt}, Sample: {sample}')
+        logging.debug(f'Task Prompt: {task_prompt}, Sample: {sample}')
         return sample, dataset_idx
     except pydantic.ValidationError as e:
         logging.error(f'Failed to bind structured output json schema: {e}')
