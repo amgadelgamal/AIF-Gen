@@ -1,0 +1,1 @@
+POLITICS_SEED_WORDS = []
