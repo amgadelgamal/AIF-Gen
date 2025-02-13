@@ -131,7 +131,7 @@ def main(
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')
         if training_args.push_to_hub:
-            trainer.push_to_hub(dataset_name=script_args.dataset_name + f'/dataset-{i}')
+            trainer.push_to_hub(dataset_name=('Continual_DPO_' + script_args.dataset_name + f'/dataset-{i}'))
 
 
 if __name__ == '__main__':
