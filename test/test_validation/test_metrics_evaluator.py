@@ -111,3 +111,17 @@ def test_response_contrast_ratio(evaluator):
     assert (
         abs(contrast_ratio - (score_chosen - score_rejected)) < 1e-6
     ), 'Contrast ratio should be equal to the difference between chosen and rejected alignment scores.'
+
+def test_response_diversity(evaluator):
+    """Test that the self-BLEU score is computed correctly."""
+    responses = [
+        'I absolutely hate this product, it is terrible and awful.',
+        'I absolutely love this product, it is amazing and wonderful!',
+        'I absolutely dislike this service, it was a huge disappointment.',
+        'I absolutely love this service, it exceeded all my expectations.'
+    ]
+    self_bleu_score = evaluator.compute_response_diversity(responses)
+    assert isinstance(self_bleu_score, float)
+    assert 0.0 <= self_bleu_score <= 1.0
+    # The inverse self-BLEU score should be greater than 0 for diverse responses.
+    assert self_bleu_score > 0.0, 'The inverse self-BLEU score should be greater than 0 for diverse responses.'
