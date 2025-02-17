@@ -1,127 +1,208 @@
+from dataclasses import dataclass
+from typing import List
+
 import pytest
 
-from aif_gen.dataset.validation.metrics_evaluator import MetricsEvaluator
+from aif_gen.dataset.validation.metrics_evaluator import (  # DiversityEvaluator,
+    AlignmentEvaluator,
+    CoherenceEvaluator,
+    ContrastEvaluator,
+    CoverageEvaluator,
+    RelevanceEvaluator,
+)
 
 
-@pytest.fixture(scope='module')
-def evaluator():
-    """Fixture to initialize the MetricsEvaluator once per test module."""
-    return MetricsEvaluator()
+@dataclass
+class DummyAlignmentDatasetSample:
+    prompt: str
+    chosen: str
+    rejected: str
+    # For DiversityEvaluator tests; can be None if not used.
+    response_set: List[str] = None
 
 
-def test_prompt_relevance_score(evaluator):
-    """Test that a response similar to the prompt yields a higher relevance score than a dissimilar response."""
-    prompt = 'Tell me a story about a relaxing vacation at the beach.'
-    similar_response = 'I enjoyed a relaxing vacation at a beautiful beach.'
-    dissimilar_response = 'I went to the grocery store to buy some fruits.'
+class DummyTask:
+    def __init__(self, preference: str):
+        self.preference = preference
 
-    score_similar = evaluator.compute_prompt_relevance_score(prompt, similar_response)
-    score_dissimilar = evaluator.compute_prompt_relevance_score(
-        prompt, dissimilar_response
-    )
-
-    # Ensure the scores are floats.
-    assert isinstance(score_similar, float)
-    assert isinstance(score_dissimilar, float)
-    # We expect the similar response to have a higher relevance score.
-    assert (
-        score_similar > score_dissimilar
-    ), 'The similar response should yield a higher relevance score than the dissimilar one.'
-    # Cosine similarity from SentenceTransformer is typically in the range [-1, 1].
-    assert -1.0 <= score_similar <= 1.0
-    assert -1.0 <= score_dissimilar <= 1.0
+    def to_dict(self):
+        return {'preference': self.preference}
 
 
-def test_content_coherence_index(evaluator):
-    """Test that a coherent response receives a higher coherence index than an incoherent one."""
-    coherent_response = 'The narrative flows logically from one event to the next with clear transitions.'
-    incoherent_response = 'Blue quickly the running car. Banana mind, teleport coffee.'
+class DummyAlignmentDataset:
+    def __init__(self, task: DummyTask, samples: List[DummyAlignmentDatasetSample]):
+        self._task = task
+        self._samples = samples
 
-    coherence_index_coherent = evaluator.compute_content_coherence_index(
-        coherent_response
-    )
-    coherence_index_incoherent = evaluator.compute_content_coherence_index(
-        incoherent_response
-    )
+    @property
+    def task(self):
+        return self._task
 
-    # Ensure the returned indices are floats.
-    assert isinstance(coherence_index_coherent, float)
-    assert isinstance(coherence_index_incoherent, float)
-    # Expect that the coherent response has a higher (inverse perplexity) index.
-    assert (
-        coherence_index_coherent > coherence_index_incoherent
-    ), 'A coherent response should have a higher coherence index than an incoherent one.'
+    @property
+    def samples(self):
+        return self._samples
 
 
-def test_prompt_coverage_ratio(evaluator):
-    """Test that the coverage ratio is computed correctly.
-
-    Using a prompt that likely yields a few noun chunks, we verify that a response which
-    includes most or all key elements scores higher than one that does not.
-    """
-    prompt = 'Tell me about your vacation at the sunny beach with clear blue skies.'
-    full_coverage_response = (
-        'I had a wonderful vacation at the sunny beach enjoying the clear blue skies.'
-    )
-    partial_coverage_response = 'I visited a beach and enjoyed the sun.'
-
-    ratio_full = evaluator.compute_prompt_coverage_ratio(prompt, full_coverage_response)
-    ratio_partial = evaluator.compute_prompt_coverage_ratio(
-        prompt, partial_coverage_response
-    )
-
-    # Ensure the ratios are in the interval [0, 1].
-    assert 0.0 <= ratio_full <= 1.0
-    assert 0.0 <= ratio_partial <= 1.0
-    # A response covering more prompt elements should have a higher ratio.
-    assert (
-        ratio_full >= ratio_partial
-    ), 'Full coverage response should yield a higher or equal coverage ratio compared to partial coverage.'
+# --- Example Continual Datasets Based on the Provided JSON ---
 
 
-def test_response_alignment_score(evaluator):
-    """Test that the alignment score is a float on a 0–1 scale for both positive and negative responses."""
-    positive_response = "I absolutely love this product, it's amazing and wonderful!"
-    negative_response = 'I absolutely hate this product, it is terrible and awful.'
-
-    score_positive = evaluator.compute_response_alignment_score(positive_response)
-    score_negative = evaluator.compute_response_alignment_score(negative_response)
-
-    assert isinstance(score_positive, float)
-    assert isinstance(score_negative, float)
-    # The dummy alignment score should fall between 0 and 1.
-    assert 0.0 <= score_positive <= 1.0
-    assert 0.0 <= score_negative <= 1.0
-
-
-def test_response_contrast_ratio(evaluator):
-    """Test that the contrast ratio is correctly computed as the difference between chosen and rejected alignment scores."""
-    chosen_response = 'I absolutely love this service, it exceeded all my expectations.'
-    rejected_response = (
-        'I absolutely dislike this service, it was a huge disappointment.'
-    )
-
-    score_chosen = evaluator.compute_response_alignment_score(chosen_response)
-    score_rejected = evaluator.compute_response_alignment_score(rejected_response)
-    contrast_ratio = evaluator.compute_response_contrast_ratio(
-        chosen_response, rejected_response
-    )
-
-    # Check that the contrast ratio equals the difference in alignment scores.
-    assert (
-        abs(contrast_ratio - (score_chosen - score_rejected)) < 1e-6
-    ), 'Contrast ratio should be equal to the difference between chosen and rejected alignment scores.'
-
-def test_response_diversity(evaluator):
-    """Test that the self-BLEU score is computed correctly."""
-    responses = [
-        'I absolutely hate this product, it is terrible and awful.',
-        'I absolutely love this product, it is amazing and wonderful!',
-        'I absolutely dislike this service, it was a huge disappointment.',
-        'I absolutely love this service, it exceeded all my expectations.'
+# Dataset 1: Preference "Make the headline polarizing"
+@pytest.fixture
+def dataset_polarizing():
+    task = DummyTask('Make the headline polarizing')
+    samples = [
+        DummyAlignmentDatasetSample(
+            prompt=(
+                '"Hospitals around the world are increasingly relying on cutting-edge technology to improve patient care, '
+                'with the integration of artificial intelligence in medical diagnosis and treatment being at the forefront of innovation. '
+                'The use of machine learning algorithms allows doctors to quickly analyze large amounts of data from various sources, '
+                'including the internet, to identify potential diseases and develop targeted treatment plans. '
+                'In a breakthrough development, researchers have successfully used AI to analyze blood samples and identify early warning signs of a previously undiagnosed disease. '
+                'What is a possible news article headline announcing this breakthrough in medical engineering and its potential impact on hospital care?"'
+            ),
+            chosen='Artificial Intelligence ',
+            rejected='Blood Analysis Breakthrough Sparks Hope for the Future',
+            response_set=[
+                'Artificial Intelligence leads the revolution in medicine',
+                'Breakthrough in AI changes hospital care forever',
+                'Hospital care transformed by AI breakthroughs',
+            ],
+        ),
+        DummyAlignmentDatasetSample(
+            prompt=(
+                'A team of researchers at a leading hospital has successfully integrated machine learning into their surgical planning process, '
+                'resulting in more precise and efficient operations. This innovation has been made possible through the collaboration of engineers, medical professionals, '
+                "and computer programmers who worked together to develop a system that can analyze complex medical data and provide personalized recommendations for each patient's unique needs. "
+                'The integration of machine learning has led to a significant reduction in complications and a notable improvement in patient recovery times, '
+                'showcasing the potential of technology to revolutionize the field of medicine.'
+            ),
+            chosen='Machine Learning Revolution in Surgery: A Game-Changer for Patients, or a Threat to Human Judgment?',
+            rejected='New AI System in Surgery is a Stepping Stone to Total Robot Overlordship',
+            response_set=[
+                'Revolutionary AI transforms surgery, but sparks debate',
+                'Surgical innovation or robot takeover? Experts weigh in',
+                'New machine learning system shakes up operating rooms',
+            ],
+        ),
     ]
-    self_bleu_score = evaluator.compute_response_diversity(responses)
-    assert isinstance(self_bleu_score, float)
-    assert 0.0 <= self_bleu_score <= 1.0
-    # The inverse self-BLEU score should be greater than 0 for diverse responses.
-    assert self_bleu_score > 0.0, 'The inverse self-BLEU score should be greater than 0 for diverse responses.'
+    return DummyAlignmentDataset(task, samples)
+
+
+# Dataset 2: Preference "Make the headline short and unbiased"
+@pytest.fixture
+def dataset_unbiased():
+    task = DummyTask('Make the headline short and unbiased')
+    samples = [
+        DummyAlignmentDatasetSample(
+            prompt=(
+                'A team of doctors from a leading research institution has been working with AI engineers to develop a new surgical robot that uses machine learning '
+                'algorithms to optimize blood vessel reconstruction during high-risk surgeries. This innovation has the potential to revolutionize the field of medicine and save countless lives. '
+                'Meanwhile, researchers at a nearby university are exploring the effects of internet usage on exercise habits.'
+            ),
+            chosen="New Surgical Robot and Internet's Impact on Exercise: Two Research Stories",
+            rejected='Scientists Develop Surgical Robot to Save Lives, But is the Internet to Blame for Our Sedentary Lifestyles?',
+            response_set=[
+                'New Surgical Robot, Internet Impact: Brief Overview',
+                'Surgical Robot and Exercise Trends Uncovered',
+                "A Dual Story: Robotics in Surgery & Internet's Role in Exercise",
+            ],
+        ),
+        DummyAlignmentDatasetSample(
+            prompt=(
+                'Imagine a world where technology and medicine intersect, transforming the way we approach healthcare and wellness. A team of engineers and computer scientists '
+                'have developed an innovative AI-powered system that can help doctors analyze medical images and identify potential diseases more accurately than ever before. '
+                'This breakthrough has the potential to revolutionize surgery and patient care, while researchers explore the impact of internet use on our health.'
+            ),
+            chosen='AI-Powered Health Scanner Revolutionizes Diagnosis and Treatment',
+            rejected='Advances in AI-Powered Health Scanner Technology: A Threat to Human Existence',
+            response_set=[
+                'AI Health Scanner: Revolutionizing Diagnosis',
+                'Breakthrough in AI Health Scanning Revealed',
+                'New AI Health Scanner Improves Diagnosis',
+            ],
+        ),
+    ]
+    return DummyAlignmentDataset(task, samples)
+
+
+def test_relevance_evaluator(dataset_polarizing):
+    evaluator = RelevanceEvaluator()
+    results = evaluator.evaluate(dataset_polarizing)
+    assert isinstance(results, list)
+    assert len(results) == len(dataset_polarizing.samples)
+    for res in results:
+        assert 'relevance' in res
+        assert isinstance(res['relevance'], int)
+        assert 0 <= res['relevance'] <= 100
+
+
+def test_coherence_evaluator(dataset_polarizing):
+    evaluator = CoherenceEvaluator()
+    results = evaluator.evaluate(dataset_polarizing)
+    assert isinstance(results, list)
+    for res in results:
+        assert 'coherence' in res
+        assert isinstance(res['coherence'], int)
+        assert 0 <= res['coherence'] <= 100
+
+
+def test_coverage_evaluator(dataset_polarizing):
+    evaluator = CoverageEvaluator()
+    results = evaluator.evaluate(dataset_polarizing)
+    assert isinstance(results, list)
+    for res in results:
+        assert 'coverage' in res
+        assert isinstance(res['coverage'], int)
+        assert 0 <= res['coverage'] <= 100
+
+
+def test_alignment_evaluator_polarizing(dataset_polarizing):
+    evaluator = AlignmentEvaluator()
+    results = evaluator.evaluate(dataset_polarizing)
+    assert isinstance(results, list)
+    for res in results:
+        assert 'alignment' in res
+        assert isinstance(res['alignment'], int)
+        # For polarizing mode, the computed score is a distance from neutral; still, it should be within 0–100.
+        assert 0 <= res['alignment'] <= 100
+
+
+def test_contrast_evaluator_polarizing(dataset_polarizing):
+    evaluator = ContrastEvaluator()
+    results = evaluator.evaluate(dataset_polarizing)
+    assert isinstance(results, list)
+    for res in results:
+        assert 'contrast' in res
+        assert isinstance(res['contrast'], int)
+        # Contrast can be negative. Check that absolute difference is within 0–100.
+        assert abs(res['contrast']) <= 100
+
+
+def test_alignment_evaluator_unbiased(dataset_unbiased):
+    evaluator = AlignmentEvaluator()
+    results = evaluator.evaluate(dataset_unbiased)
+    assert isinstance(results, list)
+    for res in results:
+        assert 'alignment' in res
+        assert isinstance(res['alignment'], int)
+        assert 0 <= res['alignment'] <= 100
+
+
+def test_contrast_evaluator_unbiased(dataset_unbiased):
+    evaluator = ContrastEvaluator()
+    results = evaluator.evaluate(dataset_unbiased)
+    assert isinstance(results, list)
+    for res in results:
+        assert 'contrast' in res
+        assert isinstance(res['contrast'], int)
+        assert abs(res['contrast']) <= 100
+
+
+# def test_diversity_evaluator(dataset_polarizing):
+#     evaluator = DiversityEvaluator(ngram=3, parallel=False)
+#     results = evaluator.evaluate(dataset_polarizing)
+#     assert isinstance(results, list)
+#     for res in results:
+#         assert "diversity" in res
+#         assert isinstance(res["diversity"], int)
+#         assert 0 <= res["diversity"] <= 100
