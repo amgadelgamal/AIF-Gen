@@ -66,8 +66,14 @@ class Domain:
         """
         components, component_weights = [], []
         for component_name, component_args in domain_dict.items():
-            component_args['name'] = component_name
-            components.append(DomainComponent.from_dict(component_args))
+            if len(component_args):
+                component_args['name'] = component_name
+                component = DomainComponent.from_dict(component_args)
+            else:
+                # Use domain component alias for seed words
+                component = DomainComponent(component_name, seed_words=component_name)
+
+            components.append(component)
 
             if 'weight' in component_args:
                 component_weights.append(component_args['weight'])

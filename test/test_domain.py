@@ -1,6 +1,7 @@
 import pytest
 
 from aif_gen.task import Domain, DomainComponent
+from aif_gen.task.seed_words import get_seed_words
 
 
 def test_init():
@@ -132,6 +133,26 @@ def test_init_from_dict_no_weights():
         assert component_dict[component.name]['seed_words'] == component.seed_words
         assert component_dict[component.name]['description'] == component.description
     assert domain.weights == [1 / len(component_dict)] * len(component_dict)
+
+
+def test_init_from_dict_seed_word_alias():
+    component_dict = {'education': {}}
+    domain = Domain.from_dict(component_dict)
+    assert domain.num_components == len(component_dict)
+    for component in domain.components:
+        assert component.name in component_dict
+        assert component.seed_words == get_seed_words(component.name)
+    assert domain.weights == [1 / len(component_dict)] * len(component_dict)
+
+
+def test_init_from_dict_multiple_seed_word_alias():
+    component_dict = {'education': {'weight': 0.7}, 'technology': {'weight': 0.3}}
+    domain = Domain.from_dict(component_dict)
+    assert domain.num_components == len(component_dict)
+    for component in domain.components:
+        assert component.name in component_dict
+        assert component.seed_words == get_seed_words(component.name)
+    assert domain.weights == [0.7, 0.3]
 
 
 def test_to_dict_no_weights():
