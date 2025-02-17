@@ -1,0 +1,14 @@
+---
+task_specs:
+  - num_samples: 10000
+    alignment_task:
+      objective: 'Ask an interesting question that a student would ask a teacher'
+      preference: 'Do not directly reveal the answer to the question. Instead, guide the student with a relevant hint.'
+      domain:
+        education
+  - num_samples: 10000
+    alignment_task:
+      objective: 'Ask an interesting question that a student would ask a teacher'
+      preference: 'Directly answer the question.'
+      domain:
+        education
