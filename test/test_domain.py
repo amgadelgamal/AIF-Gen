@@ -136,7 +136,7 @@ def test_init_from_dict_no_weights():
 
 
 def test_init_from_dict_seed_word_alias():
-    component_dict = {'education': {}}
+    component_dict = {'education': None}
     domain = Domain.from_dict(component_dict)
     assert domain.num_components == len(component_dict)
     for component in domain.components:
