@@ -1,7 +1,6 @@
 # Adaptation of the DPO TRL training script for continual learning.
 
-"""
-# Full training
+"""# Full training
 python benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
@@ -14,7 +13,7 @@ python benchmarks/dpo/dpo_continual.py \
     --eval_strategy steps \
     --eval_steps 50 \
     --run_output_dir Qwen2-0.5B-DPO \
-    --no_remove_unused_columns
+    --no_remove_unused_columns.
 
 # LoRA:
 python benchmarks/dpo/dpo_continual.py \
@@ -59,6 +58,7 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
 
 import torch
 import wandb
+from mock_data import init_mock_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import (
     DPOConfig,
@@ -71,8 +71,6 @@ from trl import (
     get_quantization_config,
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
-
-from mock_data import init_mock_dataset
 
 
 def main(
@@ -121,6 +119,7 @@ def main(
 
     continual_dataset = init_mock_dataset(script_args.dataset_name)
     output_dir = training_args.output_dir
+
     for i, dataset in enumerate(continual_dataset.datasets):
         training_args.output_dir = f'{output_dir}/dataset-{i}'
         trainer = DPOTrainer(
@@ -148,7 +147,18 @@ def main(
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')
         if training_args.push_to_hub:
-            trainer.push_to_hub(dataset_name=('Continual_DPO_' + script_args.dataset_name + f'/dataset-{i}'))
+            trainer.push_to_hub(
+                dataset_name=(
+                    'Continual_DPO_' + script_args.dataset_name + f'/dataset-{i}'
+                )
+            )
+
+        # TODO Test If using DeepSpeed through Accelerate, tear down the engine after training.
+        if hasattr(trainer, 'deepspeed') and trainer.deepspeed is not None:
+            # Remove reference to the DeepSpeed engine to allow proper cleanup.
+            del trainer.deepspeed
+        # Free cached GPU memory.
+        torch.cuda.empty_cache()
 
 
 if __name__ == '__main__':
