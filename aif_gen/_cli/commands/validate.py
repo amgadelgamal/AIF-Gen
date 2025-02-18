@@ -11,7 +11,7 @@ from aif_gen.dataset.continual_alignment_dataset import (
 from aif_gen.dataset.validation import count_validation, entropy_validation
 
 
-@click.group(context_settings={'show_default': True})
+@click.command(context_settings={'show_default': True})
 @click.argument(
     'input_data_file',
     type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
