@@ -29,6 +29,7 @@ dev = [
 ]
 benchmarks-dpo = [
     "datasets>=3.2.0",
+    "peft>=0.14.0",
     "transformers>=4.48.3",
     "trl>=0.14.0",
     "wandb>=0.19.6",
