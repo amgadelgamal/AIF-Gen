@@ -24,8 +24,7 @@ def transform() -> None:
     type=click.Path(dir_okay=False, path_type=pathlib.Path),
 )
 @click.option(
-    '-p',
-    '--probability_swap',
+    '--p',
     type=click.FloatRange(min=0, max=1),
     default=1,
     help="Probability with which to swap each 'chosen' and 'rejected' in the dataset",
