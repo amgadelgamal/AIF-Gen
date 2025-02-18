@@ -17,7 +17,7 @@ python benchmarks/dpo/dpo_continual.py \
 
 # LoRA:
 python benchmarks/dpo/dpo_continual.py \
-    --dataset_name  debug \
+    --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
@@ -29,6 +29,7 @@ python benchmarks/dpo/dpo_continual.py \
     --eval_steps 50 \
     --save_steps 3 \
     --bf16 \
+    --run_name qwen_test \
     --output_dir Qwen2-0.5B-DPO-test \
     --no_remove_unused_columns \
     --use_peft \
@@ -57,12 +58,11 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
 """
 
 import torch
-import wandb
+from continual_dpo_trainer import ContinualDPOTrainer
 from mock_data import init_mock_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import (
     DPOConfig,
-    DPOTrainer,
     ModelConfig,
     ScriptArguments,
     TrlParser,
@@ -71,6 +71,8 @@ from trl import (
     get_quantization_config,
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
+
+from wandb import log  # type: ignore
 
 
 def main(
@@ -122,7 +124,7 @@ def main(
 
     for i, dataset in enumerate(continual_dataset.datasets):
         training_args.output_dir = f'{output_dir}/dataset-{i}'
-        trainer = DPOTrainer(
+        trainer = ContinualDPOTrainer(
             model,
             ref_model,
             args=training_args,
@@ -142,7 +144,7 @@ def main(
             trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
             trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
             metrics = {'last/' + k: v for k, v in metrics.items()}
-            wandb.log(metrics)
+            trainer.log(metrics)
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')
@@ -153,7 +155,7 @@ def main(
                 )
             )
 
-        # TODO Test If using DeepSpeed through Accelerate, tear down the engine after training.
+        # If using DeepSpeed through Accelerate, tear down the engine after training.
         if hasattr(trainer, 'deepspeed') and trainer.deepspeed is not None:
             # Remove reference to the DeepSpeed engine to allow proper cleanup.
             del trainer.deepspeed

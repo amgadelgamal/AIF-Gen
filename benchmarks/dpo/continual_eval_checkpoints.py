@@ -1,7 +1,6 @@
 # Adaptation of the DPO TRL training script for continual learning.
 
-"""
-# LoRA:
+"""# LoRA:
 python benchmarks/dpo/continual_eval_checkpoints.py \
     --dataset_name  debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
@@ -20,14 +19,15 @@ python benchmarks/dpo/continual_eval_checkpoints.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
-"""
+"""  # noqa: D415
 
-import torch
 import glob
-import wandb
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from dataclasses import dataclass, field
 from typing import Optional
+
+import torch
+from mock_data import init_mock_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import (
     DPOConfig,
     DPOTrainer,
@@ -40,15 +40,12 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
-from mock_data import init_mock_dataset
 
 @dataclass
 class EvalScriptArguments(ScriptArguments):
     checkpoint_dir: Optional[str] = field(
         default=None,
-        metadata={
-            "help": "The directory containing the checkpoints to evaluate."
-        },
+        metadata={'help': 'The directory containing the checkpoints to evaluate.'},
     )
 
 
@@ -125,7 +122,7 @@ def main(
             ev_metrics = {f'dataset-{i}/' + k: v for k, v in ev_metrics.items()}
             metrics.update(ev_metrics)
 
-        wandb.log(metrics)
+        trainer.log(metrics)
 
 
 if __name__ == '__main__':
