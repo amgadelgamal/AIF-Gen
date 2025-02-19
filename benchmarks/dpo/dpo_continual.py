@@ -72,8 +72,6 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
-from wandb import log  # type: ignore
-
 
 def main(
     script_args: ScriptArguments, training_args: DPOConfig, model_args: ModelConfig
