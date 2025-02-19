@@ -3,6 +3,8 @@ import pathlib
 from dataclasses import asdict
 from typing import Any, Dict, List, Union
 
+from datasets import Dataset
+
 from aif_gen.task import AlignmentTask
 
 from .alignment_sample import AlignmentDatasetSample
@@ -170,3 +172,33 @@ class AlignmentDataset:
 
         train_frac = num_train_samples / len(samples)
         return cls(task, samples, train_frac)
+
+    def to_hf_compatible(self) -> dict[str, Dataset]:
+        r"""Convert the AlignmentDataset to a dictionary compatible with HuggingFace datasets.
+
+        Returns:
+            dict[str, Dataset]: The dictionary compatible with HuggingFace datasets.
+        """
+        dataset_dict: dict[str, Any] = self.to_dict()
+
+        hf_dict: dict[str, Dataset] = {
+            'train': Dataset.from_dict(
+                {
+                    'prompt': [sample['prompt'] for sample in dataset_dict['train']],
+                    'chosen': [sample['chosen'] for sample in dataset_dict['train']],
+                    'rejected': [
+                        sample['rejected'] for sample in dataset_dict['train']
+                    ],
+                },
+                split='train',
+            ),
+            'test': Dataset.from_dict(
+                {
+                    'prompt': [sample['prompt'] for sample in dataset_dict['test']],
+                    'chosen': [sample['chosen'] for sample in dataset_dict['test']],
+                    'rejected': [sample['rejected'] for sample in dataset_dict['test']],
+                },
+                split='test',
+            ),
+        }
+        return hf_dict
