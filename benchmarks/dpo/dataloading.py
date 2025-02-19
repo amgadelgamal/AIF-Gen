@@ -6,7 +6,9 @@ from datasets import Dataset, load_dataset
 from aif_gen.dataset import ContinualAlignmentDataset
 
 
-def init_mock_dataset(dataset_name: str) -> list[dict[str, Dataset]]:
+def _init_mock_dataset(
+    dataset_name: Union[str, ContinualAlignmentDataset, Path],
+) -> list[dict[str, Dataset]]:
     if dataset_name == 'debug':
         datasets: list[dict[str, Any]] = get_debug_datasets()
     elif dataset_name == 'ultrafeedback2anthropic':
@@ -20,10 +22,17 @@ def init_mock_dataset(dataset_name: str) -> list[dict[str, Dataset]]:
 
 def init_continual_dataset(
     dataset: Union[str, ContinualAlignmentDataset, Path],
+    mock: bool = True,
 ) -> list[dict[str, Dataset]]:
-    # if isinstance(dataset, ContinualAlignmentDataset):
-    #     return dataset.
-    raise NotImplementedError
+    r"""Initialize a continual dataset from a given dataset name or path or a ContinualAlignmentDataset Object."""
+    if mock:
+        return _init_mock_dataset(dataset)
+    if isinstance(dataset, str):
+        path: Path = Path(dataset)
+        data: ContinualAlignmentDataset = ContinualAlignmentDataset.from_json(path)
+    elif isinstance(dataset, Path):
+        data = ContinualAlignmentDataset.from_json(dataset)
+    return data.to_hf_compatible()
 
 
 def get_debug_datasets() -> list[dict[str, Any]]:
@@ -80,7 +89,3 @@ def get_ultrafeedback2anthropic_datasets() -> list[dict[str, Any]]:
         load_dataset('Anthropic/hh-rlhf'),
     ]
     return datasets
-
-
-if __name__ == '__main__':
-    ca = init_mock_dataset('debug')

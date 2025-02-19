@@ -13,7 +13,8 @@ python benchmarks/dpo/dpo_continual.py \
     --eval_strategy steps \
     --eval_steps 50 \
     --run_output_dir Qwen2-0.5B-DPO \
-    --no_remove_unused_columns.
+    --no_remove_unused_columns
+    --dataset_name debug.
 
 # LoRA:
 python benchmarks/dpo/dpo_continual.py \
@@ -35,6 +36,7 @@ python benchmarks/dpo/dpo_continual.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
+    --dataset_name debug
 
 accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero3.yaml \
     benchmarks/dpo/dpo_continual.py \
@@ -55,16 +57,17 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
+    --dataset_name debug
 """
 
 import torch
-from continual_dpo_trainer import ContinualDPOTrainer
-from mock_data import init_mock_dataset
+from continual_dpo_trainer import ContinualDPOArguments, ContinualDPOTrainer
+from dataloading import init_continual_dataset
+from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import (
     DPOConfig,
     ModelConfig,
-    ScriptArguments,
     TrlParser,
     get_kbit_device_map,
     get_peft_config,
@@ -74,7 +77,9 @@ from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
 
 def main(
-    script_args: ScriptArguments, training_args: DPOConfig, model_args: ModelConfig
+    script_args: ContinualDPOArguments,
+    training_args: DPOConfig,
+    model_args: ModelConfig,
 ) -> None:
     torch_dtype = (
         model_args.torch_dtype
@@ -117,11 +122,14 @@ def main(
             name for name, buffer in model.named_buffers() if buffer.dtype == torch.bool
         ]
 
-    continual_dataset = init_mock_dataset(script_args.dataset_name)
+    continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
+        script_args.dataset_name
+    )
     output_dir = training_args.output_dir
 
-    for i, dataset in enumerate(continual_dataset.datasets):
-        training_args.output_dir = f'{output_dir}/dataset-{i}'
+    for i, dataset in enumerate(continual_dataset):
+        current_dataset_name: str = f'dataset-{i}'
+        training_args.output_dir = f'{output_dir}/{current_dataset_name}'
         trainer = ContinualDPOTrainer(
             model,
             ref_model,
@@ -134,6 +142,8 @@ def main(
             peft_config=peft_config,
         )
 
+        # TODO will throw Invalidate trace cache @ step 10: expected module 11, but got module 19
+        # Fix with deepspeed fix release
         trainer.train()
 
         if training_args.eval_strategy != 'no':
@@ -141,8 +151,9 @@ def main(
             metrics['dataset'] = i + 1
             trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
             trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
-            metrics = {'last/' + k: v for k, v in metrics.items()}
-            trainer.log(metrics)
+            last_metrics = {k: v for k, v in metrics.items()}
+            last_section = f'task/{current_dataset_name}/last'
+            trainer.log({last_section: last_metrics})
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')
@@ -162,7 +173,7 @@ def main(
 
 
 if __name__ == '__main__':
-    dataclass_types = (ScriptArguments, DPOConfig, ModelConfig)
+    dataclass_types = (ContinualDPOArguments, DPOConfig, ModelConfig)
     parser = TrlParser(dataclass_types)
 
     script_args, training_args, model_args = parser.parse_args_and_config()

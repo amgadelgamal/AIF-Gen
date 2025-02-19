@@ -1,5 +1,5 @@
 # Adaptation of the DPO TRL training script for continual learning.
-
+# ONLY EVALUATION
 """# LoRA:
 python benchmarks/dpo/continual_eval_checkpoints.py \
     --dataset_name  debug \
@@ -19,6 +19,7 @@ python benchmarks/dpo/continual_eval_checkpoints.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
+    --dataset_name debug
 """  # noqa: D415
 
 import glob
@@ -26,11 +27,12 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
-from mock_data import init_mock_dataset
+from continual_dpo_trainer import ContinualDPOTrainer
+from dataloading import init_continual_dataset
+from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import (
     DPOConfig,
-    DPOTrainer,
     ModelConfig,
     ScriptArguments,
     TrlParser,
@@ -46,6 +48,10 @@ class EvalScriptArguments(ScriptArguments):
     checkpoint_dir: Optional[str] = field(
         default=None,
         metadata={'help': 'The directory containing the checkpoints to evaluate.'},
+    )
+    dataset_name: str = field(
+        default='debug',
+        metadata={'help': 'The name or path of the continual dataset to use.'},
     )
 
 
@@ -94,7 +100,9 @@ def main(
             name for name, buffer in model.named_buffers() if buffer.dtype == torch.bool
         ]
 
-    continual_dataset = init_mock_dataset(script_args.dataset_name)
+    continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
+        script_args.dataset_name
+    )
     output_dir = training_args.output_dir
 
     checkpoint_paths = glob.glob(f'{script_args.checkpoint_dir}/*/*')
@@ -106,9 +114,9 @@ def main(
         adapter_name = dataset_name + checkpoint_step
         model.load_adapter(checkpoint_path, adapter_name=adapter_name)
         metrics = {}
-        for i, dataset in enumerate(continual_dataset.datasets):
+        for i, dataset in enumerate(continual_dataset):
             training_args.output_dir = f'{output_dir}/dataset-{i}'
-            trainer = DPOTrainer(
+            trainer = ContinualDPOTrainer(
                 model,
                 ref_model,
                 args=training_args,

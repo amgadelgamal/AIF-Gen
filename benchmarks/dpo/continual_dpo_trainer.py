@@ -1,9 +1,18 @@
 import functools
 import inspect
+from dataclasses import dataclass, field
 from typing import Optional
 
 from accelerate import Accelerator
-from trl import DPOTrainer
+from trl import DPOTrainer, ScriptArguments
+
+
+@dataclass
+class ContinualDPOArguments(ScriptArguments):
+    dataset_name: str = field(
+        default='debug',
+        metadata={'help': 'The name or path of the continual dataset to use.'},
+    )
 
 
 class ContinualDPOTrainer(DPOTrainer):
