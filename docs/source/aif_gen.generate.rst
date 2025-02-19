@@ -1,0 +1,21 @@
+aif\_gen.generate package
+=========================
+
+Submodules
+----------
+
+aif\_gen.generate.service module
+--------------------------------
+
+.. automodule:: aif_gen.generate.service
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: aif_gen.generate
+   :members:
+   :undoc-members:
+   :show-inheritance:

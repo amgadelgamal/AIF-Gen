@@ -2,6 +2,9 @@
 requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
+[project.scripts]
+aif = "aif_gen._cli.main:cli"
+
 [project]
 name = "aif-gen"
 version = "0.1.0"
@@ -12,8 +15,15 @@ authors = [
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
 ]
 dependencies = [
+    "backoff>=2.2.1",
+    "click>=8.1.8",
     "numpy>=2.0.2",
-    "torch>=2.5.1",
+    "openai>=1.61.1",
+    "pydantic>=2.10.4",
+    "pytest-asyncio>=0.25.3",
+    "pytest-mock>=3.14.0",
+    "torch==2.3.0",
+    "types-pyyaml>=6.0.12.20241230",
 ]
 
 [dependency-groups]
@@ -26,6 +36,9 @@ dev = [
     "ruff>=0.7.3",
     "sphinx>=7.4.7",
     "sphinx-rtd-theme>=3.0.2",
+]
+benchmarks = [
+    "setuptools>=75.8.0",
 ]
 
 [tool.mypy]
