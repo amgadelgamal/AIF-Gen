@@ -1,4 +1,5 @@
 import pytest
+
 from aif_gen.task.seed_words import get_seed_words
 
 
