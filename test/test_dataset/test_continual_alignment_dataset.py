@@ -112,7 +112,7 @@ def test_hf_compatiblity():
     assert all('train' in d for d in list_of_dicts)
     assert all('test' in d for d in list_of_dicts)
     assert all(isinstance(d['train'], Dataset) for d in list_of_dicts)
-
+    assert all(isinstance(d['test'], Dataset) for d in list_of_dicts)
 
 def _generate_dataset(dataset_id: int) -> AlignmentDataset:
     component_a = DomainComponent('Component A', ['a_foo', 'a_bar', 'a_baz'])
