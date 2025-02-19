@@ -1,5 +1,7 @@
 import tempfile
 
+from datasets import Dataset
+
 from aif_gen.dataset import (
     AlignmentDataset,
     AlignmentDatasetSample,
@@ -95,6 +97,21 @@ def test_json_conversion():
         assert ca_dataset.datasets[i].task.objective == dataset.task.objective
         assert ca_dataset.datasets[i].task.preference == dataset.task.preference
         assert ca_dataset.datasets[i].samples == dataset.samples
+
+
+def test_hf_compatiblity():
+    datasets = [_generate_dataset(i) for i in range(3)]
+    ca_dataset = ContinualAlignmentDataset(datasets)
+
+    list_of_dicts = ca_dataset.to_hf_compatible()
+
+    # only ensure the type is list[dict[str, Dataset]]
+    # the rest is tested in test_alignment_dataset.py
+    assert isinstance(list_of_dicts, list)
+    assert all(isinstance(d, dict) for d in list_of_dicts)
+    assert all('train' in d for d in list_of_dicts)
+    assert all('test' in d for d in list_of_dicts)
+    assert all(isinstance(d['train'], Dataset) for d in list_of_dicts)
 
 
 def _generate_dataset(dataset_id: int) -> AlignmentDataset:
