@@ -1,4 +1,6 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+
+from aif_gen.task.seed_words import get_seed_words
 
 
 class DomainComponent:
@@ -7,7 +9,7 @@ class DomainComponent:
 
     Args:
         name (str): The name that describes the content of the domain component.
-        seed_words (List[str]): The list of seed words that describe the domain component.
+        seed_words (Union[str, List[str]]): The list of seed words that describe the domain component.
         description (Optional[str]): An optional description of the domain component.
 
     Raises:
@@ -17,9 +19,12 @@ class DomainComponent:
     def __init__(
         self,
         name: str,
-        seed_words: List[str],
+        seed_words: Union[str, List[str]],
         description: Optional[str] = None,
     ) -> None:
+        if isinstance(seed_words, str):
+            seed_words = get_seed_words(seed_words)
+
         if not len(seed_words):
             raise ValueError(
                 'Cannot initialize a DomainComponent with an empty list of seed words'
@@ -35,6 +40,7 @@ class DomainComponent:
 
         Note:
             Expects 'name', and 'seed_words' keys to be present in the dictionary.
+            Otherwise, implicitly assumes that the component 'name' is a seed word alias.
 
         Args:
             component_dict(Dict[str, Any]): The dictionary that encodes the DomainComponent.
@@ -45,13 +51,13 @@ class DomainComponent:
         Raises:
             ValueError: If the input dictionary is missing any required keys.
         """
-        expected_keys = {'name', 'seed_words'}
+        expected_keys = {'name'}
         missing_keys = expected_keys - set(component_dict)
         if len(missing_keys):
             raise ValueError(f'Missing required keys: {missing_keys}')
 
         name = component_dict['name']
-        seed_words = component_dict['seed_words']
+        seed_words = component_dict.get('seed_words', name)  # Default to name alias
         description = component_dict.get('description')
         return cls(name, seed_words, description)
 
