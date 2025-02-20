@@ -19,17 +19,15 @@ def diversity_validation(
         ngram (int): The maximum n-gram order for BLEU calculation. Default of 3 matches the original paper.
 
     Returns:
-        List[Optional[Dict[str, float]]]: For every AlignmentDataset, returns a dictionary with the following entries:
-
-        'prompt_diversity'    -> float: The diverse across prompts in samples of the AlignmentDataset.
-        'chosen_diversity'    -> float: The diversity across chosen responses in samples of the AlignmentDataset.
-        'rejected_diversity'  -> float: The diversity across rejected responses in the samples of the AlignmentDataset.
+        List[Optional[Dict[str, float]]]: For every AlignmentDataset, returns a dictionary with entries of the form '{metric}_stat':
+            - Stat is one of ['mean', 'median', 'min', 'max']
+            - Metric is one of:
+                'prompt_diversity'    -> The diversity across prompts in samples of the AlignmentDataset.
+                'chosen_diversity'    -> The diversity across chosen responses in samples of the AlignmentDataset.
+                'rejected_diversity'  -> The diversity across rejected responses in samples of the AlignmentDataset.
 
     Note:
-        If the dataset is empty, we put None in place of the validation metric.
-
-        If the input dataset is an AlignmentDataset (non-continual), this function
-        returns a 1 element list with the relevant statistics.
+        - If the dataset is empty, we put None in place of the dictionary.
 
     References:
         - https://arxiv.org/pdf/1802.01886

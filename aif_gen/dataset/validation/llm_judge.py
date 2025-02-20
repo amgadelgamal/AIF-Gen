@@ -17,18 +17,16 @@ def llm_judge_validation(dataset: Dataset) -> List[Optional[Dict[str, float]]]:
         dataset (Union[ContinualAlignmentDataset, AlignmentDataset]): The dataset to validate.
 
     Returns:
-        List[Optional[Dict[str, float]]]: For every AligmentDataset, returns a dictionary with the following entries:
-
-        'alignment_chosen'    -> The alignment between the chosen response and prompt, as determined by the LLM.
-        'alignment_rejected'  -> The alignment between the rejected response and prompt, as determined by the LLM.
-        'coherence_chosen'    -> The coherence between the chosen response and prompt, as determined by the LLM.
-        'coherence_rejected'  -> The coherence between the rejected response and prompt, as determined by the LLM.
+        List[Optional[Dict[str, float]]]: For every AlignmentDataset, returns a dictionary with entries of the form '{metric}_stat':
+            - Stat is one of ['mean', 'median', 'min', 'max']
+            - Metric is one of:
+                'alignment_chosen'    -> The alignment between the chosen response and prompt, as determined by the LLM.
+                'alignment_rejected'  -> The alignment between the rejected response and prompt, as determined by the LLM.
+                'coherence_chosen'    -> The coherence between the chosen response and prompt, as determined by the LLM.
+                'coherence_rejected'  -> The coherence between the rejected response and prompt, as determined by the LLM.
 
     Note:
-        If the LLM judge parse fails, we put None in place of the dataset.
-
-        If the input dataset is an AlignmentDataset (non-continual), this function
-        returns a 1 element list with the relevant statistics.
+        - If the dataset is empty, we put None in place of the dictionary.
     """
     if isinstance(dataset, AlignmentDataset):
         datasets = [dataset]
@@ -42,7 +40,7 @@ def llm_judge_validation(dataset: Dataset) -> List[Optional[Dict[str, float]]]:
         'text-generation',
         model=LLM_MODEL,
         tokenizer=LLM_MODEL,
-        max_new_tokens=50,
+        max_new_tokens=256,
         do_sample=False,
         truncation=True,
         pad_token_id=50256,
