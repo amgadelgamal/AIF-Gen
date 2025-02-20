@@ -16,7 +16,7 @@ class AlignmentEvaluator(BaseMetric):
         """Extract the first floating point number from the generated text.
         Returns a float between 0 and 1. If parsing fails, returns 0.5.
         """
-        match = re.search(r'([0-9]*\.?[0-9]+)', text)
+        match = re.search(r'([-+]?[0-9]*\.?[0-9]+)', text)
         if match:
             try:
                 rating = float(match.group(1))

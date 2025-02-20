@@ -1,67 +1,56 @@
-import re
-from typing import List
+from typing import Dict, List
 
-from transformers import pipeline
+from sentence_transformers import SentenceTransformer, util
 
-from aif_gen.dataset import AlignmentDataset
-from aif_gen.dataset.validation.base import BaseMetric
-
-
-def _ensure_nltk_resources() -> None:
-    """Lazily imports nltk and downloads required resources."""
-    import nltk
-
-    nltk.download('punkt', quiet=True)
-    nltk.download('averaged_perceptron_tagger', quiet=True)
+from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
+from aif_gen.typing import Dataset
 
 
-class RelevanceEvaluator(BaseMetric):
-    """A relevance evaluator that uses an LLM judge to assess how relevant a response is
-    to its associated prompt. For each sample, the judge model is prompted to generate a
-    relevance score between 0 and 1, where 1 indicates high relevance and 0 indicates low relevance.
-    """
-
+class RelevanceEvaluator:
     def __init__(self) -> None:
-        _ensure_nltk_resources()
-        self.judge = pipeline('text-generation', model='gpt2', tokenizer='gpt2')
+        self.model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 
-    def _parse_rating(self, text: str) -> float:
-        """Extracts the first floating point number from the generated text.
-        Returns a float between 0 and 1. If parsing fails, returns 0.5.
-        """
-        match = re.search(r'([0-9]*\.?[0-9]+)', text)
-        if match:
-            try:
-                rating = float(match.group(1))
-                return max(0.0, min(1.0, rating))
-            except Exception:
-                return 0.5
-        return 0.5
-
-    def evaluate(self, dataset: AlignmentDataset) -> List[float]:
-        """For each sample in the dataset, uses the LLM judge to evaluate the relevance of the response
-        with respect to the provided prompt. The relevance score is a float between 0 and 1.
+    def evaluate(self, dataset: AlignmentDataset) -> Dict[str, int]:
+        """For each sample in the AlignmentDataset, compute the cosine similarity between
+        the prompt and the chosen response, and return a dictionary mapping sample identifiers
+        to the computed relevance score (as an integer percentage).
 
         Args:
             dataset (AlignmentDataset): The dataset to evaluate.
 
         Returns:
-            List[float]: A list of relevance scores for each sample.
+            Dict[str, int]: A dictionary mapping sample IDs to computed relevance scores.
         """
-        scores: List[float] = []
-        for sample in dataset.samples:
-            # Construct a prompt for the judge to score the relevance.
-            judge_prompt = (
-                'Please evaluate the relevance of the following response with respect to the provided prompt. '
-                'Rate the relevance on a scale from 0 to 1, where 1 indicates that the response is highly relevant, '
-                'and 0 indicates that it is not relevant at all.\n\n'
-                f'Prompt: {sample.prompt}\n\n'
-                f'Response: {sample.chosen}\n\n'
-                'Score (0 to 1):'
-            )
-            output = self.judge(judge_prompt, max_length=50, do_sample=False)[0][
-                'generated_text'
-            ]
-            relevance_score = self._parse_rating(output)
-            scores.append(relevance_score)
+        scores = {}
+        for idx, sample in enumerate(dataset.samples):
+            # Use sample.id if available; otherwise, use the index as the identifier.
+            sample_id = str(getattr(sample, 'id', idx))
+            prompt = sample.prompt
+            chosen = sample.chosen
+            embeddings = self.model.encode([prompt, chosen], convert_to_tensor=True)
+            cosine_sim = util.pytorch_cos_sim(embeddings[0], embeddings[1]).item()
+            score_int = int(round(cosine_sim * 100))
+            scores[sample_id] = score_int
         return scores
+
+    def relevance_evaluation(self, dataset: Dataset) -> List[Dict[str, int]]:
+        """Compute the relevance score for each sample in the dataset.
+
+        Args:
+            dataset (Union[AlignmentDataset, ContinualAlignmentDataset]): The dataset to evaluate.
+
+        Returns:
+            List[Dict[str, int]]: For every AlignmentDataset, returns a dictionary mapping sample IDs
+            to computed relevance scores (as integer percentages). If the input dataset is an AlignmentDataset,
+            a one-element list is returned.
+        """
+        if isinstance(dataset, AlignmentDataset):
+            datasets = [dataset]
+        else:
+            assert isinstance(dataset, ContinualAlignmentDataset)
+            datasets = dataset.datasets
+
+        results = []
+        for ds in datasets:
+            results.append(self.evaluate(ds))
+        return results
