@@ -1,4 +1,4 @@
-# Adaptation of the DPO TRL training script for continual learning.
+# Evaluating checkpoints obtained from training using the dpo_continual script.
 # ONLY EVALUATION
 """# LoRA:
 python benchmarks/dpo/continual_eval_checkpoints.py \
