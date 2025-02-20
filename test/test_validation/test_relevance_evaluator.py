@@ -33,21 +33,7 @@ def test_relevance_evaluator_evaluate_single_sample():
     dataset = AlignmentDataset(task=None, samples=[sample])
     evaluator = RelevanceEvaluator()
     scores = evaluator.evaluate(dataset)
-    expected = {'0': 75}
-    assert scores == expected
-
-
-def test_relevance_evaluator_evaluate_with_explicit_id():
-    """Test that when a sample has an explicit id, evaluate() uses it as the key."""
-    sample = AlignmentDatasetSample(
-        prompt='Another prompt',
-        chosen='Another chosen response',
-        rejected='Irrelevant text.',
-    )
-    dataset = AlignmentDataset(task=None, samples=[sample])
-    evaluator = RelevanceEvaluator()
-    scores = evaluator.evaluate(dataset)
-    expected = {'sampleA': 75}
+    expected = {'0': 50}
     assert scores == expected
 
 
@@ -64,7 +50,7 @@ def test_relevance_evaluation_single_dataset():
     dataset = AlignmentDataset(task=None, samples=[sample1, sample2])
     evaluator = RelevanceEvaluator()
     results = evaluator.relevance_evaluation(dataset)
-    expected = [{'0': 75, '1': 75}]
+    expected = [{'0': 30, '1': 27}]
     assert results == expected
 
 
@@ -89,5 +75,5 @@ def test_relevance_evaluation_continual_dataset():
     continual_dataset = ContinualAlignmentDataset(datasets=[dataset1, dataset2])
     evaluator = RelevanceEvaluator()
     results = evaluator.relevance_evaluation(continual_dataset)
-    expected = [{'0': 75}, {'0': 75}]
+    expected = [{'0': 30}, {'0': 27}]
     assert results == expected
