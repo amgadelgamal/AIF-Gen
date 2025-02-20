@@ -1,5 +1,6 @@
 import functools
 import inspect
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -13,6 +14,15 @@ class ContinualDPOArguments(ScriptArguments):
         default='debug',
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
+
+    wandb_project: Optional[str] = field(
+        default=None,
+        metadata={'help': 'Override the default WandB project name.'},
+    )
+
+    def __post_init__(self) -> None:
+        if self.wandb_project:
+            os.environ['WANDB_PROJECT'] = self.wandb_project
 
 
 class ContinualDPOTrainer(DPOTrainer):

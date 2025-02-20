@@ -20,9 +20,11 @@ python benchmarks/dpo/continual_eval_checkpoints.py \
     --lora_r 32 \
     --lora_alpha 16
     --dataset_name debug
+    --wandb_project qwen_test_eval
 """  # noqa: D415
 
 import glob
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -53,6 +55,10 @@ class EvalScriptArguments(ScriptArguments):
         default='debug',
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
+
+    def __post_init__(self) -> None:
+        if self.wandb_project:
+            os.environ['WANDB_PROJECT'] = self.wandb_project
 
 
 def main(
@@ -128,6 +134,9 @@ def main(
 
             ev_metrics = trainer.evaluate()
             ev_metrics = {f'dataset-{i}/' + k: v for k, v in ev_metrics.items()}
+            if i == 0:
+                # log the name of the dataset
+                trainer.log({'dataset_name': dataset_name})
             metrics.update(ev_metrics)
 
         trainer.log(metrics)
