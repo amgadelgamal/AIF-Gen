@@ -34,6 +34,9 @@ def diversity_validation(
     References:
         - https://arxiv.org/pdf/1802.01886
     """
+    if not (isinstance(ngram, int) and ngram > 0):
+        raise ValueError(f'ngram must be a positive integer, got: {ngram}')
+
     _download_nltk_resources()
 
     if isinstance(dataset, AlignmentDataset):
@@ -45,7 +48,6 @@ def diversity_validation(
 
     results: List[Optional[Dict[str, float]]] = []
     for dataset in datasets:
-        results.append(_diversity_validation(dataset, ngram))
         if len(dataset):
             result = _diversity_validation(dataset, ngram)
         else:

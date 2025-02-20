@@ -1,82 +1,166 @@
+import numpy as np
 import pytest
 
-from aif_gen.dataset import AlignmentDataset
-from aif_gen.dataset.validation.diversity import DiversityEvaluator
+from aif_gen.dataset import (
+    AlignmentDataset,
+    AlignmentDatasetSample,
+    ContinualAlignmentDataset,
+)
+from aif_gen.dataset.validation import diversity_validation
 
 
-@pytest.fixture
-def dummy_dataset():
-    """Create a dummy dataset for testing."""
-
-    class Sample:
-        def __init__(self, chosen):
-            self.chosen = (
-                chosen  # Only 'chosen' responses are used for diversity calculation
-            )
-
+def test_diversity_validation():
     samples = [
-        Sample('The quick brown fox jumps over the lazy dog.'),
-        Sample('A completely different response to ensure variation.'),
-        Sample('Another response to make the dataset diverse.'),
+        AlignmentDatasetSample(
+            'Mock prompt A 1', 'Winning Response A 1', 'Losing Response A 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt B 1', 'Winning Response B 1', 'Losing Response B 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt C 1', 'Winning Response C 1', 'Losing Response C 1'
+        ),
     ]
+    mock_task = None
+    dataset = AlignmentDataset(task=mock_task, samples=samples)
 
-    return AlignmentDataset(samples=samples, task='dummy_task')
-
-
-def test_compute_response_diversity():
-    """Test the diversity computation on a varied response set."""
-    evaluator = DiversityEvaluator(ngram=3)
-
-    response_set = [
-        'The quick brown fox jumps over the lazy dog.',
-        'A different sentence that does not match.',
-        'Yet another distinct phrase with unique words.',
+    result = diversity_validation(dataset)
+    exp_result = [
+        {
+            'chosen_diversity_max': np.float64(0.767920558319361),
+            'chosen_diversity_mean': np.float64(0.767920558319361),
+            'chosen_diversity_median': np.float64(0.767920558319361),
+            'chosen_diversity_min': np.float64(0.767920558319361),
+            'prompt_diversity_max': np.float64(0.767920558319361),
+            'prompt_diversity_mean': np.float64(0.767920558319361),
+            'prompt_diversity_median': np.float64(0.767920558319361),
+            'prompt_diversity_min': np.float64(0.767920558319361),
+            'rejected_diversity_max': np.float64(0.767920558319361),
+            'rejected_diversity_mean': np.float64(0.767920558319361),
+            'rejected_diversity_median': np.float64(0.767920558319361),
+            'rejected_diversity_min': np.float64(0.767920558319361),
+        }
     ]
-
-    diversity_score = evaluator.compute_response_diversity(response_set)
-
-    assert isinstance(diversity_score, float), 'Diversity score should be a float'
-    assert 0.0 <= diversity_score <= 1.0, 'Diversity score should be between 0 and 1'
+    assert result == exp_result
 
 
-def test_compute_response_diversity_identical_responses():
-    """Test diversity computation when all responses are identical (should return low diversity)."""
-    evaluator = DiversityEvaluator()
-
-    response_set = [
-        'Repeated sentence.',
-        'Repeated sentence.',
-        'Repeated sentence.',
+def test_diversity_validation_identical_prompts():
+    samples = [
+        AlignmentDatasetSample(
+            'Mock prompt', 'Winning Response A 1', 'Losing Response A 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt', 'Winning Response B 1', 'Losing Response B 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt', 'Winning Response C 1', 'Losing Response C 1'
+        ),
     ]
+    mock_task = None
+    dataset = AlignmentDataset(task=mock_task, samples=samples)
 
-    diversity_score = evaluator.compute_response_diversity(response_set)
-    assert diversity_score == pytest.approx(0.0, abs=1e-5)
+    result = diversity_validation(dataset)
+    exp_result = [
+        {
+            'chosen_diversity_max': np.float64(0.767920558319361),
+            'chosen_diversity_mean': np.float64(0.767920558319361),
+            'chosen_diversity_median': np.float64(0.767920558319361),
+            'chosen_diversity_min': np.float64(0.767920558319361),
+            'prompt_diversity_max': np.float64(0.535841116638722),
+            'prompt_diversity_mean': np.float64(0.535841116638722),
+            'prompt_diversity_median': np.float64(0.535841116638722),
+            'prompt_diversity_min': np.float64(0.535841116638722),
+            'rejected_diversity_max': np.float64(0.767920558319361),
+            'rejected_diversity_mean': np.float64(0.767920558319361),
+            'rejected_diversity_median': np.float64(0.767920558319361),
+            'rejected_diversity_min': np.float64(0.767920558319361),
+        }
+    ]
+    assert result == exp_result
 
 
-def test_compute_response_diversity_single_response():
-    """Test edge case where only one response is given (should return 0.0)."""
-    evaluator = DiversityEvaluator()
+@pytest.mark.parametrize('ngram', [1, 2, 3])
+def test_diversity_validation_single_sample_dataset(ngram):
+    samples = [
+        AlignmentDatasetSample(
+            'Mock prompt A', 'Winning Response A 1', 'Losing Response A 1'
+        ),
+    ]
+    mock_task = None
+    dataset = AlignmentDataset(task=mock_task, samples=samples)
 
-    response_set = ['Only one response.']
-    diversity_score = evaluator.compute_response_diversity(response_set)
-    assert diversity_score == 0.0
+    result = diversity_validation(dataset, ngram)
+
+    exp_result = [
+        {
+            'chosen_diversity_max': 0.0,
+            'chosen_diversity_mean': 0.0,
+            'chosen_diversity_median': 0.0,
+            'chosen_diversity_min': 0.0,
+            'prompt_diversity_max': 0.0,
+            'prompt_diversity_mean': 0.0,
+            'prompt_diversity_median': 0.0,
+            'prompt_diversity_min': 0.0,
+            'rejected_diversity_max': 0.0,
+            'rejected_diversity_mean': 0.0,
+            'rejected_diversity_median': 0.0,
+            'rejected_diversity_min': 0.0,
+        }
+    ]
+    assert result == exp_result
 
 
-def test_evaluate(dummy_dataset):
-    """Test that the evaluate method correctly applies the diversity metric."""
-    evaluator = DiversityEvaluator()
-    scores = evaluator.evaluate(dummy_dataset)
+@pytest.mark.parametrize('ngram', [1, 2, 3])
+def test_diversity_validation_empty_dataset(ngram):
+    samples = []
+    mock_task = None
+    dataset = AlignmentDataset(task=mock_task, samples=samples)
 
-    assert isinstance(scores, list), 'evaluate() should return a list'
-    assert all(isinstance(score, float) for score in scores)
-    assert len(scores) == len(dummy_dataset.samples)
+    result = diversity_validation(dataset, ngram=ngram)
+    assert result == [None]
 
 
-def test_evaluate_empty_dataset():
-    """Test evaluate() on an empty dataset (should return empty list)."""
-    empty_dataset = AlignmentDataset(samples=[], task='empty_task')
+@pytest.mark.parametrize('bad_ngram', [-1, None, 0, 'foo'])
+def test_diversity_validation_bad_ngram(bad_ngram):
+    dataset = AlignmentDataset(task=None, samples=[])
 
-    evaluator = DiversityEvaluator()
-    scores = evaluator.evaluate(empty_dataset)
+    with pytest.raises(ValueError):
+        diversity_validation(dataset, ngram=bad_ngram)
 
-    assert scores == [], 'Empty dataset should return an empty list'
+
+def test_diversity_validation_continual_dataset():
+    samples = [
+        AlignmentDatasetSample(
+            'Mock prompt', 'Winning Response A 1', 'Losing Response A 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt', 'Winning Response B 1', 'Losing Response B 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt', 'Winning Response C 1', 'Losing Response C 1'
+        ),
+    ]
+    mock_task = None
+    dataset1 = AlignmentDataset(task=mock_task, samples=samples)
+    dataset2 = AlignmentDataset(task=None, samples=[])
+    dataset = ContinualAlignmentDataset(datasets=[dataset1, dataset2])
+
+    result = diversity_validation(dataset)
+    exp_result = [
+        {
+            'chosen_diversity_max': np.float64(0.767920558319361),
+            'chosen_diversity_mean': np.float64(0.767920558319361),
+            'chosen_diversity_median': np.float64(0.767920558319361),
+            'chosen_diversity_min': np.float64(0.767920558319361),
+            'prompt_diversity_max': np.float64(0.535841116638722),
+            'prompt_diversity_mean': np.float64(0.535841116638722),
+            'prompt_diversity_median': np.float64(0.535841116638722),
+            'prompt_diversity_min': np.float64(0.535841116638722),
+            'rejected_diversity_max': np.float64(0.767920558319361),
+            'rejected_diversity_mean': np.float64(0.767920558319361),
+            'rejected_diversity_median': np.float64(0.767920558319361),
+            'rejected_diversity_min': np.float64(0.767920558319361),
+        },
+        None,
+    ]
+    assert result == exp_result
