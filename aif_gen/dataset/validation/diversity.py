@@ -1,7 +1,8 @@
-from typing import List, Dict, Optional
 import logging
-import numpy as np
+from typing import Dict, List, Optional
+
 import nltk
+import numpy as np
 from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 
 from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
@@ -44,7 +45,7 @@ def diversity_validation(
         assert isinstance(dataset, ContinualAlignmentDataset)
         datasets = dataset.datasets
 
-    results = []
+    results: List[Optional[Dict[str, float]]] = []
     for dataset in datasets:
         results.append(_diversity_validation(dataset, ngram))
         if len(dataset):
@@ -60,9 +61,9 @@ def _diversity_validation(dataset: AlignmentDataset, ngram: int) -> Dict[str, fl
     # BLEU weight setting (e.g., for BLEU-3: (1/3, 1/3, 1/3))
     weight = [1.0 / ngram for _ in range(ngram)]
 
-    prompts = [sample.prompt for sample in dataset]
-    chosens = [sample.chosen for sample in dataset]
-    rejected = [sample.rejected for sample in dataset]
+    prompts = [sample.prompt for sample in dataset.samples]
+    chosens = [sample.chosen for sample in dataset.samples]
+    rejected = [sample.rejected for sample in dataset.samples]
 
     results: Dict[str, List[float]] = {}
     results['prompt_diversity'] = _compute_diversity(prompts, weight)
