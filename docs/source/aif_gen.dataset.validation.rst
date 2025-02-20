@@ -12,6 +12,14 @@ aif\_gen.dataset.validation.alignment module
    :undoc-members:
    :show-inheritance:
 
+aif\_gen.dataset.validation.base module
+---------------------------------------
+
+.. automodule:: aif_gen.dataset.validation.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 aif\_gen.dataset.validation.coherence module
 --------------------------------------------
 
