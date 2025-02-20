@@ -124,21 +124,22 @@ def _judge_coherence(judge: transformers.Pipeline, response: str) -> Optional[fl
 
 
 def _parse_judge_output(judge_output: str) -> Optional[float]:
+    logging.debug(f'Parsing judge output rating: {judge_output}')
     match = re.search(r'([-+]?[0-9]*\.?[0-9]+)', judge_output)
     try:
         assert match is not None
         rating = float(match.group(1))
         return max(0, min(1, rating))
     except Exception:
-        logging.debug(f'Failed to parse judge output rating: {judge_output}')
+        logging.warning(f'Failed to parse judge output rating: {judge_output}')
         return None
 
 
 def _compute_statistics(results: Dict[str, List[float]]) -> Dict[str, float]:
-    statistics = {}
+    statistics: Dict[str, float] = {}
     for metric, values in results.items():
-        statistics[f'{metric}_mean'] = np.mean(values)
-        statistics[f'{metric}_median'] = np.median(values)
-        statistics[f'{metric}_min'] = np.min(values)
-        statistics[f'{metric}_max'] = np.max(values)
+        statistics[f'{metric}_mean'] = float(np.mean(values))
+        statistics[f'{metric}_median'] = float(np.median(values))
+        statistics[f'{metric}_min'] = float(np.min(values))
+        statistics[f'{metric}_max'] = float(np.max(values))
     return statistics

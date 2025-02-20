@@ -89,12 +89,12 @@ def _compute_diversity(response_set: List[str], weight: List[float]) -> List[flo
 
 
 def _compute_statistics(results: Dict[str, List[float]]) -> Dict[str, float]:
-    statistics = {}
+    statistics: Dict[str, float] = {}
     for metric, values in results.items():
-        statistics[f'{metric}_mean'] = np.mean(values)
-        statistics[f'{metric}_median'] = np.median(values)
-        statistics[f'{metric}_min'] = np.min(values)
-        statistics[f'{metric}_max'] = np.max(values)
+        statistics[f'{metric}_mean'] = float(np.mean(values))
+        statistics[f'{metric}_median'] = float(np.median(values))
+        statistics[f'{metric}_min'] = float(np.min(values))
+        statistics[f'{metric}_max'] = float(np.max(values))
     return statistics
 
 
