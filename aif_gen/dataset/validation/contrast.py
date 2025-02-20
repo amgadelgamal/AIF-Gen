@@ -1,94 +1,80 @@
-from typing import Callable, Dict, List
+import re
+from typing import List
 
 from transformers import pipeline
 
-from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
+from aif_gen.dataset import AlignmentDataset
+from aif_gen.dataset.validation.base import BaseMetric
 from aif_gen.typing import Dataset
 
 
-class ContrastEvaluator:
-    """Computes the difference between the alignment scores of the chosen and rejected responses.
-    It uses the same alignment function (based on the task preference) for both.
+def _ensure_nltk_resources() -> None:
+    import nltk
+    nltk.download('punkt', quiet=True)
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+
+
+class ContrastEvaluator(BaseMetric):
     """
-
+    A contrast score evaluator that computes the difference between the LLM-generated scores
+    for the chosen and rejected responses. This class inherits from BaseMetric and uses a
+    text-generation pipeline as an LLM judge.
+    """
     def __init__(self) -> None:
-        self.classifier = pipeline('sentiment-analysis')
+        _ensure_nltk_resources()
+        self.judge = pipeline('text-generation', model='gpt2', tokenizer='gpt2')
 
-    def get_alignment_mode(self, dataset: AlignmentDataset) -> Callable[[dict], float]:
-        """Determines the alignment scoring function based on the dataset's task preference.
-
-        Returns:
-            A function that maps a classifier result to a score (between 0 and 1).
+    def _parse_rating(self, text: str) -> float:
         """
-        preference = (
-            dataset.task.preference.lower()
-            if hasattr(dataset.task, 'preference')
-            else ''
-        )
-        if 'polarizing' in preference:
-            return lambda result: abs(result['score'] - 0.5) * 2
-        elif 'negative' in preference:
-            return (
-                lambda result: result['score']
-                if result['label'] == 'NEGATIVE'
-                else 1 - result['score']
-            )
-        elif 'positive' in preference:
-            return (
-                lambda result: result['score']
-                if result['label'] == 'POSITIVE'
-                else 1 - result['score']
-            )
-        else:
-            return (
-                lambda result: result['score']
-                if result['label'] == 'POSITIVE'
-                else 1 - result['score']
-            )
+        Extracts the first floating point number from the generated text.
+        Returns a float between 0 and 1. If parsing fails, returns 0.5.
+        """
+        match = re.search(r'([0-9]*\.?[0-9]+)', text)
+        if match:
+            try:
+                rating = float(match.group(1))
+                return max(0.0, min(1.0, rating))
+            except Exception:
+                return 0.5
+        return 0.5
 
-    def evaluate(self, dataset: AlignmentDataset) -> Dict[str, int]:
-        """For each sample in the dataset, compute the alignment scores for both the chosen and rejected responses,
-        then compute their difference (contrast) and return a dictionary mapping sample identifiers to these scores.
-
+    def evaluate(self, dataset: AlignmentDataset) -> List[float]:
+        """
+        For each sample in the dataset, uses the LLM judge to evaluate both the chosen and
+        rejected responses. The contrast score is computed as the difference between the
+        chosen and rejected scores (each between 0 and 1) and is returned as a float.
+        
         Args:
             dataset (AlignmentDataset): The dataset to evaluate.
-
+        
         Returns:
-            Dict[str, int]: A dictionary mapping sample identifiers to computed contrast scores (as integer percentages).
+            List[float]: A list of contrast scores (as floats) for each sample.
         """
-        scores = {}
-        mode_func = self.get_alignment_mode(dataset)
-        for idx, sample in enumerate(dataset.samples):
-            # Use sample.id if available; otherwise, use the index as the identifier.
-            sample_id = str(getattr(sample, 'id', idx))
-            result_chosen = self.classifier(sample.chosen)[0]
-            result_rejected = self.classifier(sample.rejected)[0]
-            score_chosen = mode_func(result_chosen)
-            score_rejected = mode_func(result_rejected)
-            contrast = score_chosen - score_rejected
-            score_int = int(round(contrast * 100))
-            scores[sample_id] = score_int
+        scores: List[float] = []
+        for sample in dataset.samples:
+            # Construct prompt for the chosen response.
+            chosen_prompt = (
+                "Please evaluate the following chosen response on a scale from 0 to 1, "
+                "where 1 indicates excellent coherence and alignment, and 0 indicates poor quality:\n\n"
+                f"Chosen Response: {sample.chosen}\n\n"
+                "Score (0 to 1):"
+            )
+            chosen_output = self.judge(chosen_prompt, max_length=50, do_sample=False)[0]['generated_text']
+            chosen_score = self._parse_rating(chosen_output)
+
+            # Construct prompt for the rejected response.
+            rejected_prompt = (
+                "Please evaluate the following rejected response on a scale from 0 to 1, "
+                "where 1 indicates excellent coherence and alignment, and 0 indicates poor quality:\n\n"
+                f"Rejected Response: {sample.rejected}\n\n"
+                "Score (0 to 1):"
+            )
+            rejected_output = self.judge(rejected_prompt, max_length=50, do_sample=False)[0]['generated_text']
+            rejected_score = self._parse_rating(rejected_output)
+
+            # Compute contrast as the difference between chosen and rejected scores.
+            contrast = chosen_score - rejected_score
+            scores.append(contrast)
         return scores
 
-    def contrast_evaluation(self, dataset: Dataset) -> List[Dict[str, int]]:
-        """Compute the contrast score for each sample in the dataset.
 
-        Args:
-            dataset (Union[AlignmentDataset, ContinualAlignmentDataset]): The dataset to evaluate.
-
-        Returns:
-            List[Dict[str, int]]: For every AlignmentDataset, returns a dictionary mapping sample identifiers
-            to computed contrast scores (as integer percentages). If the input dataset is an AlignmentDataset,
-            a one-element list is returned.
-        """
-        if isinstance(dataset, AlignmentDataset):
-            datasets = [dataset]
-        else:
-            # This assert is here to satisfy type checkers.
-            assert isinstance(dataset, ContinualAlignmentDataset)
-            datasets = dataset.datasets
-
-        results = []
-        for ds in datasets:
-            results.append(self.evaluate(ds))
-        return results
