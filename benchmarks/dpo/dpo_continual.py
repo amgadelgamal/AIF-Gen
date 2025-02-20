@@ -57,7 +57,6 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
-    --dataset_name debug
 """
 
 import torch
