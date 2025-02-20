@@ -33,8 +33,6 @@ def diversity_validation(
 
     References:
         - https://arxiv.org/pdf/1802.01886
-        - https://github.com/geek-ai/Texygen
-
     """
     _download_nltk_resources()
 
@@ -58,9 +56,7 @@ def diversity_validation(
 
 
 def _diversity_validation(dataset: AlignmentDataset, ngram: int) -> Dict[str, float]:
-    # BLEU weight setting (e.g., for BLEU-3: (1/3, 1/3, 1/3))
     weight = [1.0 / ngram for _ in range(ngram)]
-
     prompts = [sample.prompt for sample in dataset.samples]
     chosens = [sample.chosen for sample in dataset.samples]
     rejected = [sample.rejected for sample in dataset.samples]
@@ -73,8 +69,10 @@ def _diversity_validation(dataset: AlignmentDataset, ngram: int) -> Dict[str, fl
 
 
 def _compute_diversity(response_set: List[str], weight: List[float]) -> List[float]:
-    tokenized_responses = [nltk.word_tokenize(sentence) for sentence in response_set]
+    if 0 <= len(response_set) < 2:
+        return len(response_set) * [0.0]
 
+    tokenized_responses = [nltk.word_tokenize(sentence) for sentence in response_set]
     diversity = []
     for i, hypothesis in enumerate(tokenized_responses):
         other_responses = tokenized_responses[:i] + tokenized_responses[i + 1 :]
