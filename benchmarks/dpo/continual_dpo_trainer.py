@@ -42,6 +42,12 @@ class ContinualDPOArguments(ScriptArguments):
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
 
+@dataclass
+class ContinualDPOConfig(DPOConfig):
+    reward_model_path: str = field(
+        default=None,
+        metadata={'help': 'The name or path to the reward models folder containing all rewards models for continual learning dataset.'},
+    )
 
 class ContinualDPOTrainer(DPOTrainer):
     # Shared accelerator instance across all trainer instances

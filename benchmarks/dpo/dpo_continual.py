@@ -20,6 +20,7 @@ python benchmarks/dpo/dpo_continual.py \
 python benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --reward_model_path /home/mila/i/ivan.anokhin/AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
@@ -60,10 +61,10 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
 """
 
 import torch
-from continual_dpo_trainer import ContinualDPOArguments, ContinualDPOTrainer
+from continual_dpo_trainer import ContinualDPOArguments, ContinualDPOConfig, ContinualDPOTrainer
 from dataloading import init_continual_dataset
 from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSequenceClassification
 from trl import (
     DPOConfig,
     ModelConfig,
@@ -77,7 +78,7 @@ from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
 def main(
     script_args: ContinualDPOArguments,
-    training_args: DPOConfig,
+    training_args: ContinualDPOConfig,
     model_args: ModelConfig,
 ) -> None:
     torch_dtype = (
@@ -126,12 +127,24 @@ def main(
     )
     output_dir = training_args.output_dir
 
+    if training_args.reward_model_path is not None:
+        for i in range(len(continual_dataset.datasets)):
+            assert os.path.exists(training_args.reward_model_path+f"/{str(i)}"), f"Reward model not found for dataset {i}"
+
     for i, dataset in enumerate(continual_dataset):
         current_dataset_name: str = f'dataset-{i}'
         training_args.output_dir = f'{output_dir}/{current_dataset_name}'
+
+
+        # Reward model only for logging metrics purpose
+        if training_args.reward_model_path is not None:
+            reward_model = AutoModelForSequenceClassification.from_pretrained(
+                training_args.reward_model_path + f"/{str(i)}", num_labels=1)
+
         trainer = ContinualDPOTrainer(
             model,
             ref_model,
+            reward_model=reward_model if training_args.reward_model_path is not None else None,
             args=training_args,
             train_dataset=dataset[script_args.dataset_train_split],
             eval_dataset=dataset[script_args.dataset_test_split]
