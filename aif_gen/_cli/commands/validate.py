@@ -9,13 +9,10 @@ from aif_gen.dataset.continual_alignment_dataset import (
     ContinualAlignmentDataset,
 )
 from aif_gen.dataset.validation import (
-    AlignmentEvaluator,
-    CoherenceEvaluator,
-    ContrastEvaluator,
-    DiversityEvaluator,
-    RelevanceEvaluator,
     count_validation,
+    diversity_validation,
     entropy_validation,
+    llm_judge_validation,
 )
 
 
@@ -41,45 +38,24 @@ from aif_gen.dataset.validation import (
     help='Perform entropy validation on the dataset.',
 )
 @click.option(
-    '--validate-alignment/--no-validate-alignment',
-    is_flag=True,
-    default=True,
-    help='Perform alignment validation on the dataset.',
-)
-@click.option(
-    '--validate-coherence/--no-validate-coherence',
-    is_flag=True,
-    default=True,
-    help='Perform coherence validation on the dataset.',
-)
-@click.option(
-    '--validate-contrast/--no-validate-contrast',
-    is_flag=True,
-    default=True,
-    help='Perform contrast validation on the dataset.',
-)
-@click.option(
     '--validate-diversity/--no-validate-diversity',
     is_flag=True,
     default=True,
     help='Perform diversity validation on the dataset.',
 )
 @click.option(
-    '--validate-relevance/--no-validate-relevance',
+    '--validate-llm-judge/--no-validate-llm-judge',
     is_flag=True,
     default=True,
-    help='Perform relevance validation on the dataset.',
+    help='Perform llm judge validation on the dataset.',
 )
 def validate(
     input_data_file: pathlib.Path,
     output_validation_file: pathlib.Path,
     validate_count: bool,
     validate_entropy: bool,
-    validate_alignment: bool,
-    validate_coherence: bool,
-    validate_contrast: bool,
     validate_diversity: bool,
-    validate_relevance: bool,
+    validate_llm_judge: bool,
 ) -> None:
     r"""Validate a ContinualAlignmentDataset.
 
@@ -101,30 +77,15 @@ def validate(
         results['entropy_validation'] = entropy_validation(dataset)
         logging.info('Finished entropy validation')
 
-    if validate_alignment:
-        logging.info('Performing alignment validation')
-        results['alignment_validation'] = AlignmentEvaluator().evaluate_all(dataset)
-        logging.info('Finished alignment validation')
-
-    if validate_coherence:
-        logging.info('Performing coherence validation')
-        results['coherence_validation'] = CoherenceEvaluator().evaluate_all(dataset)
-        logging.info('Finished coherence validation')
-
-    if validate_contrast:
-        logging.info('Performing contrast validation')
-        results['contrast_validation'] = ContrastEvaluator().evaluate_all(dataset)
-        logging.info('Finished contrast validation')
-
     if validate_diversity:
         logging.info('Performing diversity validation')
-        results['diversity_validation'] = DiversityEvaluator().evaluate_all(dataset)
+        results['diversity_validation'] = diversity_validation(dataset)
         logging.info('Finished diversity validation')
 
-    if validate_relevance:
-        logging.info('Performing relevance validation')
-        results['relevance_validation'] = RelevanceEvaluator().evaluate_all(dataset)
-        logging.info('Finished relevance validation')
+    if validate_llm_judge:
+        logging.info('Performing LLM judge validation')
+        results['llm_judge_validation'] = llm_judge_validation(dataset)
+        logging.info('Finished LLM judge validation')
 
     if len(results):
         logging.info(f'Writing validation results to: {output_validation_file}')
