@@ -1,16 +1,10 @@
-from typing import Dict, List
+from typing import List
 
-import nltk
-from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
-
-from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
-from aif_gen.typing import Dataset
-
-# nltk.download('punkt')
-# nltk.download('averaged_perceptron_tagger')
+from aif_gen.dataset import AlignmentDataset
+from aif_gen.dataset.validation.base import BaseMetric
 
 
-class DiversityEvaluator:
+class DiversityEvaluator(BaseMetric):
     """Computes the diversity for a set of responses via the inverse Self-BLEU score.
     A higher Self-BLEU score indicates lower diversity for generated sentences.
 
@@ -30,6 +24,13 @@ class DiversityEvaluator:
         # Avoid redundant calculations
         if not response_set or len(response_set) < 2:
             return 0.0
+            print('Importing nltk...')  # Debug print
+
+        import nltk
+        from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
+
+        nltk.download('punkt', quiet=True)  # Ensure tokenizer is available
+        print('NLTK successfully imported!')  # Debug print
 
         # BLEU weight setting (e.g., for BLEU-3: (1/3, 1/3, 1/3))
         weight = tuple(1.0 / self.ngram for _ in range(self.ngram))
@@ -56,23 +57,16 @@ class DiversityEvaluator:
         # Return the inverse BLEU score as diversity metric
         return 1.0 - bleu_score
 
-    def evaluate(self, dataset: Dataset) -> List[Dict[str, float]]:
-        """For a given AlignmentDataset (single task), compute the diversity between
-        the chosen responses.
+    def evaluate(self, dataset: AlignmentDataset) -> List[float]:
+        """Evaluate the diversity metric on an AlignmentDataset.
+
+        Args:
+            dataset (AlignmentDataset): The dataset to evaluate.
 
         Returns:
-            List[Dict[str, float]]: A dictionary with a key corresponding to the task.
+            List[float]: A list of diversity scores, one per sample.
         """
-        if isinstance(dataset, AlignmentDataset):
-            datasets = [dataset]
-        else:
-            # This assert is here to make mypy happy
-            assert isinstance(dataset, ContinualAlignmentDataset)
-            datasets = dataset.datasets
+        response_set = [sample.chosen for sample in dataset.samples]
+        overall_score = self.compute_response_diversity(response_set)
 
-        results = []
-        for dataset in datasets:
-            response_set = [sample.chosen for sample in dataset.samples]
-            score = self.compute_response_diversity(response_set)
-            results.append({str(dataset.task): score})
-        return results
+        return [overall_score] * len(dataset.samples)
