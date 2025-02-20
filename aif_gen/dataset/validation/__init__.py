@@ -5,4 +5,5 @@ from aif_gen.dataset.validation.contrast import ContrastEvaluator
 from aif_gen.dataset.validation.counts import count_validation
 from aif_gen.dataset.validation.diversity import DiversityEvaluator
 from aif_gen.dataset.validation.entropy import entropy_validation
+from aif_gen.dataset.validation.llm_judge import llm_judge_validation
 from aif_gen.dataset.validation.relevance import RelevanceEvaluator
