@@ -35,19 +35,8 @@ def llm_judge_validation(dataset: Dataset) -> List[Optional[Dict[str, float]]]:
         assert isinstance(dataset, ContinualAlignmentDataset)
         datasets = dataset.datasets
 
-    LLM_MODEL = 'gpt2'
-    judge = pipeline(
-        'text-generation',
-        model=LLM_MODEL,
-        tokenizer=LLM_MODEL,
-        max_new_tokens=256,
-        do_sample=False,
-        truncation=True,
-        pad_token_id=50256,
-    )
-    logging.debug(f'Running LLM judge validation with model: {LLM_MODEL}')
-
     results = []
+    judge = _init_llm_judge(model_name='gpt2')
     for dataset in datasets:
         if len(dataset):
             result = _llm_judge_validation(dataset, judge)
@@ -56,6 +45,19 @@ def llm_judge_validation(dataset: Dataset) -> List[Optional[Dict[str, float]]]:
             result = None
         results.append(result)
     return results
+
+
+def _init_llm_judge(model_name: str) -> transformers.Pipeline:
+    logging.debug(f'Running LLM judge validation with model: {model_name}')
+    return pipeline(
+        'text-generation',
+        model=model_name,
+        tokenizer=model_name,
+        max_new_tokens=256,
+        do_sample=False,
+        truncation=True,
+        pad_token_id=50256,
+    )
 
 
 def _llm_judge_validation(

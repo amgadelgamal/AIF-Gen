@@ -1,70 +1,128 @@
 import pytest
 
-from aif_gen.dataset import AlignmentDataset, AlignmentDatasetSample
+from aif_gen.dataset import (
+    AlignmentDataset,
+    AlignmentDatasetSample,
+    ContinualAlignmentDataset,
+)
+from aif_gen.dataset.validation.llm_judge import llm_judge_validation
 
 
-class DummyJudge:
-    def __init__(self, outputs):
-        self.outputs = outputs
-        self.index = 0
+@pytest.mark.parametrize('judge_rating', [-1, -1.23, -0.23, 0.12, 0.23, 0.5, 1.23, 10])
+def test_diversity_validation(mocker, judge_rating):
+    mocker.patch(
+        'aif_gen.dataset.validation.llm_judge._init_llm_judge',
+        return_value=lambda _: [{'generated_text': f'LLM Response: {judge_rating}'}],
+    )
 
-    def __call__(self, prompt, max_new_tokens, do_sample, truncation, pad_token_id):
-        output = self.outputs[self.index]
-        self.index += 1
-        return [{'generated_text': output}]
-
-
-@pytest.mark.skip('TODO: Implement llm_judge_validation_tests')
-def test_parse_rating_valid():
-    text = 'The rating is 0.75 out of 1.'
-    rating = evaluator._parse_rating(text)
-    assert rating == 0.75, 'Should extract a valid rating from the text.'
-
-
-@pytest.mark.skip('TODO: Implement llm_judge_validation_tests')
-def test_parse_rating_invalid():
-    text = 'No valid number here.'
-    rating = evaluator._parse_rating(text)
-    assert rating == 0.5, 'Should return fallback 0.5 when no number is found.'
-
-
-@pytest.mark.skip('TODO: Implement llm_judge_validation_tests')
-def test_parse_rating_clamps():
-    rating_low = evaluator._parse_rating('Rating: -0.3')
-    assert rating_low == 0.0, 'Negative ratings should be clamped to 0.0'
-    rating_high = evaluator._parse_rating('Rating: 1.3')
-    assert rating_high == 1.0, 'Ratings above 1 should be clamped to 1.0'
-
-
-@pytest.mark.skip('TODO: Implement llm_judge_validation_tests')
-def test_evaluate_with_failure():
     samples = [
-        AlignmentDatasetSample('Prompt 1', 'Chosen 1', 'Rejected 1'),
-        AlignmentDatasetSample('Prompt 2', 'Chosen 2', 'Rejected 2'),
+        AlignmentDatasetSample(
+            'Mock prompt A', 'Winning Response A 1', 'Losing Response A 1'
+        ),
     ]
     dataset = AlignmentDataset(task=None, samples=samples)
+    result = llm_judge_validation(dataset)
+    exp_keys = [
+        'alignment_chosen_max',
+        'alignment_chosen_mean',
+        'alignment_chosen_median',
+        'alignment_chosen_min',
+        'alignment_rejected_max',
+        'alignment_rejected_mean',
+        'alignment_rejected_median',
+        'alignment_rejected_min',
+        'coherence_chosen_max',
+        'coherence_chosen_mean',
+        'coherence_chosen_median',
+        'coherence_chosen_min',
+        'coherence_rejected_max',
+        'coherence_rejected_mean',
+        'coherence_rejected_median',
+        'coherence_rejected_min',
+    ]
+    assert isinstance(result, list)
+    assert sorted(list(result[0].keys())) == sorted(exp_keys)
+    for v in result[0].values():
+        assert v == max(0.0, min(1.0, judge_rating))
 
-    # first output contains "0.8" (valid), second output does not contain any number.
-    dummy_outputs = ['The rating is 0.8', 'No number provided']
-    evaluator.judge = DummyJudge(dummy_outputs)
 
-    scores = evaluator.evaluate(dataset)
-    # expected scores: 0.8 and fallback 0.5.
-    assert scores == [0.8, 0.5]
-    assert evaluator.failure_rate == 0.5
+def test_llm_judge_validation_empty_dataset(mocker):
+    mocker.patch(
+        'aif_gen.dataset.validation.llm_judge._init_llm_judge',
+        return_value=lambda _: f'LLM Response: 0.1234',
+    )
+
+    dataset = AlignmentDataset(task=None, samples=[])
+    result = llm_judge_validation(dataset)
+    assert result == [None]
 
 
-@pytest.mark.skip('TODO: Implement llm_judge_validation_tests')
-def test_evaluate_without_failure():
+@pytest.mark.parametrize('judge_rating', [-1, -1.23, -0.23, 0.12, 0.23, 0.5, 1.23, 10])
+def test_llm_judge_validation_continual_dataset(mocker, judge_rating):
+    mocker.patch(
+        'aif_gen.dataset.validation.llm_judge._init_llm_judge',
+        return_value=lambda _: [{'generated_text': f'LLM response {judge_rating}'}],
+    )
+
     samples = [
-        AlignmentDatasetSample('Prompt 1', 'Chosen 1', 'Rejected 1'),
-        AlignmentDatasetSample('Prompt 2', 'Chosen 2', 'Rejected 2'),
+        AlignmentDatasetSample(
+            'Mock prompt', 'Winning Response A 1', 'Losing Response A 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt', 'Winning Response B 1', 'Losing Response B 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt', 'Winning Response C 1', 'Losing Response C 1'
+        ),
+    ]
+    dataset1 = AlignmentDataset(task=None, samples=samples)
+    dataset2 = AlignmentDataset(task=None, samples=[])
+    dataset = ContinualAlignmentDataset(datasets=[dataset1, dataset2])
+
+    result = llm_judge_validation(dataset)
+
+    exp_keys = [
+        'alignment_chosen_max',
+        'alignment_chosen_mean',
+        'alignment_chosen_median',
+        'alignment_chosen_min',
+        'alignment_rejected_max',
+        'alignment_rejected_mean',
+        'alignment_rejected_median',
+        'alignment_rejected_min',
+        'coherence_chosen_max',
+        'coherence_chosen_mean',
+        'coherence_chosen_median',
+        'coherence_chosen_min',
+        'coherence_rejected_max',
+        'coherence_rejected_mean',
+        'coherence_rejected_median',
+        'coherence_rejected_min',
+    ]
+    assert isinstance(result, list)
+    assert sorted(list(result[0].keys())) == sorted(exp_keys)
+    for v in result[0].values():
+        assert v == max(0.0, min(1.0, judge_rating))
+    assert result[1] == None
+
+
+def test_diversity_validation_all_parses_failed(mocker):
+    mocker.patch(
+        'aif_gen.dataset.validation.llm_judge._init_llm_judge',
+        return_value=lambda _: [{'generated_text': f'Bad LLM response with no rating'}],
+    )
+
+    samples = [
+        AlignmentDatasetSample(
+            'Mock prompt A 1', 'Winning Response A 1', 'Losing Response A 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt B 1', 'Winning Response B 1', 'Losing Response B 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt C 1', 'Winning Response C 1', 'Losing Response C 1'
+        ),
     ]
     dataset = AlignmentDataset(task=None, samples=samples)
-
-    dummy_outputs = ['The rating is 0.5', 'Also, rating: 0.5']
-    evaluator.judge = DummyJudge(dummy_outputs)
-
-    scores = evaluator.evaluate(dataset)
-    assert scores == [0.5, 0.5], 'Both samples should have a score of 0.5.'
-    assert evaluator.failure_rate == 0.0
+    with pytest.raises(RuntimeError):
+        llm_judge_validation(dataset)

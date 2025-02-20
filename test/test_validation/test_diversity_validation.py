@@ -21,8 +21,7 @@ def test_diversity_validation():
             'Mock prompt C 1', 'Winning Response C 1', 'Losing Response C 1'
         ),
     ]
-    mock_task = None
-    dataset = AlignmentDataset(task=mock_task, samples=samples)
+    dataset = AlignmentDataset(task=None, samples=samples)
 
     result = diversity_validation(dataset)
     exp_result = [
@@ -56,8 +55,7 @@ def test_diversity_validation_identical_prompts():
             'Mock prompt', 'Winning Response C 1', 'Losing Response C 1'
         ),
     ]
-    mock_task = None
-    dataset = AlignmentDataset(task=mock_task, samples=samples)
+    dataset = AlignmentDataset(task=None, samples=samples)
 
     result = diversity_validation(dataset)
     exp_result = [
@@ -86,8 +84,7 @@ def test_diversity_validation_single_sample_dataset(ngram):
             'Mock prompt A', 'Winning Response A 1', 'Losing Response A 1'
         ),
     ]
-    mock_task = None
-    dataset = AlignmentDataset(task=mock_task, samples=samples)
+    dataset = AlignmentDataset(task=None, samples=samples)
 
     result = diversity_validation(dataset, ngram)
 
@@ -113,8 +110,7 @@ def test_diversity_validation_single_sample_dataset(ngram):
 @pytest.mark.parametrize('ngram', [1, 2, 3])
 def test_diversity_validation_empty_dataset(ngram):
     samples = []
-    mock_task = None
-    dataset = AlignmentDataset(task=mock_task, samples=samples)
+    dataset = AlignmentDataset(task=None, samples=samples)
 
     result = diversity_validation(dataset, ngram=ngram)
     assert result == [None]
@@ -140,8 +136,7 @@ def test_diversity_validation_continual_dataset():
             'Mock prompt', 'Winning Response C 1', 'Losing Response C 1'
         ),
     ]
-    mock_task = None
-    dataset1 = AlignmentDataset(task=mock_task, samples=samples)
+    dataset1 = AlignmentDataset(task=None, samples=samples)
     dataset2 = AlignmentDataset(task=None, samples=[])
     dataset = ContinualAlignmentDataset(datasets=[dataset1, dataset2])
 
