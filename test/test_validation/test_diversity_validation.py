@@ -9,6 +9,18 @@ from aif_gen.dataset import (
 from aif_gen.dataset.validation import diversity_validation
 
 
+@pytest.fixture(autouse=True)
+def patch_nltk(mocker):
+    mocker.patch(
+        'aif_gen.dataset.validation.diversity._download_nltk_resources',
+        return_value=69,
+    )
+    mocker.patch(
+        'aif_gen.dataset.validation.diversity._get_tokenizer',
+        return_value=lambda sentence: sentence.split(' '),
+    )
+
+
 def test_diversity_validation():
     samples = [
         AlignmentDatasetSample(

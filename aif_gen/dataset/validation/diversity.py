@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import nltk
 import numpy as np
@@ -72,7 +72,8 @@ def _compute_diversity(response_set: List[str], weight: List[float]) -> List[flo
     if 0 <= len(response_set) < 2:
         return len(response_set) * [0.0]
 
-    tokenized_responses = [nltk.word_tokenize(sentence) for sentence in response_set]
+    tokenizer = _get_tokenizer()
+    tokenized_responses = [tokenizer(sentence) for sentence in response_set]
     diversity = []
     for i, hypothesis in enumerate(tokenized_responses):
         other_responses = tokenized_responses[:i] + tokenized_responses[i + 1 :]
@@ -94,6 +95,10 @@ def _compute_statistics(results: Dict[str, List[float]]) -> Dict[str, float]:
         statistics[f'{metric}_min'] = float(np.min(values))
         statistics[f'{metric}_max'] = float(np.max(values))
     return statistics
+
+
+def _get_tokenizer() -> Callable[[str], List[str]]:
+    return nltk.word_tokenize
 
 
 def _download_nltk_resources() -> None:
