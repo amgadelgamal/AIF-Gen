@@ -1,2 +1,9 @@
 from aif_gen.dataset.validation.counts import count_validation
 from aif_gen.dataset.validation.entropy import entropy_validation
+from aif_gen.dataset.validation.base import BaseMetric
+from aif_gen.dataset.validation.alignment import AlignmentEvaluator
+
+# from aif_gen.dataset.validation.contrast import ContrastEvaluator
+from aif_gen.dataset.validation.coherence import CoherenceEvaluator
+from aif_gen.dataset.validation.relevance import RelevanceEvaluator
+from aif_gen.dataset.validation.diversity import DiversityEvaluator
