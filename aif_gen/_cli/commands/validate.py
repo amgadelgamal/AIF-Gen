@@ -103,32 +103,27 @@ def validate(
 
     if validate_alignment:
         logging.info('Performing alignment validation')
-        evaluator = AlignmentEvaluator()
-        results['alignment_validation'] = evaluator.evaluate_all(dataset)
+        results['alignment_validation'] = AlignmentEvaluator().evaluate_all(dataset)
         logging.info('Finished alignment validation')
 
     if validate_coherence:
         logging.info('Performing coherence validation')
-        evaluator = CoherenceEvaluator()
-        results['coherence_validation'] = evaluator.evaluate_all(dataset)
+        results['coherence_validation'] = CoherenceEvaluator().evaluate_all(dataset)
         logging.info('Finished coherence validation')
 
     if validate_contrast:
         logging.info('Performing contrast validation')
-        evaluator = ContrastEvaluator()
-        results['contrast_validation'] = evaluator.evaluate_all(dataset)
+        results['contrast_validation'] = ContrastEvaluator().evaluate_all(dataset)
         logging.info('Finished contrast validation')
 
     if validate_diversity:
         logging.info('Performing diversity validation')
-        evaluator = DiversityEvaluator()
-        results['diversity_validation'] = evaluator.evaluate_all(dataset)
+        results['diversity_validation'] = DiversityEvaluator().evaluate_all(dataset)
         logging.info('Finished diversity validation')
 
     if validate_relevance:
         logging.info('Performing relevance validation')
-        evaluator = RelevanceEvaluator()
-        results['relevance_validation'] = evaluator.evaluate_all(dataset)
+        results['relevance_validation'] = RelevanceEvaluator().evaluate_all(dataset)
         logging.info('Finished relevance validation')
 
     if len(results):
