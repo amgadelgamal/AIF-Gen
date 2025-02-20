@@ -1,6 +1,7 @@
 import tempfile
 
 import pytest
+from datasets import Dataset
 
 from aif_gen.dataset import AlignmentDataset, AlignmentDatasetSample
 from aif_gen.task import AlignmentTask, Domain
@@ -167,3 +168,49 @@ def test_json_conversion(train_frac):
     assert recovered_dataset.task.objective == objective
     assert recovered_dataset.task.preference == preference
     assert recovered_dataset.samples == dataset.samples
+
+
+def test_hf_compatiblity(train_frac):
+    component_dict = {
+        'Component A': {
+            'seed_words': ['a_foo', 'a_bar', 'a_baz'],
+            'description': 'A Mock Domain Component',
+        },
+        'Component B': {
+            'seed_words': ['b_foo', 'b_bar', 'b_baz'],
+            'description': 'B Mock Domain Component',
+        },
+    }
+    domain = Domain.from_dict(component_dict)
+    objective = 'Mock Objective'
+    preference = 'Mock Preference'
+    task = AlignmentTask(domain, objective, preference)
+
+    samples = [
+        AlignmentDatasetSample(
+            'Mock prompt A', 'Winning Response A', 'Losing Response A'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt B', 'Winning Response B', 'Losing Response B'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt C', 'Winning Response C', 'Losing Response C'
+        ),
+    ]
+
+    dataset = AlignmentDataset(task, samples, train_frac)
+
+    hf_dict = dataset.to_hf_compatible()
+
+    assert type(hf_dict) == dict
+    assert 'train' in hf_dict
+    assert 'test' in hf_dict
+    assert type(hf_dict['train']) == Dataset
+
+    assert hf_dict['train']['prompt'] == [sample.prompt for sample in dataset.train]
+    assert hf_dict['train']['chosen'] == [sample.chosen for sample in dataset.train]
+    assert hf_dict['train']['rejected'] == [sample.rejected for sample in dataset.train]
+
+    assert hf_dict['test']['prompt'] == [sample.prompt for sample in dataset.test]
+    assert hf_dict['test']['chosen'] == [sample.chosen for sample in dataset.test]
+    assert hf_dict['test']['rejected'] == [sample.rejected for sample in dataset.test]
