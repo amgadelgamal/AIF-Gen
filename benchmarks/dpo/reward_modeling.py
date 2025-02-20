@@ -38,6 +38,8 @@ import warnings
 
 import torch
 from dataclasses import dataclass, field
+from dataloading import init_continual_dataset
+from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, HfArgumentParser
 
 from trl import (
@@ -50,9 +52,6 @@ from trl import (
     get_quantization_config,
     setup_chat_format,
 )
-
-from aif_gen.dataset import DebugContinualDataset, ContinualUltrafeedback2AnthropicDataset
-
 
 @dataclass
 class ExtendedScriptArguments(ScriptArguments):
@@ -102,13 +101,10 @@ if __name__ == "__main__":
     ##############
     # Load dataset
     ##############
-    # dataset = load_dataset(script_args.dataset_name, name=script_args.dataset_config)
-    if script_args.dataset_name == 'debug':
-        dataset = DebugContinualDataset().datasets[script_args.dataset_index]
-    elif script_args.dataset_name == 'ultrafeedback2anthropic':
-        dataset = ContinualUltrafeedback2AnthropicDataset().datasets[script_args.dataset_index]
-    else:
-        raise ValueError(f"Unknown dataset: {script_args.dataset_name}")
+    continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
+        script_args.dataset_name
+    )
+    dataset = continual_dataset[script_args.dataset_index]
 
     ##########
     # Training

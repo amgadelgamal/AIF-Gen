@@ -29,7 +29,7 @@ python benchmarks/dpo/dpo_continual.py \
     --logging_steps 25 \
     --eval_strategy steps \
     --eval_steps 50 \
-    --save_steps 3 \
+    --save_steps 20 \
     --bf16 \
     --run_name qwen_test \
     --output_dir Qwen2-0.5B-DPO-test \
@@ -37,7 +37,6 @@ python benchmarks/dpo/dpo_continual.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
-    --dataset_name debug
 
 accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero3.yaml \
     benchmarks/dpo/dpo_continual.py \
@@ -60,6 +59,7 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
     --lora_alpha 16
 """
 
+import os
 import torch
 from continual_dpo_trainer import ContinualDPOArguments, ContinualDPOConfig, ContinualDPOTrainer
 from dataloading import init_continual_dataset
@@ -128,7 +128,7 @@ def main(
     output_dir = training_args.output_dir
 
     if training_args.reward_model_path is not None:
-        for i in range(len(continual_dataset.datasets)):
+        for i, _ in enumerate(continual_dataset):
             assert os.path.exists(training_args.reward_model_path+f"/{str(i)}"), f"Reward model not found for dataset {i}"
 
     for i, dataset in enumerate(continual_dataset):
@@ -148,8 +148,7 @@ def main(
             args=training_args,
             train_dataset=dataset[script_args.dataset_train_split],
             eval_dataset=dataset[script_args.dataset_test_split]
-            if training_args.eval_strategy != 'no'
-            else None,
+            if training_args.eval_strategy != 'no' else None,
             processing_class=tokenizer,
             peft_config=peft_config,
         )
@@ -159,13 +158,16 @@ def main(
         trainer.train()
 
         if training_args.eval_strategy != 'no':
+            if training_args.reward_model_path is not None:
+                policy_metrics = trainer.evaluate_policy()
+                print('policy_metrics', policy_metrics)
+
             metrics = trainer.evaluate()
             metrics['dataset'] = i + 1
             trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
             trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
-            last_metrics = {k: v for k, v in metrics.items()}
             last_section = f'task/{current_dataset_name}/last'
-            trainer.log({last_section: last_metrics})
+            trainer.log({last_section: metrics})
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')
@@ -185,7 +187,7 @@ def main(
 
 
 if __name__ == '__main__':
-    dataclass_types = (ContinualDPOArguments, DPOConfig, ModelConfig)
+    dataclass_types = (ContinualDPOArguments, ContinualDPOConfig, ModelConfig)
     parser = TrlParser(dataclass_types)
 
     script_args, training_args, model_args = parser.parse_args_and_config()

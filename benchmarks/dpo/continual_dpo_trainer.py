@@ -48,6 +48,10 @@ class ContinualDPOConfig(DPOConfig):
         default=None,
         metadata={'help': 'The name or path to the reward models folder containing all rewards models for continual learning dataset.'},
     )
+    response_length: int = field(
+        default=53,
+        metadata={"help": "Length of the response. Borrowed from PPOCOnfig and used only for evaluation."},
+    )
 
 class ContinualDPOTrainer(DPOTrainer):
     # Shared accelerator instance across all trainer instances
@@ -130,6 +134,7 @@ class ContinualDPOTrainer(DPOTrainer):
         if self.eval_dataset is None:
             raise ValueError("No evaluation dataset provided.")
 
+        mode = self.model.training
         self.model.eval()
         eval_metrics = defaultdict(list)
         processing_class = self.processing_class
@@ -164,12 +169,12 @@ class ContinualDPOTrainer(DPOTrainer):
                         self.stop_token_id, processing_class.pad_token_id, response
                     )
 
-                eval_metrics["query"].extend(
-                    gather_object(processing_class.batch_decode(query, skip_special_tokens=True))
-                )
-                eval_metrics["model_response"].extend(
-                    gather_object(processing_class.batch_decode(postprocessed_response))
-                )
+                # eval_metrics["query"].extend(
+                #     gather_object(processing_class.batch_decode(query, skip_special_tokens=True))
+                # )
+                # eval_metrics["model_response"].extend(
+                #     gather_object(processing_class.batch_decode(postprocessed_response))
+                # )
 
                 postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
                 _, score, _ = get_reward(
@@ -178,9 +183,11 @@ class ContinualDPOTrainer(DPOTrainer):
                 eval_metrics["score"].extend(self.accelerator.gather_for_metrics(score).float().cpu().numpy())
 
         # self.log(metrics)
-        if self.accelerator.is_main_process:
-            eval_metrics["score"] = np.mean(eval_metrics["score"])
-            self.log({"mean_score": eval_metrics["score"] })
+        # if self.accelerator.is_main_process:
+        #     eval_metrics["score"] = np.mean(eval_metrics["score"])
+        #     self.log({"mean_score": eval_metrics["score"] })
 
-        self.model.train()
+        self.model.train(mode)
+
+        return eval_metrics
 
