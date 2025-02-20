@@ -50,10 +50,7 @@ def test_compute_response_diversity_identical_responses():
     ]
 
     diversity_score = evaluator.compute_response_diversity(response_set)
-
-    assert diversity_score == pytest.approx(
-        0.0, abs=1e-5
-    ), 'Identical responses should have near-zero diversity'
+    assert diversity_score == pytest.approx(0.0, abs=1e-5)
 
 
 def test_compute_response_diversity_single_response():
@@ -62,10 +59,7 @@ def test_compute_response_diversity_single_response():
 
     response_set = ['Only one response.']
     diversity_score = evaluator.compute_response_diversity(response_set)
-
-    assert (
-        diversity_score == 0.0
-    ), 'A single response should return a diversity score of 0.0'
+    assert diversity_score == 0.0
 
 
 def test_evaluate(dummy_dataset):
@@ -74,12 +68,8 @@ def test_evaluate(dummy_dataset):
     scores = evaluator.evaluate(dummy_dataset)
 
     assert isinstance(scores, list), 'evaluate() should return a list'
-    assert all(
-        isinstance(score, float) for score in scores
-    ), 'All elements should be floats'
-    assert len(scores) == len(
-        dummy_dataset.samples
-    ), 'Number of scores should match number of samples'
+    assert all(isinstance(score, float) for score in scores)
+    assert len(scores) == len(dummy_dataset.samples)
 
 
 def test_evaluate_empty_dataset():

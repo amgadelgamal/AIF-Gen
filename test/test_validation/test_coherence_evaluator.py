@@ -33,9 +33,7 @@ def test_parse_rating_fallback():
     # When no number is found, _parse_rating should return 0.5.
     text = 'No numeric value available.'
     rating = evaluator._parse_rating(text)
-    assert (
-        abs(rating - 0.5) < 1e-6
-    ), 'Should return fallback score of 0.5 when no number is present.'
+    assert abs(rating - 0.5) < 1e-6
 
 
 def test_evaluate_single_sample():
