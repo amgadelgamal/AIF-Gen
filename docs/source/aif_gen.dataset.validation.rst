@@ -4,38 +4,6 @@ aif\_gen.dataset.validation package
 Submodules
 ----------
 
-aif\_gen.dataset.validation.alignment module
---------------------------------------------
-
-.. automodule:: aif_gen.dataset.validation.alignment
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-aif\_gen.dataset.validation.base module
----------------------------------------
-
-.. automodule:: aif_gen.dataset.validation.base
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-aif\_gen.dataset.validation.coherence module
---------------------------------------------
-
-.. automodule:: aif_gen.dataset.validation.coherence
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-aif\_gen.dataset.validation.contrast module
--------------------------------------------
-
-.. automodule:: aif_gen.dataset.validation.contrast
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 aif\_gen.dataset.validation.counts module
 -----------------------------------------
 
@@ -60,10 +28,10 @@ aif\_gen.dataset.validation.entropy module
    :undoc-members:
    :show-inheritance:
 
-aif\_gen.dataset.validation.relevance module
---------------------------------------------
+aif\_gen.dataset.validation.llm\_judge module
+---------------------------------------------
 
-.. automodule:: aif_gen.dataset.validation.relevance
+.. automodule:: aif_gen.dataset.validation.llm_judge
    :members:
    :undoc-members:
    :show-inheritance:
