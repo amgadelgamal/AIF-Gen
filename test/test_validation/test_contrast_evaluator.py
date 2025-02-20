@@ -5,7 +5,7 @@ from aif_gen.dataset import (
     AlignmentDatasetSample,
     ContinualAlignmentDataset,
 )
-from aif_gen.evaluation import ContrastEvaluator
+from aif_gen.dataset.validation import ContrastEvaluator
 
 
 class DummyTask:

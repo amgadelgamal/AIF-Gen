@@ -5,7 +5,7 @@ from aif_gen.dataset import (
     AlignmentDatasetSample,
     ContinualAlignmentDataset,
 )
-from aif_gen.dataset.validation.relevance import RelevanceEvaluator
+from aif_gen.dataset.validation import RelevanceEvaluator
 
 
 def dummy_judge(prompt, max_length, do_sample):

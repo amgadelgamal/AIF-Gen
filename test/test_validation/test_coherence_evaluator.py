@@ -7,7 +7,7 @@ from aif_gen.dataset import (
     AlignmentDatasetSample,
     ContinualAlignmentDataset,
 )
-from aif_gen.dataset.validation.coherence import CoherenceEvaluator
+from aif_gen.dataset.validation import CoherenceEvaluator
 
 
 class DummyTokenizer:

@@ -1,5 +1,5 @@
 from aif_gen.dataset import AlignmentDataset, AlignmentDatasetSample
-from aif_gen.dataset.validation.alignment import AlignmentEvaluator
+from aif_gen.dataset.validation import AlignmentEvaluator
 
 
 class DummyJudge:
@@ -58,13 +58,8 @@ def test_evaluate_with_failure():
 
     scores = evaluator.evaluate(dataset)
     # expected scores: 0.8 and fallback 0.5.
-    assert scores == [
-        0.8,
-        0.5,
-    ], "Scores should match the dummy outputs' parsed ratings."
-    assert (
-        evaluator.failure_rate == 0.5
-    ), 'Failure rate should be 0.5 (1 failure out of 2 samples).'
+    assert scores == [0.8, 0.5]
+    assert evaluator.failure_rate == 0.5
 
 
 def test_evaluate_without_failure():
@@ -83,6 +78,4 @@ def test_evaluate_without_failure():
 
     scores = evaluator.evaluate(dataset)
     assert scores == [0.5, 0.5], 'Both samples should have a score of 0.5.'
-    assert (
-        evaluator.failure_rate == 0.0
-    ), 'There should be no failures when fallback is explicitly provided.'
+    assert evaluator.failure_rate == 0.0

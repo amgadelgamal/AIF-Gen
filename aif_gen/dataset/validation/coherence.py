@@ -1,16 +1,12 @@
 from typing import Callable, Dict, List
 
-import nltk
 from transformers import pipeline
 
 from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
 from aif_gen.typing import Dataset
 
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
 
-
-class AlignmentEvaluator:
+class CoherenceEvaluator:
     def __init__(self) -> None:
         self.classifier = pipeline('sentiment-analysis')
 
