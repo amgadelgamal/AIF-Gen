@@ -1,76 +1,103 @@
-from typing import List
+from typing import List, Dict, Optional
+import logging
+import numpy as np
+import nltk
+from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 
-from aif_gen.dataset import AlignmentDataset
-from aif_gen.dataset.validation.base import BaseMetric
+from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
+from aif_gen.typing import Dataset
 
 
-class DiversityEvaluator(BaseMetric):
-    """Computes the diversity for a set of responses via the inverse Self-BLEU score.
-    A higher Self-BLEU score indicates lower diversity for generated sentences.
+def diversity_validation(
+    dataset: Dataset, ngram: int = 3
+) -> List[Optional[Dict[str, float]]]:
+    r"""Report the inverse Self-BLEU score as a measure of diversity within the generated samples.
+
+    Args:
+        dataset (Union[ContinualAlignmentDataset, AlignmentDataset]): The dataset to validate.
+        ngram (int): The maximum n-gram order for BLEU calculation. Default of 3 matches the original paper.
+
+    Returns:
+        List[Optional[Dict[str, float]]]: For every AlignmentDataset, returns a dictionary with the following entries:
+
+        'prompt_diversity'    -> float: The diverse across prompts in samples of the AlignmentDataset.
+        'chosen_diversity'    -> float: The diversity across chosen responses in samples of the AlignmentDataset.
+        'rejected_diversity'  -> float: The diversity across rejected responses in the samples of the AlignmentDataset.
+
+    Note:
+        If the dataset is empty, we put None in place of the validation metric.
+
+        If the input dataset is an AlignmentDataset (non-continual), this function
+        returns a 1 element list with the relevant statistics.
 
     References:
         - https://arxiv.org/pdf/1802.01886
         - https://github.com/geek-ai/Texygen
 
-    Args:
-        response_set (list[str]): A list of generated sentences.
-        ngram (int): The maximum n-gram order for BLEU calculation. Default of 3 matches the original paper.
     """
+    _download_nltk_resources()
 
-    def __init__(self, ngram: int = 3):
-        self._ensure_nltk_resources()
-        self.ngram = ngram
+    if isinstance(dataset, AlignmentDataset):
+        datasets = [dataset]
+    else:
+        # This assert is here to make mypy happy
+        assert isinstance(dataset, ContinualAlignmentDataset)
+        datasets = dataset.datasets
 
-    def compute_response_diversity(self, response_set: List[str]) -> float:
-        # Avoid redundant calculations
-        if not response_set or len(response_set) < 2:
-            return 0.0
+    results = []
+    for dataset in datasets:
+        results.append(_diversity_validation(dataset, ngram))
+        if len(dataset):
+            result = _diversity_validation(dataset, ngram)
+        else:
+            logging.warning(f'Skipping diversity on empty dataset: {dataset}')
+            result = None
+        results.append(result)
+    return results
 
-        import nltk
-        from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 
-        # BLEU weight setting (e.g., for BLEU-3: (1/3, 1/3, 1/3))
-        weight = tuple(1.0 / self.ngram for _ in range(self.ngram))
+def _diversity_validation(dataset: AlignmentDataset, ngram: int) -> Dict[str, float]:
+    # BLEU weight setting (e.g., for BLEU-3: (1/3, 1/3, 1/3))
+    weight = [1.0 / ngram for _ in range(ngram)]
 
-        # Tokenize responses for BLEU calculation
-        tokenized_responses = [
-            nltk.word_tokenize(sentence) for sentence in response_set
-        ]
+    prompts = [sample.prompt for sample in dataset]
+    chosens = [sample.chosen for sample in dataset]
+    rejected = [sample.rejected for sample in dataset]
 
-        scores = []
-        for i, hypothesis in enumerate(tokenized_responses):
-            other_responses = tokenized_responses[:i] + tokenized_responses[i + 1 :]
-            score = sentence_bleu(
-                other_responses,
-                hypothesis,
-                weight,
-                smoothing_function=SmoothingFunction().method1,
-            )
-            scores.append(score)
+    results: Dict[str, List[float]] = {}
+    results['prompt_diversity'] = _compute_diversity(prompts, weight)
+    results['chosen_diversity'] = _compute_diversity(chosens, weight)
+    results['rejected_diversity'] = _compute_diversity(rejected, weight)
+    return _compute_statistics(results)
 
-        # Average self-BLEU score
-        bleu_score = sum(scores) / len(scores)
 
-        # Return the inverse BLEU score as diversity metric
-        return 1.0 - bleu_score
+def _compute_diversity(response_set: List[str], weight: List[float]) -> List[float]:
+    tokenized_responses = [nltk.word_tokenize(sentence) for sentence in response_set]
 
-    def evaluate(self, dataset: AlignmentDataset) -> List[float]:
-        """Evaluate the diversity metric on an AlignmentDataset.
+    diversity = []
+    for i, hypothesis in enumerate(tokenized_responses):
+        other_responses = tokenized_responses[:i] + tokenized_responses[i + 1 :]
+        score = sentence_bleu(
+            other_responses,
+            hypothesis,
+            weight,
+            smoothing_function=SmoothingFunction().method1,
+        )
+        diversity.append(1 - score)
+    return diversity
 
-        Args:
-            dataset (AlignmentDataset): The dataset to evaluate.
 
-        Returns:
-            List[float]: A list of diversity scores, one per sample.
-        """
-        response_set = [sample.chosen for sample in dataset.samples]
-        overall_score = self.compute_response_diversity(response_set)
+def _compute_statistics(results: Dict[str, List[float]]) -> Dict[str, float]:
+    statistics = {}
+    for metric, values in results.items():
+        statistics[f'{metric}_mean'] = np.mean(values)
+        statistics[f'{metric}_median'] = np.median(values)
+        statistics[f'{metric}_min'] = np.min(values)
+        statistics[f'{metric}_max'] = np.max(values)
+    return statistics
 
-        return [overall_score] * len(dataset.samples)
 
-    @staticmethod
-    def _ensure_nltk_resources() -> None:
-        import nltk
-
-        nltk.download('punkt', quiet=True)
-        nltk.download('averaged_perceptron_tagger', quiet=True)
+def _download_nltk_resources() -> None:
+    logging.info('Downloading NLTK resources.')
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+    nltk.download('punkt', quiet=True)
