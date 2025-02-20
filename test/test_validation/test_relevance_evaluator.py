@@ -43,7 +43,6 @@ def test_relevance_evaluator_evaluate_with_explicit_id():
         prompt='Another prompt',
         chosen='Another chosen response',
         rejected='Irrelevant text.',
-        id='sampleA',
     )
     dataset = AlignmentDataset(task=None, samples=[sample])
     evaluator = RelevanceEvaluator()
@@ -57,10 +56,10 @@ def test_relevance_evaluation_single_dataset():
     to relevance scores for a single AlignmentDataset.
     """
     sample1 = AlignmentDatasetSample(
-        prompt='Prompt 1', chosen='Chosen 1', rejected='Rejected 1', id='0'
+        prompt='Prompt 1', chosen='Chosen 1', rejected='Rejected 1'
     )
     sample2 = AlignmentDatasetSample(
-        prompt='Prompt 2', chosen='Chosen 2', rejected='Rejected 2', id='1'
+        prompt='Prompt 2', chosen='Chosen 2', rejected='Rejected 2'
     )
     dataset = AlignmentDataset(task=None, samples=[sample1, sample2])
     evaluator = RelevanceEvaluator()
@@ -77,7 +76,6 @@ def test_relevance_evaluation_continual_dataset():
         prompt='Prompt 1',
         chosen='Chosen 1',
         rejected='Rejected 1',
-        id='0',
     )
     dataset1 = AlignmentDataset(task=None, samples=[sample1])
 
@@ -85,7 +83,6 @@ def test_relevance_evaluation_continual_dataset():
         prompt='Prompt 2',
         chosen='Chosen 2',
         rejected='Rejected 2',
-        id='0',
     )
     dataset2 = AlignmentDataset(task=None, samples=[sample2])
 

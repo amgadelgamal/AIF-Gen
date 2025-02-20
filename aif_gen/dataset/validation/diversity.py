@@ -6,8 +6,8 @@ from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from aif_gen.dataset import AlignmentDataset, ContinualAlignmentDataset
 from aif_gen.typing import Dataset
 
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
+# nltk.download('punkt')
+# nltk.download('averaged_perceptron_tagger')
 
 
 class DiversityEvaluator:
