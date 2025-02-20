@@ -11,7 +11,9 @@ class DummyAlignmentDataset:
 
 
 # A dummy judge function that simulates the output of the text-generation pipeline.
-def dummy_judge(prompt, max_length=50, do_sample=False):
+def dummy_judge(
+    prompt, max_new_tokens=50, do_sample=False, truncation=True, pad_token_id=None
+):
     # This dummy always returns a rating of 0.9 regardless of the prompt.
     # The evaluator will use a regular expression to parse this number.
     return [{'generated_text': ' 0.9'}]

@@ -18,19 +18,16 @@ class DiversityEvaluator(BaseMetric):
     """
 
     def __init__(self, ngram: int = 3):
+        self._ensure_nltk_resources()
         self.ngram = ngram
 
     def compute_response_diversity(self, response_set: List[str]) -> float:
         # Avoid redundant calculations
         if not response_set or len(response_set) < 2:
             return 0.0
-            print('Importing nltk...')  # Debug print
 
         import nltk
         from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
-
-        nltk.download('punkt', quiet=True)  # Ensure tokenizer is available
-        print('NLTK successfully imported!')  # Debug print
 
         # BLEU weight setting (e.g., for BLEU-3: (1/3, 1/3, 1/3))
         weight = tuple(1.0 / self.ngram for _ in range(self.ngram))
@@ -70,3 +67,10 @@ class DiversityEvaluator(BaseMetric):
         overall_score = self.compute_response_diversity(response_set)
 
         return [overall_score] * len(dataset.samples)
+
+    @staticmethod
+    def _ensure_nltk_resources() -> None:
+        import nltk
+
+        nltk.download('punkt', quiet=True)
+        nltk.download('averaged_perceptron_tagger', quiet=True)

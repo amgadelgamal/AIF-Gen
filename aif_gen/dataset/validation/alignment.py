@@ -49,9 +49,13 @@ class AlignmentEvaluator(BaseMetric):
                 'Alignment Score (0 to 1):'
             )
 
-            output = self.judge(judge_prompt, max_length=50, do_sample=False)[0][
-                'generated_text'
-            ]
+            output = self.judge(
+                judge_prompt,
+                max_new_tokens=50,
+                do_sample=False,
+                truncation=True,
+                pad_token_id=50256,
+            )[0]['generated_text']
             rating = self._parse_rating(output)
 
             # Check if the rating is the fallback value.

@@ -7,14 +7,6 @@ from aif_gen.dataset import AlignmentDataset
 from aif_gen.dataset.validation.base import BaseMetric
 
 
-def _ensure_nltk_resources() -> None:
-    """Lazily imports nltk and downloads required resources."""
-    import nltk
-
-    nltk.download('punkt', quiet=True)
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-
-
 class RelevanceEvaluator(BaseMetric):
     """A relevance evaluator that uses an LLM judge to assess how relevant a response is
     to its associated prompt. For each sample, the judge model is prompted to generate a
@@ -22,7 +14,6 @@ class RelevanceEvaluator(BaseMetric):
     """
 
     def __init__(self) -> None:
-        _ensure_nltk_resources()
         self.judge = pipeline('text-generation', model='gpt2', tokenizer='gpt2')
 
     def _parse_rating(self, text: str) -> float:
@@ -59,9 +50,14 @@ class RelevanceEvaluator(BaseMetric):
                 f'Response: {sample.chosen}\n\n'
                 'Score (0 to 1):'
             )
-            output = self.judge(judge_prompt, max_length=50, do_sample=False)[0][
-                'generated_text'
-            ]
+            output = self.judge(
+                judge_prompt,
+                max_new_tokens=50,
+                do_sample=False,
+                truncation=True,
+                pad_token_id=50256,
+            )[0]['generated_text']
+
             relevance_score = self._parse_rating(output)
             scores.append(relevance_score)
         return scores

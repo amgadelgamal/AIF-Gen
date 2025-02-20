@@ -7,13 +7,6 @@ from aif_gen.dataset import AlignmentDataset
 from aif_gen.dataset.validation.base import BaseMetric
 
 
-def _ensure_nltk_resources() -> None:
-    import nltk
-
-    nltk.download('punkt', quiet=True)
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-
-
 class ContrastEvaluator(BaseMetric):
     """A contrast score evaluator that computes the difference between the LLM-generated scores
     for the chosen and rejected responses. This class inherits from BaseMetric and uses a
@@ -21,7 +14,6 @@ class ContrastEvaluator(BaseMetric):
     """
 
     def __init__(self) -> None:
-        _ensure_nltk_resources()
         self.judge = pipeline('text-generation', model='gpt2', tokenizer='gpt2')
 
     def _parse_rating(self, text: str) -> float:
@@ -57,9 +49,14 @@ class ContrastEvaluator(BaseMetric):
                 f'Chosen Response: {sample.chosen}\n\n'
                 'Score (0 to 1):'
             )
-            chosen_output = self.judge(chosen_prompt, max_length=50, do_sample=False)[
-                0
-            ]['generated_text']
+
+            chosen_output = self.judge(
+                chosen_prompt,
+                max_new_tokens=50,
+                do_sample=False,
+                truncation=True,
+                pad_token_id=50256,
+            )[0]['generated_text']
             chosen_score = self._parse_rating(chosen_output)
 
             # Construct prompt for the rejected response.
@@ -69,8 +66,13 @@ class ContrastEvaluator(BaseMetric):
                 f'Rejected Response: {sample.rejected}\n\n'
                 'Score (0 to 1):'
             )
+
             rejected_output = self.judge(
-                rejected_prompt, max_length=50, do_sample=False
+                rejected_prompt,
+                max_new_tokens=50,
+                do_sample=False,
+                truncation=True,
+                pad_token_id=50256,
             )[0]['generated_text']
             rejected_score = self._parse_rating(rejected_output)
 

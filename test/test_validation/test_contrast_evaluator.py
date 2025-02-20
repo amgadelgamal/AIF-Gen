@@ -11,7 +11,14 @@ class DummyJudge:
         self.outputs = outputs
         self.index = 0
 
-    def __call__(self, prompt: str, max_length: int, do_sample: bool) -> List[dict]:
+    def __call__(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        do_sample: bool,
+        truncation: bool,
+        pad_token_id,
+    ) -> List[dict]:
         output = self.outputs[self.index]
         self.index += 1
         return [{'generated_text': output}]

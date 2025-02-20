@@ -11,7 +11,7 @@ class DummyJudge:
         self.outputs = outputs
         self.index = 0
 
-    def __call__(self, prompt, max_length, do_sample):
+    def __call__(self, prompt, max_new_tokens, do_sample, truncation, pad_token_id):
         output = self.outputs[self.index]
         self.index += 1
         return [{'generated_text': output}]
