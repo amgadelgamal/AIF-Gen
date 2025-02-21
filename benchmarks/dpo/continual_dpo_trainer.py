@@ -214,7 +214,6 @@ class ContinualDPOTrainer(DPOTrainer):
                     self.reward_model, postprocessed_query_response, processing_class.pad_token_id, context_length
                 )
                 eval_metrics["score"].extend(self.accelerator.gather_for_metrics(score).float().cpu().numpy())
-                print('end')
 
         eval_metrics["score"] = np.mean(eval_metrics["score"])
         self.model.train(mode)
