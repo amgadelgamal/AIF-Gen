@@ -148,7 +148,7 @@ async def llm_judge_validation(
         logging.exception(f'Exception occured while generating dataset: {e}')
         for fut in futures:
             fut.cancel()
-        await tqdm.gather(*futures)
+        await tqdm.gather(*futures, return_exceptions=True)
         return None
 
 
