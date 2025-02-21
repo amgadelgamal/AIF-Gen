@@ -12,10 +12,26 @@ aif\_gen.dataset.validation.counts module
    :undoc-members:
    :show-inheritance:
 
+aif\_gen.dataset.validation.diversity module
+--------------------------------------------
+
+.. automodule:: aif_gen.dataset.validation.diversity
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 aif\_gen.dataset.validation.entropy module
 ------------------------------------------
 
 .. automodule:: aif_gen.dataset.validation.entropy
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+aif\_gen.dataset.validation.llm\_judge module
+---------------------------------------------
+
+.. automodule:: aif_gen.dataset.validation.llm_judge
    :members:
    :undoc-members:
    :show-inheritance:

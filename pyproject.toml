@@ -18,12 +18,14 @@ dependencies = [
     "backoff>=2.2.1",
     "click>=8.1.8",
     "datasets>=3.3.1",
+    "nltk>=3.9.1",
     "numpy>=2.0.2",
     "openai>=1.61.1",
     "pydantic>=2.10.4",
     "pytest-asyncio>=0.25.3",
     "pytest-mock>=3.14.0",
     "torch==2.3.0",
+    "transformers>=4.49.0",
     "types-pyyaml>=6.0.12.20241230",
 ]
 
