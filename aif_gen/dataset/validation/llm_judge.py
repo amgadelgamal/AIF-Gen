@@ -53,10 +53,11 @@ def _init_llm_judge(model_name: str) -> transformers.Pipeline:
         'text-generation',
         model=model_name,
         tokenizer=model_name,
-        max_new_tokens=256,
+        max_new_tokens=32,
         do_sample=False,
         truncation=True,
         pad_token_id=50256,
+        return_full_text=False,
     )
 
 
