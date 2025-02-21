@@ -93,7 +93,8 @@ async def llm_judge_validation(
                 continue
 
             metrics, dataset_idx = result
-            for metric_name, metric_value in metrics:
+            for metric_name, fut_result in metrics.items():
+                metric_value = await fut_result
                 if metric_value is not None:
                     results[dataset_idx][metric_name].append(metric_value)
 
