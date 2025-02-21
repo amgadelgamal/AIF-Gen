@@ -31,7 +31,6 @@ python benchmarks/dpo/dpo_continual.py \
     --eval_steps 50 \
     --save_steps 20 \
     --bf16 \
-    --run_name qwen_test \
     --output_dir Qwen2-0.5B-DPO-test \
     --no_remove_unused_columns \
     --use_peft \
@@ -42,6 +41,7 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
     benchmarks/dpo/dpo_continual.py \
     --dataset_name  debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --reward_model_path /home/mila/i/ivan.anokhin/AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \

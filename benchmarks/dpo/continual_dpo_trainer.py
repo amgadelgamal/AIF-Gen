@@ -25,7 +25,7 @@ from trl.trainer.utils import (
 )
 from trl.trainer.dpo_config import DPOConfig
 from trl import apply_chat_template
-from transformers import GenerationConfig
+from transformers import GenerationConfig, DataCollatorWithPadding
 from transformers import (
     BaseImageProcessor,
     DataCollator,
@@ -36,6 +36,7 @@ from transformers import (
 )
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
+
 
 
 @dataclass
@@ -97,9 +98,8 @@ class ContinualDPOTrainer(DPOTrainer):
 
         # setting a reward model only for evaluation purposes
         self.reward_model = reward_model
-        if self.reward_model is None:
+        if self.reward_model is not None:
             disable_dropout_in_model(self.reward_model)
-        self.reward_model = self.accelerator.prepare(self.reward_model)
 
         if self.is_deepspeed_enabled:
             self.reward_model = prepare_deepspeed(
@@ -137,6 +137,7 @@ class ContinualDPOTrainer(DPOTrainer):
         Evaluate the model on the evaluation dataset and compute metrics.
         """
         # ToDo: the whole dataset preparation stage inside evaluate_policy funciton doesn't look pretty, probably should be moved to a separate method
+        # using the same mapping function as in PPO trainer
         dataset_text_field = "prompt"
 
         def prepare_dataset(dataset, tokenizer):
@@ -156,17 +157,17 @@ class ContinualDPOTrainer(DPOTrainer):
                 num_proc=self.args.dataset_num_proc,
             )
 
+        dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": self.processing_class})
         # Compute that only on the main process for faster data processing.
         # see: https://github.com/huggingface/trl/pull/1255
-        dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": self.processing_class})
-
-        # with PartialState().local_main_process_first():
-        #     dataset = prepare_dataset(dataset, self.processing_class)
-
+        with PartialState().local_main_process_first():
+            dataset = prepare_dataset(dataset, self.processing_class)
+        # using the same data_collator as in PPO trainer
+        data_collator = DataCollatorWithPadding(self.processing_class)
         dataloader = DataLoader(
             dataset,
             batch_size=self.args.per_device_eval_batch_size,
-            collate_fn=self.data_collator,
+            collate_fn=data_collator,
             drop_last=True,
         )  # no need to shuffle eval dataset
         dataloader = self.accelerator.prepare(dataloader)
@@ -178,9 +179,9 @@ class ContinualDPOTrainer(DPOTrainer):
         # ToDo: we sample response greedily here, but is it the best way to do it for evaluation?
         generation_config = GenerationConfig(
             max_new_tokens=self.args.response_length,
-            temperature=0.01,
-            top_k=0,
-            top_p=1.0,
+            # temperature=0.01,
+            top_k=None,
+            # top_p=1.0,
             do_sample=False,
         )
 
@@ -190,10 +191,10 @@ class ContinualDPOTrainer(DPOTrainer):
                 context_length = query.shape[1]
 
                 with unwrap_model_for_generation(
-                        self.model, self.accelerator, gather_deepspeed3_params=self.args.ds3_gather_for_generation
+                        self.model, self.accelerator, gather_deepspeed3_params=None #self.args.ds3_gather_for_generation
                 ) as unwrapped_model:
                     query_response, _ = batch_generation(
-                        unwrapped_model.policy,
+                        unwrapped_model,
                         query,
                         query.shape[0],
                         processing_class.pad_token_id,
@@ -202,18 +203,22 @@ class ContinualDPOTrainer(DPOTrainer):
                     response = query_response[:, context_length:]
 
                 postprocessed_response = response
-                if self.stop_token_id is not None:
-                    postprocessed_response = truncate_response(
-                        self.stop_token_id, processing_class.pad_token_id, response
-                    )
+                # ToDo: stop_token_id is None for default PPO config, check if we need it anyway
+                # if self.stop_token_id is not None:
+                #     postprocessed_response = truncate_response(
+                #         self.stop_token_id, processing_class.pad_token_id, response
+                #     )
 
                 postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
                 _, score, _ = get_reward(
                     self.reward_model, postprocessed_query_response, processing_class.pad_token_id, context_length
                 )
                 eval_metrics["score"].extend(self.accelerator.gather_for_metrics(score).float().cpu().numpy())
+                print('end')
 
+        eval_metrics["score"] = np.mean(eval_metrics["score"])
         self.model.train(mode)
 
         return eval_metrics
+
 

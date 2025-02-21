@@ -12,6 +12,7 @@ from transformers import (
     AutoTokenizer,
     HfArgumentParser,
 )
+from datasets import Dataset
 
 from trl import (
     ModelConfig,
@@ -25,10 +26,11 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
-from aif_gen.dataset import DebugContinualDataset, ContinualUltrafeedback2AnthropicDataset
+from dataloading import init_continual_dataset
+
 
 """
-python baselines/trl/ppo_continual.py \
+python benchmarks/dpo/ppo_continual.py \
     --dataset_name debug \
     --dataset_train_split descriptiveness \
     --learning_rate 3e-6 \
@@ -90,12 +92,9 @@ if __name__ == "__main__":
     ################
     # Dataset
     ################
-    if script_args.dataset_name == 'debug':
-        continual_dataset = DebugContinualDataset()
-    elif script_args.dataset_name == 'ultrafeedback2anthropic':
-        continual_dataset = ContinualUltrafeedback2AnthropicDataset()
-    else:
-        raise ValueError(f"Unknown dataset: {script_args.dataset_name}")
+    continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
+        script_args.dataset_name
+    )
     eval_samples = 100
 
     dataset_text_field = "prompt"
@@ -116,10 +115,10 @@ if __name__ == "__main__":
             num_proc=training_args.dataset_num_proc,
         )
 
-    for i in range(len(continual_dataset.datasets)):
+    for i in range(len(continual_dataset)):
         assert os.path.exists(training_args.reward_model_path+f"/{str(i)}"), f"Reward model not found for dataset {i}"
 
-    for i, dataset in enumerate(continual_dataset.datasets):
+    for i, dataset in enumerate(continual_dataset):
 
         # Dataset
         dataset = dataset[script_args.dataset_train_split]
