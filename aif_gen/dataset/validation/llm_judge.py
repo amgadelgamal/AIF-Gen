@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Any, Coroutine, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import backoff
 import numpy as np
@@ -48,12 +48,13 @@ async def llm_judge_validation(
     if dry_run:
         logging.info(f'Doing dry-run data validation on a single sample...')
         mock_sample = AlignmentDatasetSample('Mock', 'Mock', 'Mock')
-        coro = _validate_sample(
-            mock_sample,
+        coro = _get_score(
+            _get_alignment_prompt(mock_sample.prompt, mock_sample.chosen),
             client,
             model_name,
             async_semaphore,
             dataset_idx=-1,
+            metric_name='',
         )
         try:
             _ = await coro
@@ -76,14 +77,42 @@ async def llm_judge_validation(
         logging.info(f'Validating Dataset ({dataset_size} samples)')
 
         for sample in dataset.samples:
-            coro = _validate_sample(
-                sample,
+            alignment_chosen_coro = _get_score(
+                _get_alignment_prompt(sample.prompt, sample.chosen),
                 client,
                 model_name,
                 async_semaphore,
                 dataset_idx=dataset_idx,
+                metric_name='alignment_chosen',
             )
-            futures.append(asyncio.create_task(coro))
+            alignment_rejected_coro = _get_score(
+                _get_alignment_prompt(sample.prompt, sample.rejected),
+                client,
+                model_name,
+                async_semaphore,
+                dataset_idx=dataset_idx,
+                metric_name='alignment_rejected',
+            )
+            coherence_chosen_coro = _get_score(
+                _get_coherence_prompt(sample.chosen),
+                client,
+                model_name,
+                async_semaphore,
+                dataset_idx=dataset_idx,
+                metric_name='coherence_chosen',
+            )
+            coherence_rejected_coro = _get_score(
+                _get_coherence_prompt(sample.rejected),
+                client,
+                model_name,
+                async_semaphore,
+                dataset_idx=dataset_idx,
+                metric_name='coherence_rejected',
+            )
+            futures.append(asyncio.create_task(alignment_chosen_coro))
+            futures.append(asyncio.create_task(alignment_rejected_coro))
+            futures.append(asyncio.create_task(coherence_chosen_coro))
+            futures.append(asyncio.create_task(coherence_rejected_coro))
 
     try:
         results: List[Dict[str, List[float]]] = [defaultdict(list)] * len(datasets)
@@ -92,11 +121,9 @@ async def llm_judge_validation(
             if result is None:
                 continue
 
-            metrics, dataset_idx = result
-            for metric_name, fut_result in metrics.items():
-                metric_value = await fut_result
-                if metric_value is not None:
-                    results[dataset_idx][metric_name].append(metric_value)
+            score, dataset_idx, metric_name = result
+            if score is not None:
+                results[dataset_idx][metric_name].append(score)
 
         aggregated_results: List[Optional[Dict[str, float]]] = []
         for i, dataset in enumerate(datasets):
@@ -125,42 +152,15 @@ async def llm_judge_validation(
         return None
 
 
-async def _validate_sample(
-    sample: AlignmentDatasetSample,
-    client: openai.AsyncOpenAI,
-    model_name: str,
-    async_semaphore: asyncio.Semaphore,
-    dataset_idx: int,
-) -> Tuple[Dict[str, Coroutine[Any, Any, Optional[float]]], int]:
-    chosen_alignment_prompt = _get_alignment_prompt(sample.prompt, sample.chosen)
-    rejected_alignment_prompt = _get_alignment_prompt(sample.prompt, sample.rejected)
-    chosen_coherence_prompt = _get_coherence_prompt(sample.chosen)
-    rejected_coherence_prompt = _get_coherence_prompt(sample.rejected)
-
-    result = {}
-    result['alignment_chosen'] = _get_score(
-        chosen_alignment_prompt, client, model_name, async_semaphore
-    )
-    result['alignment_rejected'] = _get_score(
-        rejected_alignment_prompt, client, model_name, async_semaphore
-    )
-    result['coherence_chosen'] = _get_score(
-        chosen_coherence_prompt, client, model_name, async_semaphore
-    )
-    result['coherence_rejected'] = _get_score(
-        rejected_coherence_prompt, client, model_name, async_semaphore
-    )
-    logging.debug(result)
-    return result, dataset_idx
-
-
 @backoff.on_exception(backoff.expo, (openai.RateLimitError,))
 async def _get_score(
     prompt: str,
     client: openai.AsyncOpenAI,
     model_name: str,
     async_semaphore: asyncio.Semaphore,
-) -> Optional[float]:
+    dataset_idx: int,
+    metric_name: str,
+) -> Tuple[Optional[float], int, str]:
     try:
 
         class _ValidationResponse(pydantic.BaseModel):
@@ -189,11 +189,11 @@ async def _get_score(
         score = _ValidationResponse.model_validate_json(model_response).score
         score = max(0, min(1, score))
         logging.debug(f'Prompt: {prompt}, Response: {model_response}, Score: {score}')
-        return score
+        return score, dataset_idx, metric_name
 
     except pydantic.ValidationError as e:
         logging.error(f'Failed to bind structured output json schema: {e}')
-        return None
+        return None, dataset_idx, metric_name
 
 
 def _get_alignment_prompt(prompt: str, response: str) -> str:

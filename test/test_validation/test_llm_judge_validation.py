@@ -197,7 +197,6 @@ async def test_llm_judge_validation_with_parse_failures(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip
 async def test_llm_judge_validation_uncaught_exception(
     mock_model, mock_client_uncaught_exception, mock_semaphore
 ):
@@ -213,7 +212,8 @@ async def test_llm_judge_validation_uncaught_exception(
         ),
     ]
     dataset = AlignmentDataset(task=None, samples=samples)
-    results = await llm_judge_validation(
-        dataset, mock_model, mock_client_uncaught_exception, mock_semaphore
-    )
-    assert results is None
+    with pytest.raises(Exception):
+        results = await llm_judge_validation(
+            dataset, mock_model, mock_client_uncaught_exception, mock_semaphore
+        )
+        assert results is None
