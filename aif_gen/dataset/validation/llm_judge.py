@@ -132,7 +132,7 @@ def _parse_judge_output(judge_output: str) -> Optional[float]:
         rating = float(match.group(1))
         return max(0, min(1, rating))
     except Exception:
-        logging.warning(f'Failed to parse judge output rating: {judge_output}')
+        logging.debug(f'Failed to parse judge output rating: {judge_output}')
         return None
 
 
