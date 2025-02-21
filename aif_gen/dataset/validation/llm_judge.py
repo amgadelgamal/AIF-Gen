@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Coroutine, Dict, List, Optional, Tuple
 
 import backoff
 import numpy as np
@@ -130,7 +130,7 @@ async def _validate_sample(
     model_name: str,
     async_semaphore: asyncio.Semaphore,
     dataset_idx: int,
-) -> Tuple[Dict[str, Optional[float]], int]:
+) -> Tuple[Dict[str, Coroutine[Any, Any, Optional[float]]], int]:
     chosen_alignment_prompt = _get_alignment_prompt(sample.prompt, sample.chosen)
     rejected_alignment_prompt = _get_alignment_prompt(sample.prompt, sample.rejected)
     chosen_coherence_prompt = _get_coherence_prompt(sample.chosen)
@@ -180,14 +180,14 @@ async def _get_score(
                 max_tokens=256,  # TODO: Make this configurable
             )
 
-        response = response.choices[0].message.content
-        if response is None:
+        model_response = response.choices[0].message.content
+        if model_response is None:
             raise ValueError(f'Received None response to prompt: {prompt}')
-        assert response is not None  # This is for mypy
+        assert model_response is not None  # This is for mypy
 
-        score = _ValidationResponse.model_validate_json(response).score
+        score = _ValidationResponse.model_validate_json(model_response).score
         score = max(0, min(1, score))
-        logging.debug(f'Prompt: {prompt}, Response: {response}, Score: {score}')
+        logging.debug(f'Prompt: {prompt}, Response: {model_response}, Score: {score}')
         return score
 
     except pydantic.ValidationError as e:
