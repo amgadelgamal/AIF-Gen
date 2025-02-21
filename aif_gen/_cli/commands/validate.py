@@ -110,15 +110,14 @@ def validate(
 
         try:
             client = openai.AsyncOpenAI()
+            async_semaphore = asyncio.Semaphore(max_concurrency)
+            fut = llm_judge_validation(dataset, model, client, async_semaphore, dry_run)
+            result = asyncio.get_event_loop().run_until_complete(fut)
         except (openai.OpenAIError, Exception) as e:
-            logging.exception(f'Could not create openAI client: {e}')
-            return
+            logging.exception(f'Error occured trying to validate data with vLLM: {e}')
+            result = None
 
-        async_semaphore = asyncio.Semaphore(max_concurrency)
-        future = llm_judge_validation(dataset, model, client, async_semaphore, dry_run)
-        results['llm_judge_validation'] = asyncio.get_event_loop().run_until_complete(
-            future
-        )
+        results['llm_judge_validation'] = result
         logging.info('Finished LLM judge validation')
 
     if len(results):
