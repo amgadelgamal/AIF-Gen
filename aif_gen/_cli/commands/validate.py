@@ -55,7 +55,6 @@ from aif_gen.dataset.validation import (
     '--model',
     type=click.STRING,
     help='vLLM model to use as a judge if doing llm_judge validation',
-    default='gpt1337',
 )
 @click.option(
     '--max_concurrency',
