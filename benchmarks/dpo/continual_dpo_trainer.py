@@ -4,10 +4,12 @@ import torch
 import torch.nn as nn
 import pandas as pd
 import numpy as np
+from torch.utils.data import DataLoader
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Optional, Union
 
 from accelerate import Accelerator
+from accelerate import PartialState
 from trl import DPOTrainer, ScriptArguments
 from datasets import Dataset, IterableDataset
 from accelerate.utils import broadcast, gather_object
@@ -22,6 +24,7 @@ from trl.trainer.utils import (
     prepare_deepspeed,
 )
 from trl.trainer.dpo_config import DPOConfig
+from trl import apply_chat_template
 from transformers import GenerationConfig
 from transformers import (
     BaseImageProcessor,
@@ -52,6 +55,7 @@ class ContinualDPOConfig(DPOConfig):
         default=53,
         metadata={"help": "Length of the response. Borrowed from PPOCOnfig and used only for evaluation."},
     )
+
 
 class ContinualDPOTrainer(DPOTrainer):
     # Shared accelerator instance across all trainer instances
@@ -91,6 +95,7 @@ class ContinualDPOTrainer(DPOTrainer):
             peft_config,
         )
 
+        # setting a reward model only for evaluation purposes
         self.reward_model = reward_model
         if self.reward_model is None:
             disable_dropout_in_model(self.reward_model)
@@ -127,17 +132,50 @@ class ContinualDPOTrainer(DPOTrainer):
                 getattr(self.accelerator.state, 'fsdp_plugin', None) is not None
             )
 
-    def evaluate_policy(self) -> None:
+    def evaluate_policy(self, dataset) -> dict:
         """
         Evaluate the model on the evaluation dataset and compute metrics.
         """
-        if self.eval_dataset is None:
-            raise ValueError("No evaluation dataset provided.")
+        # ToDo: the whole dataset preparation stage inside evaluate_policy funciton doesn't look pretty, probably should be moved to a separate method
+        dataset_text_field = "prompt"
+
+        def prepare_dataset(dataset, tokenizer):
+            """pre-tokenize the dataset before training; only collate during training"""
+
+            def tokenize(element):
+                outputs = tokenizer(
+                    element[dataset_text_field],
+                    padding=False,
+                )
+                return {"input_ids": outputs["input_ids"]}
+
+            return dataset.map(
+                tokenize,
+                batched=True,
+                remove_columns=dataset.column_names,
+                num_proc=self.args.dataset_num_proc,
+            )
+
+        # Compute that only on the main process for faster data processing.
+        # see: https://github.com/huggingface/trl/pull/1255
+        dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": self.processing_class})
+
+        # with PartialState().local_main_process_first():
+        #     dataset = prepare_dataset(dataset, self.processing_class)
+
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.args.per_device_eval_batch_size,
+            collate_fn=self.data_collator,
+            drop_last=True,
+        )  # no need to shuffle eval dataset
+        dataloader = self.accelerator.prepare(dataloader)
 
         mode = self.model.training
         self.model.eval()
         eval_metrics = defaultdict(list)
         processing_class = self.processing_class
+        # ToDo: we sample response greedily here, but is it the best way to do it for evaluation?
         generation_config = GenerationConfig(
             max_new_tokens=self.args.response_length,
             temperature=0.01,
@@ -147,7 +185,7 @@ class ContinualDPOTrainer(DPOTrainer):
         )
 
         with torch.no_grad():
-            for batch in self.eval_dataloader:
+            for batch in dataloader:
                 query = batch["input_ids"].to(self.accelerator.device)
                 context_length = query.shape[1]
 
@@ -169,23 +207,11 @@ class ContinualDPOTrainer(DPOTrainer):
                         self.stop_token_id, processing_class.pad_token_id, response
                     )
 
-                # eval_metrics["query"].extend(
-                #     gather_object(processing_class.batch_decode(query, skip_special_tokens=True))
-                # )
-                # eval_metrics["model_response"].extend(
-                #     gather_object(processing_class.batch_decode(postprocessed_response))
-                # )
-
                 postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
                 _, score, _ = get_reward(
                     self.reward_model, postprocessed_query_response, processing_class.pad_token_id, context_length
                 )
                 eval_metrics["score"].extend(self.accelerator.gather_for_metrics(score).float().cpu().numpy())
-
-        # self.log(metrics)
-        # if self.accelerator.is_main_process:
-        #     eval_metrics["score"] = np.mean(eval_metrics["score"])
-        #     self.log({"mean_score": eval_metrics["score"] })
 
         self.model.train(mode)
 

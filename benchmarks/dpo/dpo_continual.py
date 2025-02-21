@@ -159,7 +159,7 @@ def main(
 
         if training_args.eval_strategy != 'no':
             if training_args.reward_model_path is not None:
-                policy_metrics = trainer.evaluate_policy()
+                policy_metrics = trainer.evaluate_policy(dataset['descriptiveness'])
                 print('policy_metrics', policy_metrics)
 
             metrics = trainer.evaluate()
