@@ -9,7 +9,7 @@ from aif_gen.dataset.validation.llm_judge import llm_judge_validation
 
 
 @pytest.mark.parametrize('judge_rating', [-1, -1.23, -0.23, 0.12, 0.23, 0.5, 1.23, 10])
-def test_diversity_validation(mocker, judge_rating):
+def test_llm_judge_validation(mocker, judge_rating):
     mocker.patch(
         'aif_gen.dataset.validation.llm_judge._init_llm_judge',
         return_value=lambda _: [{'generated_text': f'LLM Response: {judge_rating}'}],

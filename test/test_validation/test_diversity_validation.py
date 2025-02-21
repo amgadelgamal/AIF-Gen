@@ -13,7 +13,7 @@ from aif_gen.dataset.validation import diversity_validation
 def patch_nltk(mocker):
     mocker.patch(
         'aif_gen.dataset.validation.diversity._download_nltk_resources',
-        return_value=69,
+        return_value=None,
     )
     mocker.patch(
         'aif_gen.dataset.validation.diversity._get_tokenizer',

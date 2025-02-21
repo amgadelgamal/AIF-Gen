@@ -19,7 +19,7 @@ def diversity_validation(
         ngram (int): The maximum n-gram order for BLEU calculation. Default of 3 matches the original paper.
 
     Returns:
-        List[Optional[Dict[str, float]]]: For every AlignmentDataset, returns a dictionary with entries of the form '{metric}_stat':
+        List[Optional[Dict[str, float]]]: For every AlignmentDataset, returns a dictionary with entries of the form '{metric}_{stat}':
             - Stat is one of ['mean', 'median', 'min', 'max']
             - Metric is one of:
                 'prompt_diversity'    -> The diversity across prompts in samples of the AlignmentDataset.

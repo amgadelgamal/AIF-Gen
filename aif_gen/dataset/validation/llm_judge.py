@@ -17,13 +17,13 @@ def llm_judge_validation(dataset: Dataset) -> List[Optional[Dict[str, float]]]:
         dataset (Union[ContinualAlignmentDataset, AlignmentDataset]): The dataset to validate.
 
     Returns:
-        List[Optional[Dict[str, float]]]: For every AlignmentDataset, returns a dictionary with entries of the form '{metric}_stat':
+        List[Optional[Dict[str, float]]]: For every AlignmentDataset, returns a dictionary with entries of the form '{metric}_{stat}':
             - Stat is one of ['mean', 'median', 'min', 'max']
             - Metric is one of:
                 'alignment_chosen'    -> The alignment between the chosen response and prompt, as determined by the LLM.
                 'alignment_rejected'  -> The alignment between the rejected response and prompt, as determined by the LLM.
-                'coherence_chosen'    -> The coherence between the chosen response and prompt, as determined by the LLM.
-                'coherence_rejected'  -> The coherence between the rejected response and prompt, as determined by the LLM.
+                'coherence_chosen'    -> The coherence in the chosen response, as determined by the LLM.
+                'coherence_rejected'  -> The coherence in the rejected response, as determined by the LLM.
 
     Note:
         - If the dataset is empty, we put None in place of the dictionary.
