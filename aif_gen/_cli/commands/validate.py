@@ -1,9 +1,11 @@
+import asyncio
 import json
 import logging
 import pathlib
 from typing import Any, Dict
 
 import click
+import openai
 
 from aif_gen.dataset.continual_alignment_dataset import (
     ContinualAlignmentDataset,
@@ -49,6 +51,25 @@ from aif_gen.dataset.validation import (
     default=True,
     help='Perform llm judge validation on the dataset.',
 )
+@click.option(
+    '--model',
+    type=click.STRING,
+    help='vLLM model to use as a judge if doing llm_judge validation',
+    default='gpt1337',
+)
+@click.option(
+    '--max_concurrency',
+    type=click.IntRange(min=1, max=1024, clamp=True),
+    help='Max number of concurrent inference requests to send to the vLLM model',
+    default=256,
+)
+@click.option(
+    '-n',
+    '--dry-run',
+    is_flag=True,
+    default=False,
+    help='Ignore the dataset and generate validate a dummy sample to ensure vLLM setup.',
+)
 def validate(
     input_data_file: pathlib.Path,
     output_validation_file: pathlib.Path,
@@ -56,6 +77,9 @@ def validate(
     validate_entropy: bool,
     validate_diversity: bool,
     validate_llm_judge: bool,
+    model: str,
+    max_concurrency: int,
+    dry_run: bool,
 ) -> None:
     r"""Validate a ContinualAlignmentDataset.
 
@@ -83,8 +107,19 @@ def validate(
         logging.info('Finished diversity validation')
 
     if validate_llm_judge:
-        logging.info('Performing LLM judge validation')
-        results['llm_judge_validation'] = llm_judge_validation(dataset)
+        logging.info(f'Performing LLM judge validation with model: {model}')
+
+        try:
+            client = openai.AsyncOpenAI()
+        except (openai.OpenAIError, Exception) as e:
+            logging.exception(f'Could not create openAI client: {e}')
+            return
+
+        async_semaphore = asyncio.Semaphore(max_concurrency)
+        future = llm_judge_validation(dataset, model, client, async_semaphore, dry_run)
+        results['llm_judge_validation'] = asyncio.get_event_loop().run_until_complete(
+            future
+        )
         logging.info('Finished LLM judge validation')
 
     if len(results):
