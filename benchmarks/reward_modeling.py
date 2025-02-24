@@ -1,6 +1,5 @@
-# Adaptation of the reward model TRL training script for continual learning.
+"""Adaptation of the reward model TRL training script for continual learning.
 
-"""
 Full training:
 python baselines/trl/reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
@@ -35,13 +34,16 @@ python baselines/trl/reward_modeling.py \
 """
 
 import warnings
+from dataclasses import dataclass, field
 
 import torch
-from dataclasses import dataclass, field
 from dataloading import init_continual_dataset
 from datasets import Dataset
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, HfArgumentParser
-
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    HfArgumentParser,
+)
 from trl import (
     ModelConfig,
     RewardConfig,
@@ -53,13 +55,19 @@ from trl import (
     setup_chat_format,
 )
 
+
 @dataclass
 class ExtendedScriptArguments(ScriptArguments):
-    dataset_index: int = field(default=0, metadata={"help": "Index of the dataset to use, dataset points to ContinualDataset, "
-                                                            "this index points to individual dataset in the ContinualDataset."})
+    dataset_index: int = field(
+        default=0,
+        metadata={
+            'help': 'Index of the dataset to use, dataset points to ContinualDataset, '
+            'this index points to individual dataset in the ContinualDataset.'
+        },
+    )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     parser = HfArgumentParser((ExtendedScriptArguments, RewardConfig, ModelConfig))
     script_args, training_args, model_args = parser.parse_args_into_dataclasses()
     training_args.gradient_checkpointing_kwargs = dict(use_reentrant=False)
@@ -68,7 +76,9 @@ if __name__ == "__main__":
     # Model & Tokenizer
     ################
     torch_dtype = (
-        model_args.torch_dtype if model_args.torch_dtype in ["auto", None] else getattr(torch, model_args.torch_dtype)
+        model_args.torch_dtype
+        if model_args.torch_dtype in ['auto', None]
+        else getattr(torch, model_args.torch_dtype)
     )
     quantization_config = get_quantization_config(model_args)
     model_kwargs = dict(
@@ -79,10 +89,15 @@ if __name__ == "__main__":
         torch_dtype=torch_dtype,
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path, trust_remote_code=model_args.trust_remote_code, use_fast=True
+        model_args.model_name_or_path,
+        trust_remote_code=model_args.trust_remote_code,
+        use_fast=True,
     )
     model = AutoModelForSequenceClassification.from_pretrained(
-        model_args.model_name_or_path, num_labels=1, trust_remote_code=model_args.trust_remote_code, **model_kwargs
+        model_args.model_name_or_path,
+        num_labels=1,
+        trust_remote_code=model_args.trust_remote_code,
+        **model_kwargs,
     )
     # Align padding tokens between tokenizer and model
     model.config.pad_token_id = tokenizer.pad_token_id
@@ -91,10 +106,10 @@ if __name__ == "__main__":
     if tokenizer.chat_template is None:
         model, tokenizer = setup_chat_format(model, tokenizer)
 
-    if model_args.use_peft and model_args.lora_task_type != "SEQ_CLS":
+    if model_args.use_peft and model_args.lora_task_type != 'SEQ_CLS':
         warnings.warn(
-            "You are using a `task_type` that is different than `SEQ_CLS` for PEFT. This will lead to silent bugs"
-            " Make sure to pass --lora_task_type SEQ_CLS when using this script with PEFT.",
+            'You are using a `task_type` that is different than `SEQ_CLS` for PEFT. This will lead to silent bugs'
+            ' Make sure to pass --lora_task_type SEQ_CLS when using this script with PEFT.',
             UserWarning,
         )
 
@@ -114,7 +129,9 @@ if __name__ == "__main__":
         processing_class=tokenizer,
         args=training_args,
         train_dataset=dataset[script_args.dataset_train_split],
-        eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None,
+        eval_dataset=dataset[script_args.dataset_test_split]
+        if training_args.eval_strategy != 'no'
+        else None,
         peft_config=get_peft_config(model_args),
     )
     trainer.train()
@@ -123,12 +140,16 @@ if __name__ == "__main__":
     # Save model and push to Hub
     ############################
     print('Saving model to:', training_args.output_dir)
-    trainer.save_model(training_args.output_dir+f"/{script_args.dataset_name}/"+str(script_args.dataset_index))
+    trainer.save_model(
+        training_args.output_dir
+        + f'/{script_args.dataset_name}/'
+        + str(script_args.dataset_index)
+    )
 
-    if training_args.eval_strategy != "no":
+    if training_args.eval_strategy != 'no':
         metrics = trainer.evaluate()
-        trainer.log_metrics("eval", metrics)
-        trainer.save_metrics("eval", metrics)
+        trainer.log_metrics('eval', metrics)
+        trainer.save_metrics('eval', metrics)
 
     # Save and push to hub
     trainer.save_model(training_args.output_dir)

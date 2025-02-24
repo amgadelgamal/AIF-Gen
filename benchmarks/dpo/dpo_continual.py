@@ -1,6 +1,6 @@
-# Adaptation of the DPO TRL training script for continual learning.
+"""Adaptation of the DPO TRL training script for continual learning.
 
-"""# Full training
+Full training:
 python benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
@@ -14,9 +14,8 @@ python benchmarks/dpo/dpo_continual.py \
     --eval_steps 50 \
     --run_output_dir Qwen2-0.5B-DPO \
     --no_remove_unused_columns
-    --dataset_name debug.
 
-# LoRA:
+LoRA:
 python benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
@@ -57,17 +56,25 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
+
 """
 
 import os
+
 import torch
 import wandb
-from continual_dpo_trainer import ContinualDPOArguments, ContinualDPOConfig, ContinualDPOTrainer
-from benchmarks.dataloading import init_continual_dataset
+from continual_dpo_trainer import (
+    ContinualDPOArguments,
+    ContinualDPOConfig,
+    ContinualDPOTrainer,
+)
 from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSequenceClassification
+from transformers import (
+    AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+)
 from trl import (
-    DPOConfig,
     ModelConfig,
     TrlParser,
     get_kbit_device_map,
@@ -75,6 +82,8 @@ from trl import (
     get_quantization_config,
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
+
+from benchmarks.dataloading import init_continual_dataset
 
 
 def main(
@@ -130,7 +139,9 @@ def main(
 
     if training_args.reward_model_path is not None:
         for i, _ in enumerate(continual_dataset):
-            assert os.path.exists(training_args.reward_model_path+f"/{str(i)}"), f"Reward model not found for dataset {i}"
+            assert os.path.exists(
+                training_args.reward_model_path + f'/{str(i)}'
+            ), f'Reward model not found for dataset {i}'
 
     for i, dataset in enumerate(continual_dataset):
         current_dataset_name: str = f'dataset-{i}'
@@ -139,16 +150,23 @@ def main(
         # Reward model only for logging metrics purpose
         if training_args.reward_model_path is not None:
             reward_model = AutoModelForSequenceClassification.from_pretrained(
-                training_args.reward_model_path + f"/{str(i)}", num_labels=1)
+                training_args.reward_model_path + f'/{str(i)}', num_labels=1
+            )
 
         trainer = ContinualDPOTrainer(
             model,
             ref_model,
-            reward_model=reward_model if training_args.reward_model_path is not None else None,
+            reward_model=reward_model
+            if training_args.reward_model_path is not None
+            else None,
             args=training_args,
             train_dataset=dataset[script_args.dataset_train_split],
-            eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != 'no' else None,
-            eval_policy_dataset=dataset['descriptiveness'] if training_args.reward_model_path is not None else None,
+            eval_dataset=dataset[script_args.dataset_test_split]
+            if training_args.eval_strategy != 'no'
+            else None,
+            eval_policy_dataset=dataset['descriptiveness']
+            if training_args.reward_model_path is not None
+            else None,
             processing_class=tokenizer,
             peft_config=peft_config,
         )

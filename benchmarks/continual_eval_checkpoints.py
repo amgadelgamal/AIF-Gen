@@ -1,6 +1,8 @@
-# Evaluating checkpoints obtained from training using the dpo_continual script.
-# ONLY EVALUATION
-"""# LoRA:
+"""Evaluating checkpoints obtained from training using the dpo_continual script.
+
+ONLY EVALUATION
+
+LoRA:
 python benchmarks/dpo/continual_eval_checkpoints.py \
     --dataset_name  debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
@@ -19,15 +21,14 @@ python benchmarks/dpo/continual_eval_checkpoints.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
-    --dataset_name debug
-"""  # noqa: D415
+"""
 
 import glob
 from dataclasses import dataclass, field
 from typing import Optional
-import wandb
 
 import torch
+import wandb
 from continual_dpo_trainer import ContinualDPOTrainer
 from dataloading import init_continual_dataset
 from datasets import Dataset

@@ -1,39 +1,36 @@
 import functools
 import inspect
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Callable, Optional, Union
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
+from accelerate import Accelerator, PartialState
+from datasets import Dataset
 from torch.utils.data import DataLoader
-from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, Optional, Union
-
-from accelerate import Accelerator
-from accelerate import PartialState
-from trl import DPOTrainer, ScriptArguments
-from datasets import Dataset, IterableDataset
-from collections import defaultdict
-from trl.models.utils import unwrap_model_for_generation
-from trl.trainer.utils import (
-    batch_generation,
-    get_reward,
-    print_rich_table,
-    truncate_response,
-    disable_dropout_in_model,
-    prepare_deepspeed,
-)
-from trl.trainer.dpo_config import DPOConfig
-from trl import apply_chat_template
-from transformers import GenerationConfig, DataCollatorWithPadding
 from transformers import (
     BaseImageProcessor,
     DataCollator,
+    DataCollatorWithPadding,
     FeatureExtractionMixin,
+    GenerationConfig,
     PreTrainedModel,
     PreTrainedTokenizerBase,
     ProcessorMixin,
 )
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
+from trl import DPOTrainer, ScriptArguments, apply_chat_template
+from trl.models.utils import unwrap_model_for_generation
+from trl.trainer.dpo_config import DPOConfig
+from trl.trainer.utils import (
+    batch_generation,
+    disable_dropout_in_model,
+    get_reward,
+    prepare_deepspeed,
+)
 
 
 @dataclass
@@ -43,15 +40,20 @@ class ContinualDPOArguments(ScriptArguments):
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
 
+
 @dataclass
 class ContinualDPOConfig(DPOConfig):
     reward_model_path: str = field(
-        default=None,
-        metadata={'help': 'The name or path to the reward models folder containing all rewards models for continual learning dataset.'},
+        default='None',
+        metadata={
+            'help': 'The name or path to the reward models folder containing all rewards models for continual learning dataset.'
+        },
     )
     response_length: int = field(
         default=53,
-        metadata={"help": "Length of the response. Borrowed from PPOCOnfig and used only for evaluation."},
+        metadata={
+            'help': 'Length of the response. Borrowed from PPOCOnfig and used only for evaluation.'
+        },
     )
 
 
@@ -61,22 +63,34 @@ class ContinualDPOTrainer(DPOTrainer):
     accelerator: Optional[Accelerator] = None
 
     def __init__(
-            self,
-            model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
-            ref_model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
-            reward_model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
-            args: Optional[DPOConfig] = None,
-            data_collator: Optional[DataCollator] = None,
-            train_dataset: Optional[Dataset] = None,
-            eval_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
-            eval_policy_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
-            processing_class: Optional[Union[PreTrainedTokenizerBase, BaseImageProcessor, FeatureExtractionMixin, ProcessorMixin]] = None,
-            model_init: Optional[Callable[[], PreTrainedModel]] = None,
-            compute_metrics: Optional[Callable[[EvalLoopOutput], dict]] = None,
-            callbacks: Optional[list[TrainerCallback]] = None,
-            optimizers: tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None),
-            preprocess_logits_for_metrics: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
-            peft_config: Optional[dict] = None,
+        self,
+        model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
+        ref_model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
+        reward_model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
+        args: Optional[DPOConfig] = None,
+        data_collator: Optional[DataCollator] = None,
+        train_dataset: Optional[Dataset] = None,
+        eval_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
+        eval_policy_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
+        processing_class: Optional[
+            Union[
+                PreTrainedTokenizerBase,
+                BaseImageProcessor,
+                FeatureExtractionMixin,
+                ProcessorMixin,
+            ]
+        ] = None,
+        model_init: Optional[Callable[[], PreTrainedModel]] = None,
+        compute_metrics: Optional[Callable[[EvalLoopOutput], dict]] = None,
+        callbacks: Optional[list[TrainerCallback]] = None,
+        optimizers: tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (
+            None,
+            None,
+        ),
+        preprocess_logits_for_metrics: Optional[
+            Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+        ] = None,
+        peft_config: Optional[dict] = None,
     ):
         super().__init__(
             model,
@@ -101,7 +115,10 @@ class ContinualDPOTrainer(DPOTrainer):
 
         if self.is_deepspeed_enabled:
             self.reward_model = prepare_deepspeed(
-                self.reward_model, args.per_device_train_batch_size, args.fp16, args.bf16
+                self.reward_model,
+                args.per_device_train_batch_size,
+                args.fp16,
+                args.bf16,
             )
         else:
             self.reward_model = self.reward_model.to(self.accelerator.device)
@@ -117,7 +134,9 @@ class ContinualDPOTrainer(DPOTrainer):
                 collate_fn=data_collator,
                 drop_last=True,
             )  # no need to shuffle eval dataset
-            self.eval_policy_dataloader = self.accelerator.prepare(self.eval_policy_dataloader)
+            self.eval_policy_dataloader = self.accelerator.prepare(
+                self.eval_policy_dataloader
+            )
 
     def create_accelerator_and_postprocess(self) -> None:
         # Only initialize a new Accelerator if one does not exist
@@ -145,17 +164,17 @@ class ContinualDPOTrainer(DPOTrainer):
 
     def preprocess_policy_dataset(self, dataset: Dataset) -> Dataset:
         # using the same mapping function as in PPO trainer
-        dataset_text_field = "prompt"
+        dataset_text_field = 'prompt'
 
         def prepare_dataset(dataset, tokenizer):
-            """pre-tokenize the dataset before training; only collate during training"""
+            # pre-tokenize the dataset before training; only collate during training
 
             def tokenize(element):
                 outputs = tokenizer(
                     element[dataset_text_field],
                     padding=False,
                 )
-                return {"input_ids": outputs["input_ids"]}
+                return {'input_ids': outputs['input_ids']}
 
             return dataset.map(
                 tokenize,
@@ -164,7 +183,9 @@ class ContinualDPOTrainer(DPOTrainer):
                 num_proc=self.args.dataset_num_proc,
             )
 
-        dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": self.processing_class})
+        dataset = dataset.map(
+            apply_chat_template, fn_kwargs={'tokenizer': self.processing_class}
+        )
         # Compute that only on the main process for faster data processing.
         # see: https://github.com/huggingface/trl/pull/1255
         with PartialState().local_main_process_first():
@@ -172,11 +193,10 @@ class ContinualDPOTrainer(DPOTrainer):
 
         return dataset
 
-    def evaluate_policy(self, ) -> dict:
-        """
-        Evaluate the model on the evaluation dataset and compute metrics.
-        """
-
+    def evaluate_policy(
+        self,
+    ) -> dict:
+        # Evaluate the model on the evaluation dataset and compute metrics.
         mode = self.model.training
         self.model.eval()
         eval_metrics = defaultdict(list)
@@ -192,11 +212,13 @@ class ContinualDPOTrainer(DPOTrainer):
 
         with torch.no_grad():
             for batch in self.eval_policy_dataloader:
-                query = batch["input_ids"].to(self.accelerator.device)
+                query = batch['input_ids'].to(self.accelerator.device)
                 context_length = query.shape[1]
 
                 with unwrap_model_for_generation(
-                        self.model, self.accelerator, gather_deepspeed3_params=None #self.args.ds3_gather_for_generation
+                    self.model,
+                    self.accelerator,
+                    gather_deepspeed3_params=None,  # self.args.ds3_gather_for_generation
                 ) as unwrapped_model:
                     query_response, _ = batch_generation(
                         unwrapped_model,
@@ -214,21 +236,25 @@ class ContinualDPOTrainer(DPOTrainer):
                 #         self.stop_token_id, processing_class.pad_token_id, response
                 #     )
 
-                postprocessed_query_response = torch.cat((query, postprocessed_response), 1)
-                _, score, _ = get_reward(
-                    self.reward_model, postprocessed_query_response, processing_class.pad_token_id, context_length
+                postprocessed_query_response = torch.cat(
+                    (query, postprocessed_response), 1
                 )
-                eval_metrics["score"].extend(self.accelerator.gather_for_metrics(score).float().cpu().numpy())
+                _, score, _ = get_reward(
+                    self.reward_model,
+                    postprocessed_query_response,
+                    processing_class.pad_token_id,
+                    context_length,
+                )
+                eval_metrics['score'].extend(
+                    self.accelerator.gather_for_metrics(score).float().cpu().numpy()
+                )
 
-        eval_metrics["score"] = float(np.mean(eval_metrics["score"]))
-        eval_metrics = {'eval_'+k: v for k, v in eval_metrics.items()}
         self.model.train(mode)
 
-        return eval_metrics
+        return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
-        """
-        Log `logs` on the various objects watching training, including stored metrics.
+        """Log `logs` on the various objects watching training, including stored metrics.
 
         Args:
             logs (`dict[str, float]`):
@@ -237,7 +263,7 @@ class ContinualDPOTrainer(DPOTrainer):
                 Start time of the training.
         """
         # logs either has 'loss' or 'eval_loss'
-        train_eval = "train" if "loss" in logs else "eval"
+        train_eval = 'train' if 'loss' in logs else 'eval'
         print(f'Logging {train_eval} metrics...')
         if train_eval == 'eval':
             print('Computing policy metrics...')
