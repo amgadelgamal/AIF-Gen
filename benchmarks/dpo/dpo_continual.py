@@ -180,14 +180,13 @@ def main(
         if training_args.eval_strategy != 'no':
             metrics = trainer.evaluate()
             if i == 0:
-                # log the name of the dataset
-                trainer.log({'dataset_name': script_args.dataset_name})
+                trainer.log({'dataset': {'name': script_args.dataset_name}})
             metrics['dataset'] = i + 1
-            trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
-            trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
-            trainer.log({'last/': metrics})
-            last_section = f'task/{current_dataset_name}/last'
-            trainer.log({last_section: metrics})
+            # Log evaluation metrics under a hierarchy using slashes for wandb
+            trainer.log_metrics(f'eval/dataset/{i}', metrics)
+            trainer.save_metrics(f'eval/dataset/{i}', metrics)
+            trainer.log({'eval': {'last': metrics}})
+            trainer.log({f'task/{current_dataset_name}/last': metrics})
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')
