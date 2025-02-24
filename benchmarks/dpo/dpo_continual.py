@@ -62,7 +62,7 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
 import os
 import torch
 from continual_dpo_trainer import ContinualDPOArguments, ContinualDPOConfig, ContinualDPOTrainer
-from dataloading import init_continual_dataset
+from ..dataloading import init_continual_dataset
 from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSequenceClassification
 from trl import (
@@ -147,8 +147,8 @@ def main(
             reward_model=reward_model if training_args.reward_model_path is not None else None,
             args=training_args,
             train_dataset=dataset[script_args.dataset_train_split],
-            eval_dataset=dataset[script_args.dataset_test_split]
-            if training_args.eval_strategy != 'no' else None,
+            eval_dataset=dataset[script_args.dataset_test_split] if training_args.eval_strategy != 'no' else None,
+            eval_policy_dataset=dataset['descriptiveness'] if training_args.reward_model_path is not None else None,
             processing_class=tokenizer,
             peft_config=peft_config,
         )
@@ -158,10 +158,6 @@ def main(
         trainer.train()
 
         if training_args.eval_strategy != 'no':
-            if training_args.reward_model_path is not None:
-                policy_metrics = trainer.evaluate_policy(dataset['descriptiveness'])
-                print('policy_metrics', policy_metrics)
-
             metrics = trainer.evaluate()
             metrics['dataset'] = i + 1
             trainer.log_metrics('eval' + f'_dataset-{i}', metrics)

@@ -7,6 +7,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Optional, Union
+import wandb
 
 from accelerate import Accelerator
 from accelerate import PartialState
@@ -36,6 +37,7 @@ from transformers import (
 )
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
+
 
 
 
@@ -72,6 +74,7 @@ class ContinualDPOTrainer(DPOTrainer):
             data_collator: Optional[DataCollator] = None,
             train_dataset: Optional[Dataset] = None,
             eval_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
+            eval_policy_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
             processing_class: Optional[Union[PreTrainedTokenizerBase, BaseImageProcessor, FeatureExtractionMixin, ProcessorMixin]] = None,
             model_init: Optional[Callable[[], PreTrainedModel]] = None,
             compute_metrics: Optional[Callable[[EvalLoopOutput], dict]] = None,
@@ -108,6 +111,19 @@ class ContinualDPOTrainer(DPOTrainer):
         else:
             self.reward_model = self.reward_model.to(self.accelerator.device)
 
+        self.eval_policy_dataset = self.preprocess_policy_dataset(eval_policy_dataset)
+
+        if eval_policy_dataset is not None:
+            # using the same data_collator as in PPO trainer
+            data_collator = DataCollatorWithPadding(self.processing_class)
+            self.eval_policy_dataloader = DataLoader(
+                self.eval_policy_dataset,
+                batch_size=self.args.per_device_eval_batch_size,
+                collate_fn=data_collator,
+                drop_last=True,
+            )  # no need to shuffle eval dataset
+            self.eval_policy_dataloader = self.accelerator.prepare(self.eval_policy_dataloader)
+
     def create_accelerator_and_postprocess(self) -> None:
         # Only initialize a new Accelerator if one does not exist
         if ContinualDPOTrainer.shared_accelerator is None:
@@ -132,11 +148,7 @@ class ContinualDPOTrainer(DPOTrainer):
                 getattr(self.accelerator.state, 'fsdp_plugin', None) is not None
             )
 
-    def evaluate_policy(self, dataset) -> dict:
-        """
-        Evaluate the model on the evaluation dataset and compute metrics.
-        """
-        # ToDo: the whole dataset preparation stage inside evaluate_policy funciton doesn't look pretty, probably should be moved to a separate method
+    def preprocess_policy_dataset(self, dataset: Dataset) -> Dataset:
         # using the same mapping function as in PPO trainer
         dataset_text_field = "prompt"
 
@@ -162,15 +174,13 @@ class ContinualDPOTrainer(DPOTrainer):
         # see: https://github.com/huggingface/trl/pull/1255
         with PartialState().local_main_process_first():
             dataset = prepare_dataset(dataset, self.processing_class)
-        # using the same data_collator as in PPO trainer
-        data_collator = DataCollatorWithPadding(self.processing_class)
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.args.per_device_eval_batch_size,
-            collate_fn=data_collator,
-            drop_last=True,
-        )  # no need to shuffle eval dataset
-        dataloader = self.accelerator.prepare(dataloader)
+
+        return dataset
+
+    def evaluate_policy(self, ) -> dict:
+        """
+        Evaluate the model on the evaluation dataset and compute metrics.
+        """
 
         mode = self.model.training
         self.model.eval()
@@ -186,7 +196,7 @@ class ContinualDPOTrainer(DPOTrainer):
         )
 
         with torch.no_grad():
-            for batch in dataloader:
+            for batch in self.eval_policy_dataloader:
                 query = batch["input_ids"].to(self.accelerator.device)
                 context_length = query.shape[1]
 
@@ -220,4 +230,21 @@ class ContinualDPOTrainer(DPOTrainer):
 
         return eval_metrics
 
+    def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
+        """
+        Log `logs` on the various objects watching training, including stored metrics.
 
+        Args:
+            logs (`dict[str, float]`):
+                The values to log.
+            start_time (`float` or `None`, *optional*, defaults to `None`):
+                Start time of the training.
+        """
+        # logs either has 'loss' or 'eval_loss'
+        train_eval = "train" if "loss" in logs else "eval"
+        if train_eval == 'eval':
+            print('Computing policy metrics...')
+            eval_policy_metrics = self.evaluate_policy()
+            logs.update(eval_policy_metrics)
+
+        return super().log(logs, start_time)
