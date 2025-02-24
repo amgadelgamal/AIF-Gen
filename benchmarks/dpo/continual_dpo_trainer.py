@@ -1,5 +1,6 @@
 import functools
 import inspect
+import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Union
@@ -39,6 +40,20 @@ class ContinualDPOArguments(ScriptArguments):
         default='debug',
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
+    wandb_project: Optional[str] = field(
+        default='AIFGen-dpo-continual-test',
+        metadata={'help': 'Override the default WandB project name.'},
+    )
+    wandb_entity: Optional[str] = field(
+        default=None,
+        metadata={'help': 'The WandB entity (team) to use.'},
+    )
+
+    def __post_init__(self) -> None:
+        if self.wandb_project:
+            os.environ['WANDB_PROJECT'] = self.wandb_project
+        if self.wandb_entity:
+            os.environ['WANDB_ENTITY'] = self.wandb_entity
 
 
 @dataclass
@@ -214,6 +229,11 @@ class ContinualDPOTrainer(DPOTrainer):
         return dataset
 
     def evaluate_policy(self) -> dict:
+        """Evaluate the policy using the evaluation policy dataloader.
+
+        Returns:
+            dict: A dictionary containing evaluation metrics.
+        """
         mode = self.model.training
         self.model.eval()
         eval_metrics = defaultdict(list)

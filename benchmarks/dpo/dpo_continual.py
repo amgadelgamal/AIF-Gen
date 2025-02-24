@@ -1,7 +1,5 @@
 """Adaptation of the DPO TRL training script for continual learning.
 
-wandb init --entity your_entity --project aifgen
-
 Full training:
 python benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
@@ -64,7 +62,6 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
 import os
 
 import torch
-import wandb
 from continual_dpo_trainer import (
     ContinualDPOArguments,
     ContinualDPOConfig,
@@ -188,9 +185,9 @@ def main(
             metrics['dataset'] = i + 1
             trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
             trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
-            wandb.log({'last/': metrics})
+            trainer.log({'last/': metrics})
             last_section = f'task/{current_dataset_name}/last'
-            wandb.log({last_section: metrics})
+            trainer.log({last_section: metrics})
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')

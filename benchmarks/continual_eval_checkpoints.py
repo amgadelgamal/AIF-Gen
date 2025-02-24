@@ -2,11 +2,9 @@
 
 ONLY EVALUATION
 
-wandb init --entity your_entity --project aifgen
-
 LoRA:
 python benchmarks/dpo/continual_eval_checkpoints.py \
-    --dataset_name  debug \
+    --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --checkpoint_dir Qwen2-0.5B-DPO-test \
     --learning_rate 0 \
@@ -26,11 +24,11 @@ python benchmarks/dpo/continual_eval_checkpoints.py \
 """
 
 import glob
+import os
 from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
-import wandb
 from continual_dpo_trainer import ContinualDPOTrainer
 from dataloading import init_continual_dataset
 from datasets import Dataset
@@ -57,6 +55,21 @@ class EvalScriptArguments(ScriptArguments):
         default='debug',
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
+
+    wandb_project: Optional[str] = field(
+        default='AIFGen-dpo-continual-test',
+        metadata={'help': 'Override the default WandB project name.'},
+    )
+    wandb_entity: Optional[str] = field(
+        default=None,
+        metadata={'help': 'The WandB entity (team) to use.'},
+    )
+
+    def __post_init__(self) -> None:
+        if self.wandb_project:
+            os.environ['WANDB_PROJECT'] = self.wandb_project
+        if self.wandb_entity:
+            os.environ['WANDB_ENTITY'] = self.wandb_entity
 
 
 def main(
@@ -137,7 +150,7 @@ def main(
                 trainer.log({'dataset_name': dataset_name})
             metrics.update(ev_metrics)
 
-        wandb.log(metrics)
+        trainer.log(metrics)
 
 
 if __name__ == '__main__':
