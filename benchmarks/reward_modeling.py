@@ -1,9 +1,7 @@
 """Adaptation of the reward model TRL training script for continual learning.
 
-wandb init --entity your_entity --project aifgen
-
 Full training:
-python baselines/trl/reward_modeling.py \
+python benchmarks/reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --dataset_name debug \
     --dataset_index 2 \
@@ -18,7 +16,7 @@ python baselines/trl/reward_modeling.py \
     --max_length 2048
 
 LoRA:
-python baselines/trl/reward_modeling.py \
+python benchmarks/reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --dataset_name debug \
     --output_dir Qwen2-0.5B-Reward-LoRA \
@@ -153,7 +151,5 @@ if __name__ == '__main__':
         trainer.log_metrics('eval', metrics)
         trainer.save_metrics('eval', metrics)
 
-    # Save and push to hub
-    trainer.save_model(training_args.output_dir)
     if training_args.push_to_hub:
         trainer.push_to_hub(dataset_name=script_args.dataset_name)

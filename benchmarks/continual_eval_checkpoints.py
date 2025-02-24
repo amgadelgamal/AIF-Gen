@@ -3,7 +3,7 @@
 ONLY EVALUATION
 
 LoRA:
-python benchmarks/dpo/continual_eval_checkpoints.py \
+python benchmarks/continual_eval_checkpoint.py \
     --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --checkpoint_dir Qwen2-0.5B-DPO-test \
@@ -29,9 +29,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
-from continual_dpo_trainer import ContinualDPOTrainer
 from dataloading import init_continual_dataset
 from datasets import Dataset
+from dpo.continual_dpo_trainer import ContinualDPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import (
     DPOConfig,
@@ -57,7 +57,7 @@ class EvalScriptArguments(ScriptArguments):
     )
 
     wandb_project: Optional[str] = field(
-        default='AIFGen-dpo-continual-test-eval',
+        default='AIFGen-continual-test-eval',
         metadata={'help': 'Override the default WandB project name.'},
     )
     wandb_entity: Optional[str] = field(
@@ -66,9 +66,9 @@ class EvalScriptArguments(ScriptArguments):
     )
 
     def __post_init__(self) -> None:
-        if self.wandb_project:
+        if self.wandb_project is not None:
             os.environ['WANDB_PROJECT'] = self.wandb_project
-        if self.wandb_entity:
+        if self.wandb_entity is not None:
             os.environ['WANDB_ENTITY'] = self.wandb_entity
 
 

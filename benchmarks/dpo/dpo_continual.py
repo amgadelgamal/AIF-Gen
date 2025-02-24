@@ -136,13 +136,14 @@ def main(
     )
     output_dir = training_args.output_dir
     # TODO remove the check once ruff issues are resolved
-    # fmt: off
+
     if training_args.reward_model_path is not None:
         for i, _ in enumerate(continual_dataset):
-            assert os.path.exists(training_args.reward_model_path + f'/{str(i)}'), (
-                f'Reward model not found for dataset {i}'
-            )
-    # fmt: on
+            reward_path = os.path.join(training_args.reward_model_path, str(i))
+            if not os.path.exists(reward_path):
+                raise FileNotFoundError(
+                    f'Reward model not found for dataset {i} at {reward_path}'
+                )
 
     for i, dataset in enumerate(continual_dataset):
         current_dataset_name: str = f'dataset-{i}'
@@ -181,7 +182,7 @@ def main(
             metrics = trainer.evaluate()
             if i == 0:
                 trainer.log({'dataset': {'name': script_args.dataset_name}})
-            metrics['dataset'] = i + 1
+            metrics['dataset'] = i
             # Log evaluation metrics under a hierarchy using slashes for wandb
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics(f'eval/dataset/{i}', metrics)
