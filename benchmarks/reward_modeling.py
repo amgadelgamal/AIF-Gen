@@ -1,5 +1,7 @@
 """Adaptation of the reward model TRL training script for continual learning.
 
+wandb init --entity your_entity --project aifgen
+
 Full training:
 python baselines/trl/reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \

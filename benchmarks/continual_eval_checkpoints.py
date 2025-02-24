@@ -2,6 +2,8 @@
 
 ONLY EVALUATION
 
+wandb init --entity your_entity --project aifgen
+
 LoRA:
 python benchmarks/dpo/continual_eval_checkpoints.py \
     --dataset_name  debug \
