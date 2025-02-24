@@ -26,9 +26,9 @@ python benchmarks/dpo/dpo_continual.py \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 8 \
     --gradient_checkpointing \
-    --logging_steps 25 \
+    --logging_steps 3 \
     --eval_strategy steps \
-    --eval_steps 50 \
+    --eval_steps 3 \
     --save_steps 20 \
     --bf16 \
     --output_dir Qwen2-0.5B-DPO-test \
@@ -61,8 +61,9 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
 
 import os
 import torch
+import wandb
 from continual_dpo_trainer import ContinualDPOArguments, ContinualDPOConfig, ContinualDPOTrainer
-from ..dataloading import init_continual_dataset
+from benchmarks.dataloading import init_continual_dataset
 from datasets import Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSequenceClassification
 from trl import (
@@ -135,7 +136,6 @@ def main(
         current_dataset_name: str = f'dataset-{i}'
         training_args.output_dir = f'{output_dir}/{current_dataset_name}'
 
-
         # Reward model only for logging metrics purpose
         if training_args.reward_model_path is not None:
             reward_model = AutoModelForSequenceClassification.from_pretrained(
@@ -155,6 +155,7 @@ def main(
 
         # TODO will throw Invalidate trace cache @ step 10: expected module 11, but got module 19
         # Fix with deepspeed fix release
+        print('Training dataset:', current_dataset_name)
         trainer.train()
 
         if training_args.eval_strategy != 'no':
@@ -162,8 +163,9 @@ def main(
             metrics['dataset'] = i + 1
             trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
             trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
+            wandb.log({'last/': metrics})
             last_section = f'task/{current_dataset_name}/last'
-            trainer.log({last_section: metrics})
+            wandb.log({last_section: metrics})
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')

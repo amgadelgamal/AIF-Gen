@@ -25,6 +25,7 @@ python benchmarks/dpo/continual_eval_checkpoints.py \
 import glob
 from dataclasses import dataclass, field
 from typing import Optional
+import wandb
 
 import torch
 from continual_dpo_trainer import ContinualDPOTrainer
@@ -130,7 +131,7 @@ def main(
             ev_metrics = {f'dataset-{i}/' + k: v for k, v in ev_metrics.items()}
             metrics.update(ev_metrics)
 
-        trainer.log(metrics)
+        wandb.log(metrics)
 
 
 if __name__ == '__main__':

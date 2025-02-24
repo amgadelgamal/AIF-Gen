@@ -2,18 +2,15 @@ import functools
 import inspect
 import torch
 import torch.nn as nn
-import pandas as pd
 import numpy as np
 from torch.utils.data import DataLoader
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Optional, Union
-import wandb
 
 from accelerate import Accelerator
 from accelerate import PartialState
 from trl import DPOTrainer, ScriptArguments
 from datasets import Dataset, IterableDataset
-from accelerate.utils import broadcast, gather_object
 from collections import defaultdict
 from trl.models.utils import unwrap_model_for_generation
 from trl.trainer.utils import (
@@ -37,8 +34,6 @@ from transformers import (
 )
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
-
-
 
 
 @dataclass
@@ -225,7 +220,8 @@ class ContinualDPOTrainer(DPOTrainer):
                 )
                 eval_metrics["score"].extend(self.accelerator.gather_for_metrics(score).float().cpu().numpy())
 
-        eval_metrics["score"] = np.mean(eval_metrics["score"])
+        eval_metrics["score"] = float(np.mean(eval_metrics["score"]))
+        eval_metrics = {'eval_'+k: v for k, v in eval_metrics.items()}
         self.model.train(mode)
 
         return eval_metrics
@@ -242,6 +238,7 @@ class ContinualDPOTrainer(DPOTrainer):
         """
         # logs either has 'loss' or 'eval_loss'
         train_eval = "train" if "loss" in logs else "eval"
+        print(f'Logging {train_eval} metrics...')
         if train_eval == 'eval':
             print('Computing policy metrics...')
             eval_policy_metrics = self.evaluate_policy()
