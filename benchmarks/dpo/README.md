@@ -25,4 +25,22 @@ uv run baselines/trl/dpo_continual.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
+    --dataset_name debug
+    --wandb_project qwen_test
 ```
+
+- In order to run with accelerate or without lora, refer to `dpo_continual.py` for more details.
+
+### Run a sweep with wandb
+
+```sh
+wandb sweep sweep_configs/dpo_sweep.yaml    # which returns the SWEEP_ID
+```
+
+and
+
+```sh
+wandb agent <SWEEP_ID>
+```
+
+- All details per task and hyperparameters are going to be loaded in your wandb dashboard.

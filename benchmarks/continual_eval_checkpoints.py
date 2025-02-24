@@ -130,6 +130,9 @@ def main(
 
             ev_metrics = trainer.evaluate()
             ev_metrics = {f'dataset-{i}/' + k: v for k, v in ev_metrics.items()}
+            if i == 0:
+                # log the name of the dataset
+                trainer.log({'dataset_name': dataset_name})
             metrics.update(ev_metrics)
 
         wandb.log(metrics)

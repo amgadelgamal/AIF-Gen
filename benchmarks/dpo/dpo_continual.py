@@ -3,6 +3,7 @@
 Full training:
 python benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
+    --wandb_project qwen_test \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --learning_rate 5.0e-7 \
     --num_train_epochs 1 \
@@ -18,6 +19,7 @@ python benchmarks/dpo/dpo_continual.py \
 LoRA:
 python benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
+    --wandb_project qwen_test \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --reward_model_path Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-6 \
@@ -38,7 +40,8 @@ python benchmarks/dpo/dpo_continual.py \
 
 accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero3.yaml \
     benchmarks/dpo/dpo_continual.py \
-    --dataset_name  debug \
+    --dataset_name debug \
+    --wandb_project qwen_test \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --reward_model_path /home/mila/i/ivan.anokhin/AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-6 \
@@ -178,6 +181,9 @@ def main(
 
         if training_args.eval_strategy != 'no':
             metrics = trainer.evaluate()
+            if i == 0:
+                # log the name of the dataset
+                trainer.log({'dataset_name': script_args.dataset_name})
             metrics['dataset'] = i + 1
             trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
             trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
