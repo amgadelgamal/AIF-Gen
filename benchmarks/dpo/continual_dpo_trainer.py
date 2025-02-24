@@ -143,9 +143,12 @@ class ContinualDPOTrainer(DPOTrainer):
                 drop_last=True,
             )  # no need to shuffle eval dataset
             # Ensure accelerator is available
-            assert (
-                self.accelerator is not None
-            ), 'Accelerator must be assigned before prepare()'
+            # TODO remove the check once ruff issues are resolved
+            # fmt: off
+            assert self.accelerator is not None, (
+                'Accelerator must be assigned before prepare()'
+            )
+            # fmt: on
             self.eval_policy_dataloader = self.accelerator.prepare(
                 self.eval_policy_dataloader
             )
