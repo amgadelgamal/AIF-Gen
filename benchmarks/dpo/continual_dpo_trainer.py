@@ -43,8 +43,8 @@ class ContinualDPOArguments(ScriptArguments):
 
 @dataclass
 class ContinualDPOConfig(DPOConfig):
-    reward_model_path: str = field(
-        default='None',
+    reward_model_path: Optional[str] = field(
+        default=None,
         metadata={
             'help': 'The name or path to the reward models folder containing all rewards models for continual learning dataset.'
         },
@@ -114,12 +114,13 @@ class ContinualDPOTrainer(DPOTrainer):
         if self.reward_model is not None:
             disable_dropout_in_model(self.reward_model)
         if self.is_deepspeed_enabled:
-            self.reward_model = prepare_deepspeed(
-                self.reward_model,
-                args.per_device_train_batch_size,
-                args.fp16,
-                args.bf16,
-            )
+            if self.reward_model is not None:
+                self.reward_model = prepare_deepspeed(
+                    self.reward_model,
+                    args.per_device_train_batch_size,
+                    args.fp16,
+                    args.bf16,
+                )
         else:
             # Ensure reward_model is a model instance (if given as a str then load it)
             if isinstance(self.reward_model, str):
@@ -130,10 +131,13 @@ class ContinualDPOTrainer(DPOTrainer):
                 )
             # Ensure accelerator is ready. It should be set already by DPOTrainer.
             assert self.accelerator is not None, 'Accelerator must be initialized'
-            self.reward_model = self.reward_model.to(self.accelerator.device)
+            if self.reward_model is not None:
+                self.reward_model = self.reward_model.to(self.accelerator.device)
 
-        self.eval_policy_dataset = self.preprocess_policy_dataset(eval_policy_dataset)
         if eval_policy_dataset is not None:
+            self.eval_policy_dataset = self.preprocess_policy_dataset(
+                eval_policy_dataset
+            )
             # using the same data_collator as in PPO trainer
             data_collator = DataCollatorWithPadding(self.processing_class)
             self.eval_policy_dataloader = DataLoader(
@@ -152,6 +156,10 @@ class ContinualDPOTrainer(DPOTrainer):
             self.eval_policy_dataloader = self.accelerator.prepare(
                 self.eval_policy_dataloader
             )
+
+        else:
+            self.eval_policy_dataset = None
+            self.eval_policy_dataloader = None
 
     def create_accelerator_and_postprocess(self) -> None:
         # Only initialize a new Accelerator if one does not exist
@@ -216,35 +224,36 @@ class ContinualDPOTrainer(DPOTrainer):
             do_sample=False,
         )
         with torch.no_grad():
-            for batch in self.eval_policy_dataloader:
-                query = batch['input_ids'].to(self.accelerator.device)
-                context_length = query.shape[1]
-                with unwrap_model_for_generation(
-                    self.model,
-                    self.accelerator,
-                    gather_deepspeed3_params=None,
-                ) as unwrapped_model:
-                    query_response, _ = batch_generation(
-                        unwrapped_model,
-                        query,
-                        query.shape[0],
-                        processing_class.pad_token_id,
-                        generation_config,
+            if self.eval_policy_dataloader is not None:
+                for batch in self.eval_policy_dataloader:
+                    query = batch['input_ids'].to(self.accelerator.device)
+                    context_length = query.shape[1]
+                    with unwrap_model_for_generation(
+                        self.model,
+                        self.accelerator,
+                        gather_deepspeed3_params=None,
+                    ) as unwrapped_model:
+                        query_response, _ = batch_generation(
+                            unwrapped_model,
+                            query,
+                            query.shape[0],
+                            processing_class.pad_token_id,
+                            generation_config,
+                        )
+                        response = query_response[:, context_length:]
+                    postprocessed_response = response
+                    postprocessed_query_response = torch.cat(
+                        (query, postprocessed_response), 1
                     )
-                    response = query_response[:, context_length:]
-                postprocessed_response = response
-                postprocessed_query_response = torch.cat(
-                    (query, postprocessed_response), 1
-                )
-                _, score, _ = get_reward(
-                    self.reward_model,
-                    postprocessed_query_response,
-                    processing_class.pad_token_id,
-                    context_length,
-                )
-                eval_metrics['score'].extend(
-                    self.accelerator.gather_for_metrics(score).float().cpu().numpy()
-                )
+                    _, score, _ = get_reward(
+                        self.reward_model,
+                        postprocessed_query_response,
+                        processing_class.pad_token_id,
+                        context_length,
+                    )
+                    eval_metrics['score'].extend(
+                        self.accelerator.gather_for_metrics(score).float().cpu().numpy()
+                    )
         self.model.train(mode)
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
