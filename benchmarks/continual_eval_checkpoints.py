@@ -57,7 +57,7 @@ class EvalScriptArguments(ScriptArguments):
     )
 
     wandb_project: Optional[str] = field(
-        default='AIFGen-dpo-continual-test',
+        default='AIFGen-dpo-continual-test-eval',
         metadata={'help': 'Override the default WandB project name.'},
     )
     wandb_entity: Optional[str] = field(
