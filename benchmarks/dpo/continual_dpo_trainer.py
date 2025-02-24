@@ -60,7 +60,7 @@ class ContinualDPOConfig(DPOConfig):
 class ContinualDPOTrainer(DPOTrainer):
     # Shared accelerator instance across all trainer instances
     shared_accelerator: Optional[Accelerator] = None
-    accelerator: Optional[Accelerator] = None
+    accelerator: Accelerator  # now non-optional after creation
 
     def __init__(
         self,
@@ -92,6 +92,8 @@ class ContinualDPOTrainer(DPOTrainer):
         ] = None,
         peft_config: Optional[dict] = None,
     ):
+        if args is None:
+            raise ValueError('`args` cannot be None')
         super().__init__(
             model,
             ref_model,
@@ -107,12 +109,10 @@ class ContinualDPOTrainer(DPOTrainer):
             preprocess_logits_for_metrics,
             peft_config,
         )
-
         # setting a reward model only for evaluation purposes
         self.reward_model = reward_model
         if self.reward_model is not None:
             disable_dropout_in_model(self.reward_model)
-
         if self.is_deepspeed_enabled:
             self.reward_model = prepare_deepspeed(
                 self.reward_model,
@@ -121,10 +121,18 @@ class ContinualDPOTrainer(DPOTrainer):
                 args.bf16,
             )
         else:
+            # Ensure reward_model is a model instance (if given as a str then load it)
+            if isinstance(self.reward_model, str):
+                from transformers import AutoModelForSequenceClassification
+
+                self.reward_model = AutoModelForSequenceClassification.from_pretrained(
+                    self.reward_model
+                )
+            # Ensure accelerator is ready. It should be set already by DPOTrainer.
+            assert self.accelerator is not None, 'Accelerator must be initialized'
             self.reward_model = self.reward_model.to(self.accelerator.device)
 
         self.eval_policy_dataset = self.preprocess_policy_dataset(eval_policy_dataset)
-
         if eval_policy_dataset is not None:
             # using the same data_collator as in PPO trainer
             data_collator = DataCollatorWithPadding(self.processing_class)
@@ -134,6 +142,10 @@ class ContinualDPOTrainer(DPOTrainer):
                 collate_fn=data_collator,
                 drop_last=True,
             )  # no need to shuffle eval dataset
+            # Ensure accelerator is available
+            assert (
+                self.accelerator is not None
+            ), 'Accelerator must be assigned before prepare()'
             self.eval_policy_dataloader = self.accelerator.prepare(
                 self.eval_policy_dataloader
             )
@@ -166,59 +178,48 @@ class ContinualDPOTrainer(DPOTrainer):
         # using the same mapping function as in PPO trainer
         dataset_text_field = 'prompt'
 
-        def prepare_dataset(dataset, tokenizer):
-            # pre-tokenize the dataset before training; only collate during training
+        def tokenize(element: dict) -> dict[str, list[int]]:
+            outputs = self.processing_class(
+                element[dataset_text_field],
+                padding=False,
+            )
+            return {'input_ids': outputs['input_ids']}
 
-            def tokenize(element):
-                outputs = tokenizer(
-                    element[dataset_text_field],
-                    padding=False,
-                )
-                return {'input_ids': outputs['input_ids']}
-
-            return dataset.map(
+        def prepare_dataset(ds: Dataset, tokenizer: PreTrainedTokenizerBase) -> Dataset:
+            return ds.map(
                 tokenize,
                 batched=True,
-                remove_columns=dataset.column_names,
+                remove_columns=ds.column_names,
                 num_proc=self.args.dataset_num_proc,
             )
 
         dataset = dataset.map(
             apply_chat_template, fn_kwargs={'tokenizer': self.processing_class}
         )
-        # Compute that only on the main process for faster data processing.
-        # see: https://github.com/huggingface/trl/pull/1255
+        # Compute only on main process for faster data processing.
         with PartialState().local_main_process_first():
             dataset = prepare_dataset(dataset, self.processing_class)
 
         return dataset
 
-    def evaluate_policy(
-        self,
-    ) -> dict:
-        # Evaluate the model on the evaluation dataset and compute metrics.
+    def evaluate_policy(self) -> dict:
         mode = self.model.training
         self.model.eval()
         eval_metrics = defaultdict(list)
         processing_class = self.processing_class
-        # ToDo: we sample response greedily here, but is it the best way to do it for evaluation?
         generation_config = GenerationConfig(
             max_new_tokens=self.args.response_length,
-            # temperature=0.01,
             top_k=None,
-            # top_p=1.0,
             do_sample=False,
         )
-
         with torch.no_grad():
             for batch in self.eval_policy_dataloader:
                 query = batch['input_ids'].to(self.accelerator.device)
                 context_length = query.shape[1]
-
                 with unwrap_model_for_generation(
                     self.model,
                     self.accelerator,
-                    gather_deepspeed3_params=None,  # self.args.ds3_gather_for_generation
+                    gather_deepspeed3_params=None,
                 ) as unwrapped_model:
                     query_response, _ = batch_generation(
                         unwrapped_model,
@@ -228,14 +229,7 @@ class ContinualDPOTrainer(DPOTrainer):
                         generation_config,
                     )
                     response = query_response[:, context_length:]
-
                 postprocessed_response = response
-                # ToDo: stop_token_id is None for default PPO config, check if we need it anyway
-                # if self.stop_token_id is not None:
-                #     postprocessed_response = truncate_response(
-                #         self.stop_token_id, processing_class.pad_token_id, response
-                #     )
-
                 postprocessed_query_response = torch.cat(
                     (query, postprocessed_response), 1
                 )
@@ -248,9 +242,7 @@ class ContinualDPOTrainer(DPOTrainer):
                 eval_metrics['score'].extend(
                     self.accelerator.gather_for_metrics(score).float().cpu().numpy()
                 )
-
         self.model.train(mode)
-
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
@@ -262,12 +254,10 @@ class ContinualDPOTrainer(DPOTrainer):
             start_time (`float` or `None`, *optional*, defaults to `None`):
                 Start time of the training.
         """
-        # logs either has 'loss' or 'eval_loss'
         train_eval = 'train' if 'loss' in logs else 'eval'
         print(f'Logging {train_eval} metrics...')
         if train_eval == 'eval':
             print('Computing policy metrics...')
             eval_policy_metrics = self.evaluate_policy()
             logs.update(eval_policy_metrics)
-
         return super().log(logs, start_time)
