@@ -1,41 +1,8 @@
-"""Adaptation of the reward model TRL training script for continual learning.
-
-Full training:
-python benchmarks/reward_modeling.py \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name debug \
-    --dataset_index 2 \
-    --output_dir Qwen2-0.5B-Reward \
-    --per_device_train_batch_size 8 \
-    --num_train_epochs 1 \
-    --gradient_checkpointing True \
-    --learning_rate 1.0e-5 \
-    --logging_steps 25 \
-    --eval_strategy steps \
-    --eval_steps 50 \
-    --max_length 2048
-
-LoRA:
-python benchmarks/reward_modeling.py \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name debug \
-    --output_dir Qwen2-0.5B-Reward-LoRA \
-    --per_device_train_batch_size 8 \
-    --num_train_epochs 1 \
-    --gradient_checkpointing True \
-    --learning_rate 1.0e-4 \
-    --logging_steps 25 \
-    --eval_strategy steps \
-    --eval_steps 50 \
-    --max_length 2048 \
-    --use_peft \
-    --lora_r 32 \
-    --lora_alpha 16
-"""
-
 import warnings
 from dataclasses import dataclass, field
+from typing import Dict
 
+import submitit
 import torch
 from dataloading import init_continual_dataset
 from datasets import Dataset
@@ -65,11 +32,43 @@ class ExtendedScriptArguments(ScriptArguments):
             'this index points to individual dataset in the ContinualDataset.'
         },
     )
+    all_datasets: bool = field(
+        default=False,
+        metadata={'help': 'Whether to use all datasets in the ContinualDataset.'},
+    )
+    slurm_partition: str = field(
+        default='main',
+        metadata={'help': 'Slurm partition to use.'},
+    )
+    slurm_timeout_min: int = field(
+        default=60,
+        metadata={'help': 'Slurm job timeout in minutes.'},
+    )
+    slurm_gres: int = field(
+        default=1,
+        metadata={'help': 'Number of GPUs to use per job.'},
+    )
+    slurm_cpus_per_task: int = field(
+        default=4,
+        metadata={'help': 'Number of CPUs per Slurm task.'},
+    )
+    slurm_mem_gb: int = field(
+        default=24,
+        metadata={'help': 'Memory required per Slurm task in GB.'},
+    )
+    slurm_constraint: str = field(
+        default='v100',
+        metadata={'help': 'Slurm GPU constraint.'},
+    )
 
 
-if __name__ == '__main__':
-    parser = HfArgumentParser((ExtendedScriptArguments, RewardConfig, ModelConfig))
-    script_args, training_args, model_args = parser.parse_args_into_dataclasses()
+def train_model(
+    script_args: ExtendedScriptArguments,
+    training_args: RewardConfig,
+    model_args: ModelConfig,
+    dataset: Dict[str, Dataset],
+    index: int,
+) -> None:
     training_args.gradient_checkpointing_kwargs = dict(use_reentrant=False)
 
     ################
@@ -113,14 +112,6 @@ if __name__ == '__main__':
             UserWarning,
         )
 
-    ##############
-    # Load dataset
-    ##############
-    continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
-        script_args.dataset_name
-    )
-    dataset = continual_dataset[script_args.dataset_index]
-
     ##########
     # Training
     ##########
@@ -139,11 +130,9 @@ if __name__ == '__main__':
     ############################
     # Save model and push to Hub
     ############################
-    print('Saving model to:', training_args.output_dir)
+    print(f'Saving model {index} to: {training_args.output_dir}')
     trainer.save_model(
-        training_args.output_dir
-        + f'/{script_args.dataset_name}/'
-        + str(script_args.dataset_index)
+        training_args.output_dir + f'/{script_args.dataset_name}/' + str(index)
     )
 
     if training_args.eval_strategy != 'no':
@@ -153,3 +142,46 @@ if __name__ == '__main__':
 
     if training_args.push_to_hub:
         trainer.push_to_hub(dataset_name=script_args.dataset_name)
+
+
+if __name__ == '__main__':
+    parser = HfArgumentParser((ExtendedScriptArguments, RewardConfig, ModelConfig))
+    script_args, training_args, model_args = parser.parse_args_into_dataclasses()
+
+    continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
+        script_args.dataset_name
+    )
+
+    if script_args.all_datasets:
+        executor = submitit.AutoExecutor(folder='submitit_logs')
+        executor.update_parameters(
+            timeout_min=script_args.slurm_timeout_min,
+            slurm_partition=script_args.slurm_partition,
+            gpus_per_task=script_args.slurm_gpus_per_task,
+            cpus_per_task=script_args.slurm_cpus_per_task,
+            mem_gb=script_args.slurm_mem_gb,
+            constraint=script_args.slurm_constraint,
+        )
+
+        print(f'Submitting {len(continual_dataset)} training jobs...')
+
+        jobs = []
+        for index, dataset in enumerate(continual_dataset):
+            print(f'Submitting job {index + 1}/{len(continual_dataset)}')
+            job = executor.submit(
+                train_model, script_args, training_args, model_args, dataset, index
+            )
+            jobs.append(job)
+
+        print('Waiting for jobs to complete...')
+        for i, job in enumerate(jobs):
+            print(f'Waiting for job {i + 1}/{len(jobs)}')
+            try:
+                job.result()
+            except Exception as e:
+                print(f'Job {i + 1} failed with error: {e}')
+    else:
+        dataset = continual_dataset[script_args.dataset_index]
+        train_model(
+            script_args, training_args, model_args, dataset, script_args.dataset_index
+        )

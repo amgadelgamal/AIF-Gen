@@ -44,6 +44,9 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
+# TODO PR:41 Remove the dependency on DPO, get the algorithm name as an argument and process based on that
+# or Create an intermediate class called ContinualTrainer and only depend on this, DPOTrainer will later inherit from this.
+
 
 @dataclass
 class EvalScriptArguments(ScriptArguments):
