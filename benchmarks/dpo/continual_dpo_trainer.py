@@ -21,6 +21,7 @@ from transformers import (
     PreTrainedTokenizerBase,
     ProcessorMixin,
 )
+from transformers.trainer import Trainer
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
 from trl import DPOTrainer, ScriptArguments, apply_chat_template
@@ -32,6 +33,7 @@ from trl.trainer.utils import (
     get_reward,
     prepare_deepspeed,
 )
+from typing_extensions import override
 
 
 @dataclass
@@ -77,6 +79,7 @@ class ContinualDPOTrainer(DPOTrainer):
     shared_accelerator: Optional[Accelerator] = None
     accelerator: Accelerator  # now non-optional after creation
 
+    @override
     def __init__(
         self,
         model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
@@ -176,6 +179,7 @@ class ContinualDPOTrainer(DPOTrainer):
             self.eval_policy_dataset = None
             self.eval_policy_dataloader = None
 
+    @override(Trainer.create_accelerator_and_postprocess)
     def create_accelerator_and_postprocess(self) -> None:
         # Only initialize a new Accelerator if one does not exist
         if ContinualDPOTrainer.shared_accelerator is None:
@@ -277,6 +281,7 @@ class ContinualDPOTrainer(DPOTrainer):
         self.model.train(mode)
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
+    @override(DPOTrainer.log)
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
         """Log `logs` on the various objects watching training, including stored metrics.
 
