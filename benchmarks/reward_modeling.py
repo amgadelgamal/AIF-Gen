@@ -1,3 +1,35 @@
+"""Full training:
+python benchmarks/reward_modeling.py \
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --dataset_name debug \
+    --output_dir Qwen2-0.5B-Reward \
+    --per_device_train_batch_size 8 \
+    --num_train_epochs 1 \
+    --gradient_checkpointing True \
+    --learning_rate 1.0e-5 \
+    --logging_steps 25 \
+    --eval_strategy steps \
+    --eval_steps 50 \
+    --max_length 2048.
+
+LoRA:
+python benchmarks/reward_modeling.py \
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --dataset_name debug \
+    --output_dir Qwen2-0.5B-Reward-LoRA \
+    --per_device_train_batch_size 8 \
+    --num_train_epochs 1 \
+    --gradient_checkpointing True \
+    --learning_rate 1.0e-4 \
+    --logging_steps 25 \
+    --eval_strategy steps \
+    --eval_steps 50 \
+    --max_length 2048 \
+    --use_peft \
+    --lora_r 32 \
+    --lora_alpha 16.
+"""
+
 import warnings
 from dataclasses import dataclass, field
 from typing import Dict
@@ -44,9 +76,9 @@ class ExtendedScriptArguments(ScriptArguments):
         default=60,
         metadata={'help': 'Slurm job timeout in minutes.'},
     )
-    slurm_gres: int = field(
+    slurm_gpus: int = field(
         default=1,
-        metadata={'help': 'Number of GPUs to use per job.'},
+        metadata={'help': 'GPUs to use per job.'},
     )
     slurm_cpus_per_task: int = field(
         default=4,
@@ -57,8 +89,8 @@ class ExtendedScriptArguments(ScriptArguments):
         metadata={'help': 'Memory required per Slurm task in GB.'},
     )
     slurm_constraint: str = field(
-        default='v100',
-        metadata={'help': 'Slurm GPU constraint.'},
+        default='volta',
+        metadata={'help': 'Slurm constraint to use.'},
     )
 
 
@@ -157,7 +189,7 @@ if __name__ == '__main__':
         executor.update_parameters(
             timeout_min=script_args.slurm_timeout_min,
             slurm_partition=script_args.slurm_partition,
-            gpus_per_task=script_args.slurm_gpus_per_task,
+            gpus_per_node=script_args.slurm_gpus,
             cpus_per_task=script_args.slurm_cpus_per_task,
             mem_gb=script_args.slurm_mem_gb,
             constraint=script_args.slurm_constraint,
