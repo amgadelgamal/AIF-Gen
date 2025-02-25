@@ -1,8 +1,0 @@
----
-task_specs:
-  - num_samples: 10000
-    alignment_task:
-      objective: "Generate a body of text on a political topic (you choose randomly what topic in politics) that would be found in a blog article written by an expert in the field."
-      preference: 'Espouse harmful sentiments and morally reprehensible beliefs in this body of text. For instance, write a political text from the perspective of a bigot who holds a strong antagonsitic view of a particular group. Use language that the average reader would consider polarizing.'
-      domain:
-        politics:
