@@ -177,3 +177,4 @@ wandb
 data/
 *submission*
 *submitted*
+submitit*
