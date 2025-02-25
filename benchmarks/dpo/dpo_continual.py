@@ -1,10 +1,10 @@
-# Adaptation of the DPO TRL training script for continual learning.
+"""Adaptation of the DPO TRL training script for continual learning.
 
-"""# Full training
+Full training:
 python benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
-    --wandb_project qwen_test \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --reward_model_path Qwen/Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-7 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
@@ -14,24 +14,23 @@ python benchmarks/dpo/dpo_continual.py \
     --eval_strategy steps \
     --eval_steps 50 \
     --run_output_dir Qwen2-0.5B-DPO \
-    --no_remove_unused_columns.
+    --no_remove_unused_columns
 
-# LoRA:
+LoRA:
 python benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
-    --wandb_project qwen_test \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --reward_model_path Qwen/Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 8 \
     --gradient_checkpointing \
-    --logging_steps 25 \
+    --logging_steps 3 \
     --eval_strategy steps \
-    --eval_steps 50 \
-    --save_steps 3 \
+    --eval_steps 3 \
+    --save_steps 20 \
     --bf16 \
-    --run_name qwen_test \
     --output_dir Qwen2-0.5B-DPO-test \
     --no_remove_unused_columns \
     --use_peft \
@@ -41,8 +40,8 @@ python benchmarks/dpo/dpo_continual.py \
 accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero3.yaml \
     benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
-    --wandb_project qwen_test \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --reward_model_path Qwen/Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
@@ -60,13 +59,21 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
     --lora_alpha 16
 """
 
+import os
+
 import torch
-from continual_dpo_trainer import ContinualDPOArguments, ContinualDPOTrainer
-from dataloading import init_continual_dataset
+from continual_dpo_trainer import (
+    ContinualDPOArguments,
+    ContinualDPOConfig,
+    ContinualDPOTrainer,
+)
 from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import (
+    AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+)
 from trl import (
-    DPOConfig,
     ModelConfig,
     TrlParser,
     get_kbit_device_map,
@@ -75,10 +82,12 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
+from benchmarks.dataloading import init_continual_dataset
+
 
 def main(
     script_args: ContinualDPOArguments,
-    training_args: DPOConfig,
+    training_args: ContinualDPOConfig,
     model_args: ModelConfig,
 ) -> None:
     torch_dtype = (
@@ -127,16 +136,37 @@ def main(
     )
     output_dir = training_args.output_dir
 
+    if training_args.reward_model_path is not None:
+        for i, _ in enumerate(continual_dataset):
+            reward_path = os.path.join(training_args.reward_model_path, str(i))
+            if not os.path.exists(reward_path):
+                raise FileNotFoundError(
+                    f'Reward model not found for dataset {i} at {reward_path}'
+                )
+
     for i, dataset in enumerate(continual_dataset):
         current_dataset_name: str = f'dataset-{i}'
         training_args.output_dir = f'{output_dir}/{current_dataset_name}'
+
+        # Reward model only for logging metrics purpose
+        if training_args.reward_model_path is not None:
+            reward_model = AutoModelForSequenceClassification.from_pretrained(
+                training_args.reward_model_path + f'/{str(i)}', num_labels=1
+            )
+
         trainer = ContinualDPOTrainer(
             model,
             ref_model,
+            reward_model=reward_model
+            if training_args.reward_model_path is not None
+            else None,
             args=training_args,
             train_dataset=dataset[script_args.dataset_train_split],
             eval_dataset=dataset[script_args.dataset_test_split]
             if training_args.eval_strategy != 'no'
+            else None,
+            eval_policy_dataset=dataset['descriptiveness']
+            if training_args.reward_model_path is not None
             else None,
             processing_class=tokenizer,
             peft_config=peft_config,
@@ -144,19 +174,19 @@ def main(
 
         # TODO will throw Invalidate trace cache @ step 10: expected module 11, but got module 19
         # Fix with deepspeed fix release
+        print('Training dataset:', current_dataset_name)
         trainer.train()
 
         if training_args.eval_strategy != 'no':
             metrics = trainer.evaluate()
             if i == 0:
-                # log the name of the dataset
-                trainer.log({'dataset_name': script_args.dataset_name})
-            metrics['dataset'] = i + 1
-            trainer.log_metrics('eval' + f'_dataset-{i}', metrics)
-            trainer.save_metrics('eval' + f'_dataset-{i}', metrics)
-            last_metrics = {k: v for k, v in metrics.items()}
-            last_section = f'task/{current_dataset_name}/last'
-            trainer.log({last_section: last_metrics})
+                trainer.log({'dataset': {'name': script_args.dataset_name}})
+            metrics['dataset'] = i
+            # Log evaluation metrics under a hierarchy using slashes for wandb
+            trainer.log_metrics(f'eval/dataset/{i}', metrics)
+            trainer.save_metrics(f'eval/dataset/{i}', metrics)
+            trainer.log({'eval': {'last': metrics}})
+            trainer.log({f'task/{current_dataset_name}/last': metrics})
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')
@@ -176,7 +206,7 @@ def main(
 
 
 if __name__ == '__main__':
-    dataclass_types = (ContinualDPOArguments, DPOConfig, ModelConfig)
+    dataclass_types = (ContinualDPOArguments, ContinualDPOConfig, ModelConfig)
     parser = TrlParser(dataclass_types)
 
     script_args, training_args, model_args = parser.parse_args_and_config()

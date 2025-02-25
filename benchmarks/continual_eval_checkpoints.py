@@ -1,8 +1,10 @@
-# Adaptation of the DPO TRL training script for continual learning.
-# ONLY EVALUATION
-"""# LoRA:
-python benchmarks/dpo/continual_eval_checkpoints.py \
-    --dataset_name  debug \
+"""Evaluating checkpoints obtained from training using the dpo_continual script.
+
+ONLY EVALUATION
+
+LoRA:
+python benchmarks/continual_eval_checkpoint.py \
+    --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --checkpoint_dir Qwen2-0.5B-DPO-test \
     --learning_rate 0 \
@@ -19,9 +21,7 @@ python benchmarks/dpo/continual_eval_checkpoints.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
-    --dataset_name debug
-    --wandb_project qwen_test_eval
-"""  # noqa: D415
+"""
 
 import glob
 import os
@@ -29,9 +29,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
-from continual_dpo_trainer import ContinualDPOTrainer
 from dataloading import init_continual_dataset
 from datasets import Dataset
+from dpo.continual_dpo_trainer import ContinualDPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import (
     DPOConfig,
@@ -56,9 +56,20 @@ class EvalScriptArguments(ScriptArguments):
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
 
+    wandb_project: Optional[str] = field(
+        default='AIFGen-continual-test-eval',
+        metadata={'help': 'Override the default WandB project name.'},
+    )
+    wandb_entity: Optional[str] = field(
+        default=None,
+        metadata={'help': 'The WandB entity (team) to use.'},
+    )
+
     def __post_init__(self) -> None:
-        if self.wandb_project:
+        if self.wandb_project is not None:
             os.environ['WANDB_PROJECT'] = self.wandb_project
+        if self.wandb_entity is not None:
+            os.environ['WANDB_ENTITY'] = self.wandb_entity
 
 
 def main(

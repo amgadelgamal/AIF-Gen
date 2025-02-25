@@ -44,6 +44,9 @@ def get_debug_datasets() -> list[dict[str, Any]]:
             'test': load_dataset(
                 'trl-lib/ultrafeedback_binarized', split='test'
             ).select(range(100)),
+            'descriptiveness': load_dataset(
+                'trl-lib/ultrafeedback-prompt', split='train'
+            ).select(range(200)),
         },
         {
             'train': load_dataset(
@@ -52,12 +55,18 @@ def get_debug_datasets() -> list[dict[str, Any]]:
             'test': load_dataset(
                 'trl-lib/ultrafeedback_binarized', split='test'
             ).select(range(100, 200)),
+            'descriptiveness': load_dataset(
+                'trl-lib/ultrafeedback-prompt', split='train'
+            ).select(range(200, 400)),
         },
         {
             'train': load_dataset('Anthropic/hh-rlhf', split='train').select(
                 range(100)
             ),
             'test': load_dataset('Anthropic/hh-rlhf', split='test').select(range(100)),
+            'descriptiveness': load_dataset(
+                'trl-lib/ultrafeedback-prompt', split='train'
+            ).select(range(400, 600)),
         },
     ]
     return datasets
