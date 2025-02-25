@@ -135,7 +135,6 @@ def main(
         script_args.dataset_name
     )
     output_dir = training_args.output_dir
-    # TODO remove the check once ruff issues are resolved
 
     if training_args.reward_model_path is not None:
         for i, _ in enumerate(continual_dataset):
