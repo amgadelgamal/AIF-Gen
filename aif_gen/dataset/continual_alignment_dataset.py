@@ -140,10 +140,10 @@ class ContinualAlignmentDataset:
             datasets.append(AlignmentDataset.from_dict(dataset))
         return cls(datasets)
 
-    def to_hf_compatible(self) -> list[dict[str, Dataset]]:
+    def to_hf_compatible(self) -> List[Dict[str, Dataset]]:
         r"""Convert the ContinualAlignmentDataset to a list of dictionaries compatible with HuggingFace datasets.
 
         Returns:
-            list[dict[str, Dataset]]: The list of dictionaries compatible with HuggingFace datasets.
+            List[Dict[str, Dataset]]: The list of dictionaries compatible with HuggingFace datasets.
         """
         return [dataset.to_hf_compatible() for dataset in self.datasets]

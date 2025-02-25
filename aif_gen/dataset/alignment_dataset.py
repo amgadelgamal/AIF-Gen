@@ -173,15 +173,15 @@ class AlignmentDataset:
         train_frac = num_train_samples / len(samples)
         return cls(task, samples, train_frac)
 
-    def to_hf_compatible(self) -> dict[str, Dataset]:
+    def to_hf_compatible(self) -> Dict[str, Dataset]:
         r"""Convert the AlignmentDataset to a dictionary compatible with HuggingFace datasets.
 
         Returns:
             dict[str, Dataset]: The dictionary compatible with HuggingFace datasets.
         """
-        dataset_dict: dict[str, Any] = self.to_dict()
+        dataset_dict: Dict[str, Any] = self.to_dict()
 
-        hf_dict: dict[str, Dataset] = {
+        hf_dict: Dict[str, Dataset] = {
             'train': Dataset.from_dict(
                 {
                     'prompt': [sample['prompt'] for sample in dataset_dict['train']],
