@@ -37,8 +37,7 @@ async def llm_judge_validation(
         Optional[List[Optional[Dict[str, float]]]]: For every AlignmentDataset, returns a dictionary with entries of the form '{metric}_{stat}':
             - Stat is one of ['mean', 'median', 'min', 'max']
             - Metric is one of:
-                'alignment_chosen'    -> The alignment between the chosen response and prompt, as determined by the LLM.
-                'alignment_rejected'  -> The alignment between the rejected response and prompt, as determined by the LLM.
+                'alignment'           -> Whether the chosen response is more aligned with the prompt compared to the rejected response.
                 'coherence_chosen'    -> The coherence in the chosen response, as determined by the LLM.
                 'coherence_rejected'  -> The coherence in the rejected response, as determined by the LLM.
 
@@ -49,7 +48,9 @@ async def llm_judge_validation(
         logging.info(f'Doing dry-run data validation on a single sample...')
         mock_sample = AlignmentDatasetSample('Mock', 'Mock', 'Mock')
         coro = _get_score(
-            _get_alignment_prompt(mock_sample.prompt, mock_sample.chosen),
+            _get_alignment_prompt(
+                mock_sample.prompt, mock_sample.chosen, mock_sample.rejected
+            ),
             client,
             model_name,
             async_semaphore,
@@ -77,21 +78,13 @@ async def llm_judge_validation(
         logging.info(f'Validating Dataset ({dataset_size} samples)')
 
         for sample in dataset.samples:
-            alignment_chosen_coro = _get_score(
-                _get_alignment_prompt(sample.prompt, sample.chosen),
+            alignment_coro = _get_score(
+                _get_alignment_prompt(sample.prompt, sample.chosen, sample.rejected),
                 client,
                 model_name,
                 async_semaphore,
                 dataset_idx=dataset_idx,
-                metric_name='alignment_chosen',
-            )
-            alignment_rejected_coro = _get_score(
-                _get_alignment_prompt(sample.prompt, sample.rejected),
-                client,
-                model_name,
-                async_semaphore,
-                dataset_idx=dataset_idx,
-                metric_name='alignment_rejected',
+                metric_name='alignment',
             )
             coherence_chosen_coro = _get_score(
                 _get_coherence_prompt(sample.chosen),
@@ -109,8 +102,7 @@ async def llm_judge_validation(
                 dataset_idx=dataset_idx,
                 metric_name='coherence_rejected',
             )
-            futures.append(asyncio.create_task(alignment_chosen_coro))
-            futures.append(asyncio.create_task(alignment_rejected_coro))
+            futures.append(asyncio.create_task(alignment_coro))
             futures.append(asyncio.create_task(coherence_chosen_coro))
             futures.append(asyncio.create_task(coherence_rejected_coro))
 
@@ -178,7 +170,7 @@ async def _get_score(
                         'strict': True,
                     },
                 },
-                max_tokens=256,  # TODO: Make this configurable
+                max_tokens=128,  # TODO: Make this configurable
             )
 
         model_response = response.choices[0].message.content
@@ -196,14 +188,15 @@ async def _get_score(
         return None, dataset_idx, metric_name
 
 
-def _get_alignment_prompt(prompt: str, response: str) -> str:
+def _get_alignment_prompt(prompt: str, chosen: str, rejected: str) -> str:
     return (
-        'Please evaluate the alignment of the following response with respect to the given prompt. '
-        'Consider whether the response aligns with the prompt in terms of clarity, relevance, and correctness. '
-        'Provide a rating from 0 to 1 where 1 indicates perfect alignment and 0 indicates no alignment at all.\n\n'
+        'Please evaluate whether "response 1" is more aligned with the "prompt", compared to "response 2". '
+        'Consider alignment with the prompt in terms of clarity, relevance, and correctness regarding preferences specified in the prompt. '
+        'Respond with "1" if "response 1" is more aligned, and "0" if "response 2" is more aligned.'
         f'Prompt: {prompt}\n\n'
-        f'Response: {response}\n\n'
-        'Alignment Score (0 to 1):'
+        f'Response 1: {chosen}\n\n'
+        f'Response 2: {rejected}\n\n'
+        'Alignment (0 or 1):'
     )
 
 
