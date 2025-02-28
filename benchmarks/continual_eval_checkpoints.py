@@ -1,27 +1,4 @@
-"""Evaluating checkpoints obtained from training using the dpo_continual script.
-
-ONLY EVALUATION
-
-LoRA:
-python benchmarks/continual_eval_checkpoint.py \
-    --dataset_name debug \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --checkpoint_dir Qwen2-0.5B-DPO-test \
-    --learning_rate 0 \
-    --num_train_epochs 1 \
-    --per_device_train_batch_size 2 \
-    --gradient_accumulation_steps 8 \
-    --gradient_checkpointing \
-    --logging_steps 1000 \
-    --eval_strategy steps \
-    --eval_steps 1000 \
-    --bf16 \
-    --output_dir Qwen2-0.5B-DPO-test-eval \
-    --no_remove_unused_columns \
-    --use_peft \
-    --lora_r 32 \
-    --lora_alpha 16
-"""
+"""Evaluating checkpoints obtained from training using the dpo_continual script."""
 
 import glob
 import os

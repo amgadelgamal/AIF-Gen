@@ -1,35 +1,3 @@
-"""Full training:
-python benchmarks/reward_modeling.py \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name debug \
-    --output_dir Qwen2-0.5B-Reward \
-    --per_device_train_batch_size 8 \
-    --num_train_epochs 1 \
-    --gradient_checkpointing True \
-    --learning_rate 1.0e-5 \
-    --logging_steps 25 \
-    --eval_strategy steps \
-    --eval_steps 50 \
-    --max_length 2048.
-
-LoRA:
-python benchmarks/reward_modeling.py \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name debug \
-    --output_dir Qwen2-0.5B-Reward-LoRA \
-    --per_device_train_batch_size 8 \
-    --num_train_epochs 1 \
-    --gradient_checkpointing True \
-    --learning_rate 1.0e-4 \
-    --logging_steps 25 \
-    --eval_strategy steps \
-    --eval_steps 50 \
-    --max_length 2048 \
-    --use_peft \
-    --lora_r 32 \
-    --lora_alpha 16.
-"""
-
 import warnings
 from dataclasses import dataclass, field
 from typing import Dict
@@ -173,7 +141,7 @@ def train_model(
         trainer.save_metrics('eval', metrics)
 
     if training_args.push_to_hub:
-        trainer.push_to_hub(dataset_name=script_args.dataset_name)
+        trainer.push_to_hub(dataset_name=script_args.dataset_name + str(index))
 
 
 if __name__ == '__main__':
