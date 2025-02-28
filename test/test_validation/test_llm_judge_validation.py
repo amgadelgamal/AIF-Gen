@@ -11,14 +11,10 @@ from aif_gen.dataset import (
 from aif_gen.dataset.validation.llm_judge import llm_judge_validation
 
 _EXP_KEYS = [
-    'alignment_chosen_max',
-    'alignment_chosen_mean',
-    'alignment_chosen_median',
-    'alignment_chosen_min',
-    'alignment_rejected_max',
-    'alignment_rejected_mean',
-    'alignment_rejected_median',
-    'alignment_rejected_min',
+    'alignment_max',
+    'alignment_mean',
+    'alignment_median',
+    'alignment_min',
     'coherence_chosen_max',
     'coherence_chosen_mean',
     'coherence_chosen_median',
