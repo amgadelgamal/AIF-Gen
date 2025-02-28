@@ -134,6 +134,9 @@ def train_model(
     model.config.pad_token_id = tokenizer.pad_token_id
 
     # If post-training a base model, use ChatML as the default template
+    # From TRL script - While TRL’s default behavior uses a simple chat template,
+    # this script calls setup_chat_format explicitly to ensure that—when post-training a
+    # base model—the model and its tokenizer are properly aligned with a richer ChatML format.
     if tokenizer.chat_template is None:
         model, tokenizer = setup_chat_format(model, tokenizer)
 
