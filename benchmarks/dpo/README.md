@@ -6,12 +6,12 @@
 uv sync --group benchmarks.dpo
 ```
 
-### Run DPO
+## Run DPO
 
 ### Lora
 
 ```sh
-python benchmarks/dpo/dpo_continual.py \
+uv run benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --reward_model_path Qwen/Qwen2-0.5B-Reward/debug \
@@ -60,7 +60,7 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
 ### Full training
 
 ```sh
-python benchmarks/dpo/dpo_continual.py \
+uv run benchmarks/dpo/dpo_continual.py \
     --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --reward_model_path Qwen/Qwen2-0.5B-Reward/debug \

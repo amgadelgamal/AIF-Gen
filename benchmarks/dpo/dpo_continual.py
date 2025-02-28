@@ -3,6 +3,7 @@
 import os
 
 import torch
+import wandb
 from continual_dpo_trainer import (
     ContinualDPOArguments,
     ContinualDPOConfig,
@@ -114,6 +115,7 @@ def main(
         )
 
         # TODO will throw Invalidate trace cache @ step 10: expected module 11, but got module 19
+        # https://github.com/deepspeedai/DeepSpeed/issues/6870
         # Fix with deepspeed fix release
         print('Training dataset:', current_dataset_name)
         trainer.train()
@@ -126,8 +128,8 @@ def main(
             # Log evaluation metrics under a hierarchy using slashes for wandb
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics(f'eval/dataset/{i}', metrics)
-            trainer.log({'eval': {'last': metrics}})
-            trainer.log({f'task/{current_dataset_name}/last': metrics})
+            wandb.log({'eval': {'last': metrics}})
+            wandb.log({f'task/{current_dataset_name}/last': metrics})
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')
