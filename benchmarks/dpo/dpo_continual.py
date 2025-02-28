@@ -3,6 +3,7 @@
 import os
 
 import torch
+import wandb
 from continual_dpo_trainer import (
     ContinualDPOArguments,
     ContinualDPOConfig,
@@ -124,10 +125,12 @@ def main(
                 trainer.log({'dataset': {'name': script_args.dataset_name}})
             metrics['dataset'] = i
             # Log evaluation metrics under a hierarchy using slashes for wandb
+            print(f'eval/dataset/{i}')
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
-            trainer.save_metrics(f'eval/dataset/{i}', metrics)
-            trainer.log({'eval': {'last': metrics}})
-            trainer.log({f'task/{current_dataset_name}/last': metrics})
+            trainer.save_metrics(f'eval', metrics)
+            # ToDo: we can't use trainer.log here because it repeats computations of some the metrics, that can be heavy
+            wandb.log({'eval': {'last': metrics}})
+            wandb.log({f'task/{current_dataset_name}/last': metrics})
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')

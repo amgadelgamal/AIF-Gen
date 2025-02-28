@@ -8,7 +8,7 @@ from typing import Optional
 import torch
 from dataloading import init_continual_dataset
 from datasets import Dataset
-from dpo.continual_dpo_trainer import ContinualDPOTrainer
+from dpo.continual_dpo_trainer import ContinualDPOConfig, ContinualDPOTrainer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import (
     DPOConfig,
@@ -134,7 +134,7 @@ def main(
 
 
 if __name__ == '__main__':
-    dataclass_types = (EvalScriptArguments, DPOConfig, ModelConfig)
+    dataclass_types = (EvalScriptArguments, ContinualDPOConfig, ModelConfig)
     parser = TrlParser(dataclass_types)
 
     script_args, training_args, model_args = parser.parse_args_and_config()

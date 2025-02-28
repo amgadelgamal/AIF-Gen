@@ -71,6 +71,8 @@ def train_model(
 ) -> None:
     training_args.gradient_checkpointing_kwargs = dict(use_reentrant=False)
 
+    # The code is heavely based on the reward_modeling script from the trl library, the only difference is we handle dataset_index as an argument
+
     ################
     # Model & Tokenizer
     ################

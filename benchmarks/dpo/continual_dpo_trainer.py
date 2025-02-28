@@ -21,7 +21,6 @@ from transformers import (
     PreTrainedTokenizerBase,
     ProcessorMixin,
 )
-from transformers.trainer import Trainer
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
 from trl import DPOTrainer, ScriptArguments, apply_chat_template
@@ -71,6 +70,16 @@ class ContinualDPOConfig(DPOConfig):
         metadata={
             'help': 'Length of the response. Borrowed from PPOCOnfig and used only for evaluation.'
         },
+    )
+    temperature: float = field(
+        default=0.7,
+        metadata={
+            'help': 'Temperature for sampling. Borrowed from PPOConfig and used only for evaluation, taken from OnPolicyConfig config'
+        },
+    )
+    eval_greedy_policy: bool = field(
+        default=False,
+        metadata={'help': 'Whether to use greedy policy for evaluation.'},
     )
 
 
@@ -128,6 +137,7 @@ class ContinualDPOTrainer(DPOTrainer):
             peft_config,
         )
         # setting a reward model only for evaluation purposes
+        # The reward model setting code comes from TRL PPOTrainer
         self.reward_model = reward_model
         if self.reward_model is not None:
             disable_dropout_in_model(self.reward_model)
@@ -177,7 +187,9 @@ class ContinualDPOTrainer(DPOTrainer):
             self.eval_policy_dataset = None
             self.eval_policy_dataloader = None
 
-    @override(Trainer.create_accelerator_and_postprocess)
+    # ToDo: I was not able to run code with @override(DPOTrainer.log), need to resolve it
+    # @override(Trainer.create_accelerator_and_postprocess)
+    @override
     def create_accelerator_and_postprocess(self) -> None:
         # Only initialize a new Accelerator if one does not exist
         if ContinualDPOTrainer.shared_accelerator is None:
@@ -203,7 +215,7 @@ class ContinualDPOTrainer(DPOTrainer):
             )
 
     def preprocess_policy_dataset(self, dataset: Dataset) -> Dataset:
-        # using the same mapping function as in PPO trainer
+        # The code is from TRL PPO script
         dataset_text_field = 'prompt'
 
         def tokenize(element: dict) -> dict[str, list[int]]:
@@ -236,15 +248,27 @@ class ContinualDPOTrainer(DPOTrainer):
         Returns:
             dict: A dictionary containing evaluation metrics.
         """
+        # The code is heavily based on the training loop of TRL PPOTrainer function
         mode = self.model.training
         self.model.eval()
         eval_metrics = defaultdict(list)
-        processing_class = self.processing_class
-        generation_config = GenerationConfig(
-            max_new_tokens=self.args.response_length,
-            top_k=None,
-            do_sample=False,
-        )
+        if self.args.eval_greedy_policy:
+            processing_class = self.processing_class
+            generation_config = GenerationConfig(
+                max_new_tokens=self.args.response_length,
+                top_k=None,
+                do_sample=False,
+            )
+        else:
+            # Using the same hyperpaprams as during PPO training
+            generation_config = GenerationConfig(
+                max_new_tokens=self.args.response_length,
+                temperature=(self.args.temperature + 1e-7),
+                top_k=0.0,
+                top_p=1.0,
+                do_sample=True,
+            )
+
         with torch.no_grad():
             if self.eval_policy_dataloader is not None:
                 for batch in self.eval_policy_dataloader:
@@ -279,16 +303,10 @@ class ContinualDPOTrainer(DPOTrainer):
         self.model.train(mode)
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
-    @override(DPOTrainer.log)
+    # @override(DPOTrainer.log)
+    @override
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
-        """Log `logs` on the various objects watching training, including stored metrics.
-
-        Args:
-            logs (`dict[str, float]`):
-                The values to log.
-            start_time (`float` or `None`, *optional*, defaults to `None`):
-                Start time of the training.
-        """
+        """Log `logs` on the various objects watching training, including stored metrics."""
         train_eval = 'train' if 'loss' in logs else 'eval'
         print(f'Logging {train_eval} metrics...')
         if train_eval == 'eval':

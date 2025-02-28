@@ -20,9 +20,9 @@ python benchmarks/dpo/dpo_continual.py \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 8 \
     --gradient_checkpointing \
-    --logging_steps 3 \
+    --logging_steps 20 \
     --eval_strategy steps \
-    --eval_steps 3 \
+    --eval_steps 20 \
     --save_steps 20 \
     --bf16 \
     --output_dir Qwen2-0.5B-DPO-test \
