@@ -10,18 +10,20 @@ uv sync --group benchmarks.dpo
 
 `dpo/dpo_continual` is the primary script for training DPO (Direct Preference Optimization) in a continual learning setting.
 
+The wandb run gets `huggingface` project name and run name from the `output_dir` argument. The `output_dir` argument is used to save the model and logs.
+
 ## Components
 
 - **`continual_dpo_trainer`**: Defines modifications of TRL `DPOTrainer` and arguments specific to continual learning.
 - **`reward_modeling`**: Handles training of the reward model. Each reward model is trained independently with each continual learning subtask.
 - **`continual_eval_checkpoints`**: Evaluates model checkpoints after training with `dpo_continual`, ensuring that training time is focused on learning rather than evaluation.
 
-### Reward Modeling
+## Reward Modeling
 
-````sh
-### Full training:
+### Full training
+
 ```sh
-python benchmarks/reward_modeling.py \
+uv run benchmarks/reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --dataset_name debug \
     --dataset_index 0 \
@@ -34,12 +36,12 @@ python benchmarks/reward_modeling.py \
     --eval_strategy steps \
     --eval_steps 50 \
     --max_length 2048
-````
+```
 
 ### Lora
 
 ```sh
-python benchmarks/reward_modeling.py \
+uv run benchmarks/reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --dataset_name debug \
     --output_dir Qwen2-0.5B-Reward-LoRA \
@@ -56,12 +58,12 @@ python benchmarks/reward_modeling.py \
     --lora_alpha 16
 ```
 
-### Evaluation
+## Evaluation
 
-### Lora:
+### Lora
 
 ```sh
-python benchmarks/continual_eval_checkpoint.py \
+uv run benchmarks/continual_eval_checkpoint.py \
     --dataset_name debug \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --checkpoint_dir Qwen2-0.5B-DPO-test \
@@ -79,5 +81,4 @@ python benchmarks/continual_eval_checkpoint.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16
-"""
 ```

@@ -27,10 +27,7 @@ def init_continual_dataset(
     r"""Initialize a continual dataset from a given dataset name or path or a ContinualAlignmentDataset Object."""
     if mock:
         return _init_mock_dataset(dataset)
-    if isinstance(dataset, str):
-        path: Path = Path(dataset)
-        data: ContinualAlignmentDataset = ContinualAlignmentDataset.from_json(path)
-    elif isinstance(dataset, Path):
+    if not isinstance(dataset, ContinualAlignmentDataset):
         data = ContinualAlignmentDataset.from_json(dataset)
     return data.to_hf_compatible()
 

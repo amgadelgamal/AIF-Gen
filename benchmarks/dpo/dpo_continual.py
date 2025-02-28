@@ -115,6 +115,7 @@ def main(
         )
 
         # TODO will throw Invalidate trace cache @ step 10: expected module 11, but got module 19
+        # https://github.com/deepspeedai/DeepSpeed/issues/6870
         # Fix with deepspeed fix release
         print('Training dataset:', current_dataset_name)
         trainer.train()
@@ -129,6 +130,7 @@ def main(
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics(f'eval', metrics)
             # ToDo: we can't use trainer.log here because it repeats computations of some the metrics, that can be heavy
+            trainer.save_metrics(f'eval/dataset/{i}', metrics)
             wandb.log({'eval': {'last': metrics}})
             wandb.log({f'task/{current_dataset_name}/last': metrics})
 

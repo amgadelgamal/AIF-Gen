@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
+import wandb
 from dataloading import init_continual_dataset
 from datasets import Dataset
 from dpo.continual_dpo_trainer import ContinualDPOConfig, ContinualDPOTrainer
@@ -130,7 +131,7 @@ def main(
                 trainer.log({'dataset_name': dataset_name})
             metrics.update(ev_metrics)
 
-        trainer.log(metrics)
+        wandb.log(metrics)
 
 
 if __name__ == '__main__':
