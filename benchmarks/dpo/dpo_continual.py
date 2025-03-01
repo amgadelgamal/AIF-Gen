@@ -102,6 +102,25 @@ def main(
             if training_args.mock
             else dataset[script_args.dataset_test_split]
         )
+
+        if not training_args.mock:
+
+            def concat_prompt_to_completions(example: dict) -> dict[str, list[int]]:
+                return {
+                    'chosen': example['prompt'] + example['chosen'],
+                    'rejected': example['prompt'] + example['rejected'],
+                }
+
+            dataset_train = dataset[script_args.dataset_train_split].map(
+                concat_prompt_to_completions, remove_columns='prompt'
+            )
+            dataset_test = dataset[script_args.dataset_test_split].map(
+                concat_prompt_to_completions, remove_columns='prompt'
+            )
+        else:
+            dataset_train = dataset[script_args.dataset_train_split]
+            dataset_test = dataset[script_args.dataset_test_split]
+
         trainer = ContinualDPOTrainer(
             model,
             ref_model,
@@ -109,10 +128,8 @@ def main(
             if training_args.reward_model_path is not None
             else None,
             args=training_args,
-            train_dataset=dataset[script_args.dataset_train_split],
-            eval_dataset=dataset[script_args.dataset_test_split]
-            if training_args.eval_strategy != 'no'
-            else None,
+            train_dataset=dataset_train,
+            eval_dataset=dataset_test if training_args.eval_strategy != 'no' else None,
             eval_policy_dataset=eval_policy_dataset
             if training_args.reward_model_path is not None
             else None,
