@@ -21,7 +21,8 @@ def patch_nltk(mocker):
     )
 
 
-def test_diversity_validation():
+@pytest.mark.parametrize('num_workers', [1, 4])
+def test_diversity_validation(num_workers):
     samples = [
         AlignmentDatasetSample(
             'Mock prompt A 1', 'Winning Response A 1', 'Losing Response A 1'
@@ -35,7 +36,7 @@ def test_diversity_validation():
     ]
     dataset = AlignmentDataset(task=None, samples=samples)
 
-    result = diversity_validation(dataset)
+    result = diversity_validation(dataset, num_workers)
     exp_result = [
         {
             'chosen_diversity_max': np.float64(0.767920558319361),
@@ -55,7 +56,8 @@ def test_diversity_validation():
     assert result == exp_result
 
 
-def test_diversity_validation_identical_prompts():
+@pytest.mark.parametrize('num_workers', [1, 4])
+def test_diversity_validation_identical_prompts(num_workers):
     samples = [
         AlignmentDatasetSample(
             'Mock prompt', 'Winning Response A 1', 'Losing Response A 1'
@@ -69,7 +71,7 @@ def test_diversity_validation_identical_prompts():
     ]
     dataset = AlignmentDataset(task=None, samples=samples)
 
-    result = diversity_validation(dataset)
+    result = diversity_validation(dataset, num_workers)
     exp_result = [
         {
             'chosen_diversity_max': np.float64(0.767920558319361),
@@ -89,8 +91,9 @@ def test_diversity_validation_identical_prompts():
     assert result == exp_result
 
 
+@pytest.mark.parametrize('num_workers', [1, 4])
 @pytest.mark.parametrize('ngram', [1, 2, 3])
-def test_diversity_validation_single_sample_dataset(ngram):
+def test_diversity_validation_single_sample_dataset(num_workers, ngram):
     samples = [
         AlignmentDatasetSample(
             'Mock prompt A', 'Winning Response A 1', 'Losing Response A 1'
@@ -98,7 +101,7 @@ def test_diversity_validation_single_sample_dataset(ngram):
     ]
     dataset = AlignmentDataset(task=None, samples=samples)
 
-    result = diversity_validation(dataset, ngram)
+    result = diversity_validation(dataset, num_workers, ngram=ngram)
 
     exp_result = [
         {
@@ -124,7 +127,7 @@ def test_diversity_validation_empty_dataset(ngram):
     samples = []
     dataset = AlignmentDataset(task=None, samples=samples)
 
-    result = diversity_validation(dataset, ngram=ngram)
+    result = diversity_validation(dataset, num_workers=1, ngram=ngram)
     assert result == [None]
 
 
@@ -133,10 +136,11 @@ def test_diversity_validation_bad_ngram(bad_ngram):
     dataset = AlignmentDataset(task=None, samples=[])
 
     with pytest.raises(ValueError):
-        diversity_validation(dataset, ngram=bad_ngram)
+        diversity_validation(dataset, num_workers=1, ngram=bad_ngram)
 
 
-def test_diversity_validation_continual_dataset():
+@pytest.mark.parametrize('num_workers', [1, 4])
+def test_diversity_validation_continual_dataset(num_workers):
     samples = [
         AlignmentDatasetSample(
             'Mock prompt', 'Winning Response A 1', 'Losing Response A 1'
@@ -152,7 +156,7 @@ def test_diversity_validation_continual_dataset():
     dataset2 = AlignmentDataset(task=None, samples=[])
     dataset = ContinualAlignmentDataset(datasets=[dataset1, dataset2])
 
-    result = diversity_validation(dataset)
+    result = diversity_validation(dataset, num_workers)
     exp_result = [
         {
             'chosen_diversity_max': np.float64(0.767920558319361),

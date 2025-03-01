@@ -1,4 +1,5 @@
 import logging
+import multiprocessing as mp
 from typing import Callable, Dict, List, Optional
 
 import nltk
@@ -10,12 +11,13 @@ from aif_gen.typing import Dataset
 
 
 def diversity_validation(
-    dataset: Dataset, ngram: int = 3
+    dataset: Dataset, num_workers: int, ngram: int = 3
 ) -> List[Optional[Dict[str, float]]]:
     r"""Report the inverse Self-BLEU score as a measure of diversity within the generated samples.
 
     Args:
         dataset (Union[ContinualAlignmentDataset, AlignmentDataset]): The dataset to validate.
+        num_workers (int): Number of sub-process workers to spawn for the diversity validation.
         ngram (int): The maximum n-gram order for BLEU calculation. Default of 3 matches the original paper.
 
     Returns:
@@ -47,7 +49,7 @@ def diversity_validation(
     results: List[Optional[Dict[str, float]]] = []
     for dataset in datasets:
         if len(dataset):
-            result = _diversity_validation(dataset, ngram)
+            result = _diversity_validation(dataset, num_workers, ngram)
         else:
             logging.warning(f'Skipping diversity on empty dataset: {dataset}')
             result = None
@@ -55,36 +57,52 @@ def diversity_validation(
     return results
 
 
-def _diversity_validation(dataset: AlignmentDataset, ngram: int) -> Dict[str, float]:
+def _diversity_validation(
+    dataset: AlignmentDataset, num_workers: int, ngram: int
+) -> Dict[str, float]:
     weight = [1.0 / ngram for _ in range(ngram)]
     prompts = [sample.prompt for sample in dataset.samples]
     chosens = [sample.chosen for sample in dataset.samples]
     rejected = [sample.rejected for sample in dataset.samples]
 
     results: Dict[str, List[float]] = {}
-    results['prompt_diversity'] = _compute_diversity(prompts, weight)
-    results['chosen_diversity'] = _compute_diversity(chosens, weight)
-    results['rejected_diversity'] = _compute_diversity(rejected, weight)
+    results['prompt_diversity'] = _compute_diversity(prompts, weight, num_workers)
+    results['chosen_diversity'] = _compute_diversity(chosens, weight, num_workers)
+    results['rejected_diversity'] = _compute_diversity(rejected, weight, num_workers)
     return _compute_statistics(results)
 
 
-def _compute_diversity(response_set: List[str], weight: List[float]) -> List[float]:
+def _compute_diversity(
+    response_set: List[str], weight: List[float], num_workers: int
+) -> List[float]:
     if 0 <= len(response_set) < 2:
         return len(response_set) * [0.0]
 
     tokenizer = _get_tokenizer()
     tokenized_responses = [tokenizer(sentence) for sentence in response_set]
-    diversity = []
-    for i, hypothesis in enumerate(tokenized_responses):
-        other_responses = tokenized_responses[:i] + tokenized_responses[i + 1 :]
-        score = sentence_bleu(
-            other_responses,
-            hypothesis,
-            weight,
-            smoothing_function=SmoothingFunction().method1,
+
+    with mp.Pool(num_workers) as pool:
+        return pool.starmap(
+            _diversity_score,
+            [
+                (
+                    tokenized_responses[:i] + tokenized_responses[i + 1 :],
+                    hypothesis,
+                    weight,
+                )
+                for i, hypothesis in enumerate(tokenized_responses)
+            ],
         )
-        diversity.append(1 - score)
-    return diversity
+
+
+def _diversity_score(responses: List[str], hypothesis: str, weight: List[str]) -> float:
+    score = sentence_bleu(
+        responses,
+        hypothesis,
+        weight,
+        smoothing_function=SmoothingFunction().method1,
+    )
+    return 1 - score
 
 
 def _compute_statistics(results: Dict[str, List[float]]) -> Dict[str, float]:
@@ -103,5 +121,8 @@ def _get_tokenizer() -> Callable[[str], List[str]]:
 
 def _download_nltk_resources() -> None:
     logging.info('Downloading NLTK resources.')
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-    nltk.download('punkt', quiet=True)
+    required_resources = ['punkt_tab']
+    for resource in required_resources:
+        logging.info(f'Downloading NLTK: {resource}')
+        nltk.download('punkt_tab')
+    logging.info('Downloaded NLTK resources.')
