@@ -120,9 +120,8 @@ def _get_tokenizer() -> Callable[[str], List[str]]:
 
 
 def _download_nltk_resources() -> None:
-    logging.info('Downloading NLTK resources.')
     required_resources = ['punkt_tab']
     for resource in required_resources:
         logging.info(f'Downloading NLTK: {resource}')
-        nltk.download('punkt_tab')
-    logging.info('Downloaded NLTK resources.')
+        nltk.download(resource)
+        logging.info(f'Downloaded NLTK: {resource}')
