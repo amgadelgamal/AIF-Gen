@@ -97,12 +97,6 @@ def main(
                 training_args.reward_model_path + f'/{str(i)}', num_labels=1
             )
 
-        eval_policy_dataset = (
-            dataset['descriptiveness']
-            if training_args.mock
-            else dataset[script_args.dataset_test_split]
-        )
-
         if not training_args.mock:
 
             def concat_prompt_to_completions(example: dict) -> dict[str, list[int]]:
@@ -117,9 +111,11 @@ def main(
             dataset_test = dataset[script_args.dataset_test_split].map(
                 concat_prompt_to_completions, remove_columns='prompt'
             )
+            eval_policy_dataset = dataset[script_args.dataset_test_split]
         else:
             dataset_train = dataset[script_args.dataset_train_split]
             dataset_test = dataset[script_args.dataset_test_split]
+            eval_policy_dataset = dataset['descriptiveness']
 
         trainer = ContinualDPOTrainer(
             model,
