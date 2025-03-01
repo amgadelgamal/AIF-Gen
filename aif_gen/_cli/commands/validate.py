@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import pathlib
 from typing import Any, Dict
 
@@ -51,9 +52,9 @@ from aif_gen.dataset.validation import (
 )
 @click.option(
     '--num-workers',
-    type=click.IntRange(min=1, max=32, clamp=True),
+    type=click.IntRange(min=1, max=64, clamp=True),
     help='Number of sub-process workers to spawn for computing diversity validation.',
-    default=4,
+    default=os.cpu_count(),
 )
 def validate(
     input_data_file: pathlib.Path,
