@@ -27,6 +27,7 @@ from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 from benchmarks.dataloading import init_continual_dataset
 
 
+# The code is based on TRL DPO script https://github.com/huggingface/trl/blob/main/trl/scripts/dpo.py
 def main(
     script_args: ContinualDPOArguments,
     training_args: ContinualDPOConfig,
@@ -74,7 +75,7 @@ def main(
         ]
 
     continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
-        script_args.dataset_name
+        script_args.dataset_name, mock=training_args.mock
     )
     output_dir = training_args.output_dir
 
@@ -96,6 +97,11 @@ def main(
                 training_args.reward_model_path + f'/{str(i)}', num_labels=1
             )
 
+        eval_policy_dataset = (
+            dataset['descriptiveness']
+            if training_args.mock
+            else dataset[script_args.dataset_test_split]
+        )
         trainer = ContinualDPOTrainer(
             model,
             ref_model,
@@ -107,7 +113,7 @@ def main(
             eval_dataset=dataset[script_args.dataset_test_split]
             if training_args.eval_strategy != 'no'
             else None,
-            eval_policy_dataset=dataset['descriptiveness']
+            eval_policy_dataset=eval_policy_dataset
             if training_args.reward_model_path is not None
             else None,
             processing_class=tokenizer,
@@ -130,7 +136,6 @@ def main(
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics(f'eval', metrics)
             # ToDo: we can't use trainer.log here because it repeats computations of some the metrics, that can be heavy
-            trainer.save_metrics(f'eval/dataset/{i}', metrics)
             wandb.log({'eval': {'last': metrics}})
             wandb.log({f'task/{current_dataset_name}/last': metrics})
 

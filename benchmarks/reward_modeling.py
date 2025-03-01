@@ -62,6 +62,11 @@ class ExtendedScriptArguments(ScriptArguments):
     )
 
 
+# This code is heavily based on the reward_modeling script from the TRL library:
+# https://github.com/huggingface/trl/blob/main/examples/scripts/reward_modeling.py
+# The main difference is that we handle dataset_index as an argument.
+
+
 def train_model(
     script_args: ExtendedScriptArguments,
     training_args: RewardConfig,
@@ -70,8 +75,6 @@ def train_model(
     index: int,
 ) -> None:
     training_args.gradient_checkpointing_kwargs = dict(use_reentrant=False)
-
-    # The code is heavely based on the reward_modeling script from the trl library, the only difference is we handle dataset_index as an argument
 
     ################
     # Model & Tokenizer

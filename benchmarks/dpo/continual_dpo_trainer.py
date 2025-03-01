@@ -65,6 +65,10 @@ class ContinualDPOConfig(DPOConfig):
             'help': 'The name or path to the reward models folder containing all rewards models for continual learning dataset.'
         },
     )
+    mock: bool = field(
+        default=False,
+        metadata={'help': 'Whether to use mock dataset.'},
+    )
     response_length: int = field(
         default=53,
         metadata={
@@ -137,7 +141,7 @@ class ContinualDPOTrainer(DPOTrainer):
             peft_config,
         )
         # setting a reward model only for evaluation purposes
-        # The reward model setting code comes from TRL PPOTrainer
+        # The reward model setting code comes from TRL PPOTrainer https://github.com/huggingface/trl/blob/main/trl/trainer/ppo_trainer.py#L284
         self.reward_model = reward_model
         if self.reward_model is not None:
             disable_dropout_in_model(self.reward_model)
@@ -215,7 +219,7 @@ class ContinualDPOTrainer(DPOTrainer):
             )
 
     def preprocess_policy_dataset(self, dataset: Dataset) -> Dataset:
-        # The code is from TRL PPO script
+        # The code is from TRL PPO script https://github.com/huggingface/trl/blob/main/examples/scripts/ppo/ppo.py
         dataset_text_field = 'prompt'
 
         def tokenize(element: dict) -> dict[str, list[int]]:
@@ -233,13 +237,17 @@ class ContinualDPOTrainer(DPOTrainer):
                 num_proc=self.args.dataset_num_proc,
             )
 
-        dataset = dataset.map(
-            apply_chat_template, fn_kwargs={'tokenizer': self.processing_class}
+        dataset = (
+            dataset.map(
+                apply_chat_template, fn_kwargs={'tokenizer': self.processing_class}
+            )
+            if self.args.mock
+            else dataset
         )
+
         # Compute only on main process for faster data processing.
         with PartialState().local_main_process_first():
             dataset = prepare_dataset(dataset, self.processing_class)
-
         return dataset
 
     def evaluate_policy(self) -> dict:
@@ -248,12 +256,12 @@ class ContinualDPOTrainer(DPOTrainer):
         Returns:
             dict: A dictionary containing evaluation metrics.
         """
-        # The code is heavily based on the training loop of TRL PPOTrainer function
+        # The code is heavily based on the training loop of TRL PPOTrainer function https://github.com/huggingface/trl/blob/main/trl/trainer/ppo_trainer.py#L677
         mode = self.model.training
         self.model.eval()
         eval_metrics = defaultdict(list)
+        processing_class = self.processing_class
         if self.args.eval_greedy_policy:
-            processing_class = self.processing_class
             generation_config = GenerationConfig(
                 max_new_tokens=self.args.response_length,
                 top_k=None,
