@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
-import wandb
 from dataloading import init_continual_dataset
 from datasets import Dataset
 from dpo.continual_dpo_trainer import ContinualDPOConfig, ContinualDPOTrainer
@@ -21,6 +20,8 @@ from trl import (
     get_quantization_config,
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
+
+from wandb import log as wandb_logger  # type: ignore
 
 # TODO PR:41 Remove the dependency on DPO, get the algorithm name as an argument and process based on that
 # or Create an intermediate class called ContinualTrainer and only depend on this, DPOTrainer will later inherit from this.
@@ -44,6 +45,10 @@ class EvalScriptArguments(ScriptArguments):
     wandb_entity: Optional[str] = field(
         default=None,
         metadata={'help': 'The WandB entity (team) to use.'},
+    )
+    mock: bool = field(
+        default=False,
+        metadata={'help': 'Whether to use mock datasets.'},
     )
 
     def __post_init__(self) -> None:
@@ -99,7 +104,8 @@ def main(
         ]
 
     continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
-        script_args.dataset_name
+        script_args.dataset_name,
+        mock=script_args.mock,
     )
     output_dir = training_args.output_dir
 
@@ -131,7 +137,7 @@ def main(
                 trainer.log({'dataset_name': dataset_name})
             metrics.update(ev_metrics)
 
-        wandb.log(metrics)
+        wandb_logger(metrics)
 
 
 if __name__ == '__main__':

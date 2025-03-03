@@ -32,6 +32,10 @@ class ExtendedScriptArguments(ScriptArguments):
             'this index points to individual dataset in the ContinualDataset.'
         },
     )
+    mock: bool = field(
+        default=False,
+        metadata={'help': 'Whether to use mock datasets.'},
+    )
     all_datasets: bool = field(
         default=False,
         metadata={'help': 'Whether to use all datasets in the ContinualDataset.'},
@@ -106,23 +110,19 @@ def train_model(
     # Align padding tokens between tokenizer and model
     model.config.pad_token_id = tokenizer.pad_token_id
 
-    # If post-training a base model, use ChatML as the default template
-    # From TRL script - While TRL’s default behavior uses a simple chat template,
-    # this script calls setup_chat_format explicitly to ensure that—when post-training a
-    # base model—the model and its tokenizer are properly aligned with a richer ChatML format.
+    # Use ChatML format if the tokenizer doesn't already have a chat template
     if tokenizer.chat_template is None:
         model, tokenizer = setup_chat_format(model, tokenizer)
 
+    # Warn when using PEFT with a non-standard task type
     if model_args.use_peft and model_args.lora_task_type != 'SEQ_CLS':
         warnings.warn(
-            'You are using a `task_type` that is different than `SEQ_CLS` for PEFT. This will lead to silent bugs'
-            ' Make sure to pass --lora_task_type SEQ_CLS when using this script with PEFT.',
+            'You are using a `task_type` that is different than `SEQ_CLS` for PEFT. '
+            'This may lead to silent bugs. Make sure to pass --lora_task_type SEQ_CLS when using this script with PEFT.',
             UserWarning,
         )
 
-    ##########
-    # Training
-    ##########
+    # Initialize and run trainer
     trainer = RewardTrainer(
         model=model,
         processing_class=tokenizer,
@@ -135,19 +135,15 @@ def train_model(
     )
     trainer.train()
 
-    ############################
-    # Save model and push to Hub
-    ############################
+    # Save model and optionally push to the hub
     print(f'Saving model {index} to: {training_args.output_dir}')
     trainer.save_model(
-        training_args.output_dir + f'/{script_args.dataset_name}/' + str(index)
+        training_args.output_dir + f'/{script_args.dataset_name}/{index}'
     )
-
     if training_args.eval_strategy != 'no':
         metrics = trainer.evaluate()
         trainer.log_metrics('eval', metrics)
         trainer.save_metrics('eval', metrics)
-
     if training_args.push_to_hub:
         trainer.push_to_hub(dataset_name=script_args.dataset_name + str(index))
 
@@ -156,8 +152,8 @@ if __name__ == '__main__':
     parser = HfArgumentParser((ExtendedScriptArguments, RewardConfig, ModelConfig))
     script_args, training_args, model_args = parser.parse_args_into_dataclasses()
 
-    continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
-        script_args.dataset_name
+    continual_dataset: list[Dict[str, Dataset]] = init_continual_dataset(
+        script_args.dataset_name, mock=script_args.mock
     )
 
     if script_args.all_datasets:
@@ -170,9 +166,7 @@ if __name__ == '__main__':
             mem_gb=script_args.slurm_mem_gb,
             constraint=script_args.slurm_constraint,
         )
-
         print(f'Submitting {len(continual_dataset)} training jobs...')
-
         jobs = []
         for index, dataset in enumerate(continual_dataset):
             print(f'Submitting job {index + 1}/{len(continual_dataset)}')
@@ -180,7 +174,6 @@ if __name__ == '__main__':
                 train_model, script_args, training_args, model_args, dataset, index
             )
             jobs.append(job)
-
         print('Waiting for jobs to complete...')
         for i, job in enumerate(jobs):
             print(f'Waiting for job {i + 1}/{len(jobs)}')
