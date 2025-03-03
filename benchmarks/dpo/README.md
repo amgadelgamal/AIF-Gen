@@ -72,7 +72,7 @@ uv run benchmarks/dpo/dpo_continual.py \
     --logging_steps 25 \
     --eval_strategy steps \
     --eval_steps 50 \
-    --run_output_dir Qwen2-0.5B-DPO \
+    --output_dir Qwen2-0.5B-DPO \
     --no_remove_unused_columns
 ```
 
