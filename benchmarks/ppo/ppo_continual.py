@@ -53,18 +53,20 @@ def main(
         quantization_config=quantization_config,
     )
     tokenizer = AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path,
+        training_args.sft_model_path,
         trust_remote_code=model_args.trust_remote_code,
+        padding_side='left',
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     if tokenizer.chat_template is None:
         tokenizer.chat_template = SIMPLE_CHAT_TEMPLATE
     value_model = AutoModelForSequenceClassification.from_pretrained(
-        script_args.value_model_path,
+        script_args.value_model_path + '_0',
         trust_remote_code=model_args.trust_remote_code,
         num_labels=1,
     )
+    model = str(training_args.sft_model_path)
     policy = AutoModelForCausalLM.from_pretrained(
         training_args.sft_model_path, trust_remote_code=model_args.trust_remote_code
     )
@@ -80,54 +82,65 @@ def main(
     continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
         script_args.dataset_name, mock=training_args.mock
     )
-    output_dir = training_args.output_dir
+    base_output_dir = training_args.output_dir
 
-    for i, _ in enumerate(continual_dataset):
-        reward_path = os.path.join(training_args.reward_model_path, str(i))
-        if not os.path.exists(reward_path):
-            raise FileNotFoundError(
-                f'Reward model not found for dataset {i} at {reward_path}'
-            )
+    # Extract clean dataset name (e.g. "debug" from "benchmarks/continual_data_debug.json")
+    clean_dataset_name = os.path.basename(script_args.dataset_name)
+    if '.' in clean_dataset_name:
+        clean_dataset_name = clean_dataset_name.split('.')[0]
 
     for i, dataset in enumerate(continual_dataset):
-        current_dataset_name: str = f'dataset-{i}'
-        training_args.output_dir = f'{output_dir}/{current_dataset_name}'
+        # Build a custom repository name for the ppo model
+        # e.g. "Qwen2-0.5B-Instruct_debug_PPO_0"
+        custom_repo_name = (
+            str(model).split('/')[-1] + '_' + clean_dataset_name + '_PPO_' + str(i)
+        )
+        if training_args.push_to_hub:
+            training_args.hub_model_id = custom_repo_name
+        # Update the output directory so that saving and pushing are done from a single folder.
+        training_args.output_dir = os.path.join(base_output_dir, custom_repo_name)
 
-        # TODO Value model is based on the reward model, so we need to think if we want to reinstantiate
-        #  the value model with the new reward model when we change dataset or continue to train with the old one
-        # Reward model
+        # Load the reward model following a similar naming convention.
+        # Here we assume that the reward_model_path is expected to include the suffix.
+        # e.g. "path/to/reward_model_Qwen2-0.5B-Instruct_debug_REWARD_0"
+        reward_model_repo = (
+            model.split('/')[-1] + '_' + clean_dataset_name + '_REWARD_' + str(i)
+        )
+        # Either load using training_args.reward_model_path with the suffix or adjust as needed.
         reward_model = AutoModelForSequenceClassification.from_pretrained(
-            training_args.reward_model_path + f'/{str(i)}', num_labels=1
+            training_args.reward_model_path + '_' + str(i), num_labels=1
         )
 
         dataset_text_field = 'prompt'
         dataset_train = dataset[script_args.dataset_train_split]
         dataset_test = dataset[script_args.dataset_test_split]
 
-        def prepare_dataset(dataset: Dataset, tokenizer: AutoTokenizer) -> Dataset:
-            """pre-tokenize the dataset before training; only collate during training."""
-
-            def tokenize(element: dict) -> dict[str, Any]:
-                if not training_args.mock:
-                    # explicit dataset
-                    outputs = tokenizer(
-                        element[dataset_text_field],
-                        padding=False,
-                    )
-                else:
-                    # implicit dataset type
-                    outputs = tokenizer(
-                        element,
-                        padding=False,
-                    )
+        def prepare_dataset(ds: Dataset, tokenizer: AutoTokenizer) -> Dataset:
+            def tokenize_batch(batch: dict) -> dict[str, Any]:
+                # Get the texts from the expected field
+                texts = batch.get(dataset_text_field)
+                if texts is None:
+                    # fallback to the first available column, if needed
+                    first_key = list(batch.keys())[0]
+                    texts = batch[first_key]
+                outputs = tokenizer(
+                    texts,
+                    padding='max_length',  # adjust as needed
+                    truncation=True,
+                    max_length=2048,  # adjust max length as needed
+                )
                 return {'input_ids': outputs['input_ids']}
 
-            return dataset.map(
-                tokenize,
+            return ds.map(
+                tokenize_batch,
                 batched=True,
-                remove_columns=dataset.column_names,
-                num_proc=training_args.dataset_num_proc,
+                remove_columns=ds.column_names,  # optionally you can remove this for debugging
+                # num_proc=training_args.dataset_num_proc  # remove num_proc for now
             )
+
+        mapped_ds = prepare_dataset(dataset_train, tokenizer)
+        for i in range(3):
+            print(mapped_ds[i])
 
         with PartialState().local_main_process_first():
             train_dataset = prepare_dataset(dataset_train, tokenizer)
@@ -147,42 +160,39 @@ def main(
             eval_dataset=eval_dataset,
             peft_config=peft_config,
         )
+        print(trainer.dataloader)
+        for batch in trainer.dataloader:
+            print(batch)
+            break
         trainer.train()
 
-        # TODO: PPOTrainer doens't have an evaluate method - should be fixed now
         if training_args.eval_strategy != 'no':
             metrics = trainer.evaluate()
             if i == 0:
                 trainer.log({'dataset': {'name': script_args.dataset_name}})
             metrics['dataset'] = i
-            # Log evaluation metrics under a hierarchy using slashes for wandb
             print(f'eval/dataset/{i}')
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics(f'eval', metrics)
-            # ToDo: we can't use trainer.log here because it repeats computations of some the metrics, that can be heavy
             wandb_log({'eval': {'last': metrics}})
-            wandb_log({f'task/{current_dataset_name}/last': metrics})
+            wandb_log({f'task/{custom_repo_name}/last': metrics})
 
-        # Save and push to hub
-        trainer.save_model(training_args.output_dir + '/last')
+        # Save and push to hub.
+        trainer.save_model(os.path.join(training_args.output_dir, 'last'))
         if training_args.push_to_hub:
             trainer.push_to_hub(
-                dataset_name=(
-                    'Continual_PPO_' + script_args.dataset_name + f'/dataset-{i}'
-                )
+                model_name=custom_repo_name,
+                dataset_name='Continual_PPO_' + clean_dataset_name + '_' + str(i),
             )
 
-        # If using DeepSpeed through Accelerate, tear down the engine after training.
+        # Clean up DeepSpeed engine if it exists.
         if hasattr(trainer, 'deepspeed') and trainer.deepspeed is not None:
-            # Remove reference to the DeepSpeed engine to allow proper cleanup.
             del trainer.deepspeed
-        # Free cached GPU memory.
         torch.cuda.empty_cache()
 
 
 if __name__ == '__main__':
     dataclass_types = (ContinualPPOArguments, ContinualPPOConfig, ModelConfig)
     parser = TrlParser(dataclass_types)
-
     script_args, training_args, model_args = parser.parse_args_and_config()
     main(script_args, training_args, model_args)
