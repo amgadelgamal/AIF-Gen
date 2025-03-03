@@ -12,8 +12,8 @@ uv sync --group benchmarks.ppo
 
 ```sh
 uv run benchmarks/ppo/ppo_continual.py \
-    --dataset_name debug \
-    --mock true \
+    --dataset_name benchmarks/continual_data_debug.json \
+    --mock False \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --reward_model_path Qwen/Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-6 \
@@ -33,28 +33,29 @@ uv run benchmarks/ppo/ppo_continual.py \
     --lora_alpha 16
 ```
 
-"""
-python baselines/trl/ppo_continual.py \
---dataset_name debug \
---dataset_train_split descriptiveness \
---learning_rate 3e-6 \
---output_dir models/minimal/ppo \
---per_device_train_batch_size 8 \
---gradient_accumulation_steps 1 \
---total_episodes 20 \
---use_peft \
---model_name_or_path Qwen/Qwen2-0.5B-Instruct \
---sft_model_path Qwen/Qwen2-0.5B-Instruct \
---reward_model_path /home/mila/i/ivan.anokhin/AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug \
---missing_eos_penalty 1.0
-"""
+```sh
+uv run baselines/trl/ppo_continual.py \
+    --dataset_name benchmarks/continual_data_debug.json \
+    --mock False \
+    --learning_rate 3e-6 \
+    --output_dir models/minimal/ppo \
+    --per_device_train_batch_size 8 \
+    --gradient_accumulation_steps 1 \
+    --total_episodes 20 \
+    --use_peft \
+    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
+    --sft_model_path Qwen/Qwen2-0.5B-Instruct \
+    --reward_model_path /home/mila/i/ivan.anokhin/AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug \
+    --missing_eos_penalty 1.0
+```
 
 ### Lora with accelerate
 
 ```sh
 accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero3.yaml \
     benchmarks/ppo/ppo_continual.py \
-    --dataset_name debug \
+    --dataset_name benchmarks/continual_data_debug.json \
+    --mock False \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --reward_model_path Qwen/Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-6 \

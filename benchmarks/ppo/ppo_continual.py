@@ -1,9 +1,10 @@
 """Adaption of the PPO TRL training script for continual learning."""
 
 import os
+from typing import Any
 
 import torch
-import wandb
+from accelerate import PartialState
 from continual_ppo_trainer import (
     ContinualPPOArguments,
     ContinualPPOConfig,
@@ -25,6 +26,7 @@ from trl import (
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
 from benchmarks.dataloading import init_continual_dataset
+from wandb import log as wandb_log  # type: ignore
 
 
 def main(
@@ -37,6 +39,10 @@ def main(
         if model_args.torch_dtype in ['auto', None]
         else getattr(torch, model_args.torch_dtype)
     )
+
+    ################
+    # Model & Tokenizer
+    ################
     quantization_config = get_quantization_config(model_args)
     model_kwargs = dict(
         revision=model_args.model_revision,
@@ -46,12 +52,18 @@ def main(
         device_map=get_kbit_device_map() if quantization_config is not None else None,
         quantization_config=quantization_config,
     )
-    value_model_path = (
-        '/home/mila/i/ivan.anokhin/AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug/0'
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        trust_remote_code=model_args.trust_remote_code,
     )
-
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    if tokenizer.chat_template is None:
+        tokenizer.chat_template = SIMPLE_CHAT_TEMPLATE
     value_model = AutoModelForSequenceClassification.from_pretrained(
-        value_model_path, trust_remote_code=model_args.trust_remote_code, num_labels=1
+        script_args.value_model_path,
+        trust_remote_code=model_args.trust_remote_code,
+        num_labels=1,
     )
     policy = AutoModelForCausalLM.from_pretrained(
         training_args.sft_model_path, trust_remote_code=model_args.trust_remote_code
@@ -64,14 +76,6 @@ def main(
         )
     else:
         ref_policy = None
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path,
-        trust_remote_code=model_args.trust_remote_code,
-    )
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    if tokenizer.chat_template is None:
-        tokenizer.chat_template = SIMPLE_CHAT_TEMPLATE
 
     continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
         script_args.dataset_name, mock=training_args.mock
@@ -89,45 +93,63 @@ def main(
         current_dataset_name: str = f'dataset-{i}'
         training_args.output_dir = f'{output_dir}/{current_dataset_name}'
 
-        # ToDo: Value model is based on the reward model, so we need to think if we want to reinstantiate
+        # TODO Value model is based on the reward model, so we need to think if we want to reinstantiate
         #  the value model with the new reward model when we change dataset or continue to train with the old one
         # Reward model
         reward_model = AutoModelForSequenceClassification.from_pretrained(
             training_args.reward_model_path + f'/{str(i)}', num_labels=1
         )
 
-        if not training_args.mock:
+        dataset_text_field = 'prompt'
+        dataset_train = dataset[script_args.dataset_train_split]
+        dataset_test = dataset[script_args.dataset_test_split]
 
-            def concat_prompt_to_completions(example: dict) -> dict[str, list[int]]:
-                return {
-                    'chosen': example['prompt'] + example['chosen'],
-                    'rejected': example['prompt'] + example['rejected'],
-                }
+        def prepare_dataset(dataset: Dataset, tokenizer: AutoTokenizer) -> Dataset:
+            """pre-tokenize the dataset before training; only collate during training."""
 
-            dataset_train = dataset[script_args.dataset_train_split].map(
-                concat_prompt_to_completions, remove_columns='prompt'
+            def tokenize(element: dict) -> dict[str, Any]:
+                if not training_args.mock:
+                    # explicit dataset
+                    outputs = tokenizer(
+                        element[dataset_text_field],
+                        padding=False,
+                    )
+                else:
+                    # implicit dataset type
+                    outputs = tokenizer(
+                        element,
+                        padding=False,
+                    )
+                return {'input_ids': outputs['input_ids']}
+
+            return dataset.map(
+                tokenize,
+                batched=True,
+                remove_columns=dataset.column_names,
+                num_proc=training_args.dataset_num_proc,
             )
-            dataset_test = dataset[script_args.dataset_test_split].map(
-                concat_prompt_to_completions, remove_columns='prompt'
-            )
-        else:
-            dataset_train = dataset[script_args.dataset_train_split]
-            dataset_test = dataset[script_args.dataset_test_split]
 
+        with PartialState().local_main_process_first():
+            train_dataset = prepare_dataset(dataset_train, tokenizer)
+            eval_dataset = prepare_dataset(dataset_test, tokenizer)
+
+        ################
+        # Training
+        ################
         trainer = ContinualPPOTrainer(
             args=training_args,
+            processing_class=tokenizer,
             model=policy,
             ref_model=ref_policy,
             reward_model=reward_model,
             value_model=value_model,
-            train_dataset=dataset_train,
-            eval_dataset=dataset_test,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
             peft_config=peft_config,
-            processing_class=tokenizer,
         )
         trainer.train()
 
-        # TODO: PPOTrainer doens't have an evaluate method
+        # TODO: PPOTrainer doens't have an evaluate method - should be fixed now
         if training_args.eval_strategy != 'no':
             metrics = trainer.evaluate()
             if i == 0:
@@ -138,8 +160,8 @@ def main(
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics(f'eval', metrics)
             # ToDo: we can't use trainer.log here because it repeats computations of some the metrics, that can be heavy
-            wandb.log({'eval': {'last': metrics}})
-            wandb.log({f'task/{current_dataset_name}/last': metrics})
+            wandb_log({'eval': {'last': metrics}})
+            wandb_log({f'task/{current_dataset_name}/last': metrics})
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')

@@ -25,7 +25,7 @@ The wandb run gets `huggingface` project name and run name from the `output_dir`
 ```sh
 uv run benchmarks/reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name benchmarks/dpo/continual_data_debug.json \
+    --dataset_name benchmarks/continual_data_debug.json \
     --dataset_index 0 \
     --output_dir Qwen2-0.5B-Reward \
     --per_device_train_batch_size 8 \
@@ -43,7 +43,7 @@ uv run benchmarks/reward_modeling.py \
 ```sh
 uv run benchmarks/reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name benchmarks/dpo/continual_data_debug.json \
+    --dataset_name benchmarks/continual_data_debug.json \
     --output_dir Qwen2-0.5B-Reward-LoRA \
     --per_device_train_batch_size 8 \
     --num_train_epochs 1 \
@@ -64,7 +64,7 @@ uv run benchmarks/reward_modeling.py \
 
 ```sh
 uv run benchmarks/continual_eval_checkpoint.py \
-    --dataset_name benchmarks/dpo/continual_dpo_trainer \
+    --dataset_name benchmarks/continual_dpo_trainer \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --checkpoint_dir Qwen2-0.5B-DPO-test \
     --learning_rate 0 \
