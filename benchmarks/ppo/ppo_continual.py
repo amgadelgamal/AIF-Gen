@@ -1,7 +1,6 @@
 """Adaption of the PPO TRL training script for continual learning."""
 
 import os
-from typing import Any
 
 import torch
 from accelerate import PartialState
@@ -25,8 +24,8 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
+import wandb as wb
 from benchmarks.dataloading import init_continual_dataset
-from wandb import log as wandb_log  # type: ignore
 
 
 def main(
@@ -55,7 +54,6 @@ def main(
     tokenizer = AutoTokenizer.from_pretrained(
         training_args.sft_model_path,
         trust_remote_code=model_args.trust_remote_code,
-        padding_side='left',
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -115,32 +113,24 @@ def main(
         dataset_train = dataset[script_args.dataset_train_split]
         dataset_test = dataset[script_args.dataset_test_split]
 
-        def prepare_dataset(ds: Dataset, tokenizer: AutoTokenizer) -> Dataset:
-            def tokenize_batch(batch: dict) -> dict[str, Any]:
-                # Get the texts from the expected field
-                texts = batch.get(dataset_text_field)
-                if texts is None:
-                    # fallback to the first available column, if needed
-                    first_key = list(batch.keys())[0]
-                    texts = batch[first_key]
+        # custom collate function to handle the dataset in order to avoid issues with the tokenizer
+
+        def prepare_dataset(dataset: Dataset, tokenizer: AutoTokenizer) -> Dataset:
+            """pre-tokenize the dataset before training; only collate during training."""
+
+            def tokenize(element: dict) -> dict:
                 outputs = tokenizer(
-                    texts,
-                    padding='max_length',  # adjust as needed
-                    truncation=True,
-                    max_length=2048,  # adjust max length as needed
+                    element[dataset_text_field],
+                    padding=False,
                 )
                 return {'input_ids': outputs['input_ids']}
 
-            return ds.map(
-                tokenize_batch,
+            return dataset.map(
+                tokenize,
                 batched=True,
-                remove_columns=ds.column_names,  # optionally you can remove this for debugging
-                # num_proc=training_args.dataset_num_proc  # remove num_proc for now
+                remove_columns=dataset.column_names,
+                num_proc=training_args.dataset_num_proc,
             )
-
-        mapped_ds = prepare_dataset(dataset_train, tokenizer)
-        for i in range(3):
-            print(mapped_ds[i])
 
         with PartialState().local_main_process_first():
             train_dataset = prepare_dataset(dataset_train, tokenizer)
@@ -160,10 +150,6 @@ def main(
             eval_dataset=eval_dataset,
             peft_config=peft_config,
         )
-        print(trainer.dataloader)
-        for batch in trainer.dataloader:
-            print(batch)
-            break
         trainer.train()
 
         if training_args.eval_strategy != 'no':
@@ -174,10 +160,11 @@ def main(
             print(f'eval/dataset/{i}')
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics(f'eval', metrics)
-            wandb_log({'eval': {'last': metrics}})
-            wandb_log({f'task/{custom_repo_name}/last': metrics})
+            wb.log({'eval': {'last': metrics}})  # type: ignore[attr-defined]
+            wb.log({f'task/{custom_repo_name}/last': metrics})  # type: ignore[attr-defined]
 
         # Save and push to hub.
+        # TODO - needs testing
         trainer.save_model(os.path.join(training_args.output_dir, 'last'))
         if training_args.push_to_hub:
             trainer.push_to_hub(
