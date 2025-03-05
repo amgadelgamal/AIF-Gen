@@ -23,8 +23,8 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
+import wandb as wb
 from benchmarks.dataloading import init_continual_dataset
-from wandb import log as wandb_log  # type: ignore
 
 
 # The code is based on TRL DPO script https://github.com/huggingface/trl/blob/main/trl/scripts/dpo.py
@@ -149,8 +149,8 @@ def main(
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics(f'eval', metrics)
             # ToDo: we can't use trainer.log here because it repeats computations of some the metrics, that can be heavy
-            wandb_log({'eval': {'last': metrics}})
-            wandb_log({f'task/{current_dataset_name}/last': metrics})
+            wb.log({'eval': {'last': metrics}})  # type: ignore[attr-defined]
+            wb.log({f'task/{current_dataset_name}/last': metrics})  # type: ignore[attr-defined]
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')

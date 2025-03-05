@@ -164,9 +164,9 @@ def main(
             wb.log({f'task/{custom_repo_name}/last': metrics})  # type: ignore[attr-defined]
 
         # Save and push to hub.
-        # TODO - needs testing
-        trainer.save_model(os.path.join(training_args.output_dir, 'last'))
-        if training_args.push_to_hub:
+        if not training_args.push_to_hub:
+            trainer.save_model(os.path.join(training_args.output_dir))
+        else:
             trainer.push_to_hub(
                 model_name=custom_repo_name,
                 dataset_name='Continual_PPO_' + clean_dataset_name + '_' + str(i),

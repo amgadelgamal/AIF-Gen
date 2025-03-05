@@ -19,6 +19,7 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizerBase,
     ProcessorMixin,
+    Trainer,
     default_data_collator,
 )
 from transformers.trainer_callback import TrainerCallback
@@ -186,7 +187,7 @@ class ContinualPPOTrainer(PPOTrainer):
         """Custom evaluation method for PPO. Generates completions from the evaluation dataloader,
         computes rewards using the reward model, and returns aggregated metrics.
         """
-        mode = self.model.training
+        mode: bool = self.model.training
         self.model.eval()
         eval_metrics = defaultdict(list)
         processing_class = self.processing_class
@@ -261,3 +262,30 @@ class ContinualPPOTrainer(PPOTrainer):
         self.model.train(mode)
         # Aggregate and return the metrics (here, averaging the reward scores)
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
+
+    def save_model(
+        self, output_dir: Optional[str] = None, _internal_call: bool = False
+    ) -> None:
+        """Save the model, dealing with the case where it's a PEFT model without a policy attribute."""
+        # Store the original model
+        original_model = self.model
+
+        # For PEFT models (which lack .policy attribute), use the model directly
+        if hasattr(self.model, 'base_model'):
+            # PEFT model case - don't try to access .policy
+            pass  # Keep the model as is
+        elif hasattr(self.model, 'policy'):
+            # Standard PPO case - use the policy as in the original implementation
+            self.model: nn.Module = self.model.policy
+        elif hasattr(self.model, 'policy_model'):
+            # Standard PPO case - use the policy_model as in the original implementation
+            self.model = self.model.policy_model
+
+        # Call the parent class's save_model
+        if output_dir is None:
+            output_dir = self.args.output_dir
+
+        Trainer.save_model(self, output_dir, _internal_call)
+
+        # Restore the original model
+        self.model = original_model
