@@ -4,6 +4,14 @@ aif\_gen.util package
 Submodules
 ----------
 
+aif\_gen.util.find\_irrelevant\_files module
+--------------------------------------------
+
+.. automodule:: aif_gen.util.find_irrelevant_files
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 aif\_gen.util.logging module
 ----------------------------
 
