@@ -173,30 +173,40 @@ def find_irrelevant_files(
 
 
 if __name__ == '__main__':
-    import argparse
+    # import argparse
 
-    parser = argparse.ArgumentParser(
-        description='Find irrelevant files for a given algorithm in a Python codebase.'
-    )
-    parser.add_argument(
-        'algorithm_name', help="Algorithm name to look for, e.g. 'ppo'."
-    )
-    parser.add_argument('--base-dir', default='./', help='Base directory to search in.')
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(
+    #     description='Find irrelevant files for a given algorithm in a Python codebase.'
+    # )
+    # parser.add_argument(
+    #     'algorithm_name', help="Algorithm name to look for, e.g. 'ppo'."
+    # )
+    # parser.add_argument('--base-dir', default='./', help='Base directory to search in.')
+    # args = parser.parse_args()
 
-    result = find_irrelevant_files(args.algorithm_name, base_dir=args.base_dir)
-    print('Relevant files:')
-    for r in sorted(result['relevant_files']):
-        print('  ', r)
+    # result = find_irrelevant_files(args.algorithm_name, base_dir=args.base_dir)
+    # print('Relevant files:')
+    # for r in sorted(result['relevant_files']):
+    #     print('  ', r)
 
-    print('\nIrrelevant files:')
-    for i in sorted(result['irrelevant_files']):
-        print('  ', i)
+    # print('\nIrrelevant files:')
+    # for i in sorted(result['irrelevant_files']):
+    #     print('  ', i)
 
-    print('\nMake sure you keep the __init__.py files in the relevant directories.')
+    # print('\nMake sure you keep the __init__.py files in the relevant directories.')
 
     # remove all irrelevant files except __init__.py's in the codebase
-    for file in result['irrelevant_files']:
+    # for file in result['irrelevant_files']:
+    #     if os.path.basename(file) == '__init__.py':
+    #         continue
+    #     os.remove(file)
+
+    # remove all irrelevant files except __init__.py's in the codebase to the intersection of cppo and copr
+    result = find_irrelevant_files('cppo', base_dir='benchmarks/COPR')
+    result2 = find_irrelevant_files('copr', base_dir='benchmarks/COPR')
+    intersection = result['irrelevant_files'].intersection(result2['irrelevant_files'])
+    for file in intersection:
         if os.path.basename(file) == '__init__.py':
             continue
         os.remove(file)
+    print(f'Removed {len(intersection)} files')
