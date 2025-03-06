@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.9"
 resolution-markers = [
     "python_full_version >= '3.12' and sys_platform == 'linux'",
@@ -46,7 +47,6 @@ dependencies = [
     { name = "pytest-asyncio" },
     { name = "pytest-mock" },
     { name = "torch" },
-    { name = "transformers" },
     { name = "types-pyyaml" },
 ]
 
@@ -88,7 +88,6 @@ requires-dist = [
     { name = "pytest-asyncio", specifier = ">=0.25.3" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "torch", specifier = "==2.3.0" },
-    { name = "transformers", specifier = ">=4.49.0" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20241230" },
 ]
 
