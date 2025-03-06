@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import pathlib
 
@@ -57,6 +58,8 @@ def generate(
     logging.debug(f'Configuration: {data_config}')
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_file.parent / 'config.json', 'w') as f:
+        json.dump(data_config, f)
 
     try:
         client = openai.AsyncOpenAI()
