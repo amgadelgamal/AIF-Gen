@@ -9,8 +9,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import transformers
 from accelerate import Accelerator, PartialState
 from datasets import Dataset
+from packaging import version
 from torch.utils.data import DataLoader
 from transformers import (
     BaseImageProcessor,
@@ -21,6 +23,7 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizerBase,
     ProcessorMixin,
+    Trainer,
 )
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
@@ -541,8 +544,14 @@ class COPRTrainer(DPOTrainer):
     ) -> None:
         """Add COPR-specific metrics to logs including policy evaluation metrics."""
         train_eval = 'train' if 'loss' in logs else 'eval'
-        print(f'Logging {train_eval} metrics...')
 
+        # First, add averaged stored metrics to logs (from parent class)
+        for key, metrics in self._stored_metrics[train_eval].items():
+            logs[key] = torch.tensor(metrics).mean().item()
+        # Clear stored metrics after processing
+        del self._stored_metrics[train_eval]
+
+        # Then add COPR-specific metrics
         if train_eval == 'eval' and self.eval_policy_dataloader is not None:
             print('Computing policy metrics...')
             eval_policy_metrics = self.evaluate_policy()
@@ -551,4 +560,10 @@ class COPRTrainer(DPOTrainer):
         # Add lambda value to logs
         logs['lambda'] = self.lambda_value
 
-        return super().log(logs, start_time)
+        # Call the grandparent's log method (Trainer.log) with version checking
+        # This matches the parent DPOTrainer implementation
+
+        if version.parse(transformers.__version__) >= version.parse('4.47.0.dev0'):
+            return Trainer.log(self, logs, start_time)
+        else:  # transformers<=4.46
+            return Trainer.log(self, logs)
