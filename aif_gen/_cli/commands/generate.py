@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import json
 import logging
 import pathlib
@@ -24,7 +25,7 @@ from aif_gen.util.path import get_run_id
     '--output_file',
     type=click.Path(dir_okay=False, path_type=pathlib.Path),
     help='Path to write the generated dataset.',
-    default=lambda: f'data/{get_run_id(name=click.get_current_context().params["data_config_name"].stem)}.json',
+    default=lambda: f'data/{get_run_id(name=click.get_current_context().params["data_config_name"].stem)}/data.json',
 )
 @click.option(
     '--max_concurrency',
@@ -58,8 +59,13 @@ def generate(
     logging.debug(f'Configuration: {data_config}')
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_file.parent / 'config.json', 'w') as f:
-        json.dump(data_config, f)
+
+    if not dry_run:
+        config = copy.deepcopy(data_config)
+        config['model'] = model
+        config['max_concurrency'] = max_concurrency
+        with open(output_file.parent / 'config.json', 'w') as f:
+            json.dump(config, f)
 
     try:
         client = openai.AsyncOpenAI()
