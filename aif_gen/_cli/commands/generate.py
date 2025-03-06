@@ -23,7 +23,7 @@ from aif_gen.util.path import get_run_id
     '--output_file',
     type=click.Path(dir_okay=False, path_type=pathlib.Path),
     help='Path to write the generated dataset.',
-    default=lambda: f"data/{get_run_id(name=click.get_current_context().params['data_config_name'].stem)}.json",
+    default=lambda: f'data/{get_run_id(name=click.get_current_context().params["data_config_name"].stem)}.json',
 )
 @click.option(
     '--max_concurrency',
