@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import pathlib
 from typing import Any, Dict
 
@@ -52,6 +53,12 @@ from aif_gen.dataset.validation import (
     help='Perform llm judge validation on the dataset.',
 )
 @click.option(
+    '--num-workers',
+    type=click.IntRange(min=1, max=64, clamp=True),
+    help='Number of sub-process workers to spawn for computing diversity validation.',
+    default=os.cpu_count(),
+)
+@click.option(
     '--model',
     type=click.STRING,
     help='vLLM model to use as a judge if doing llm_judge validation',
@@ -76,6 +83,7 @@ def validate(
     validate_entropy: bool,
     validate_diversity: bool,
     validate_llm_judge: bool,
+    num_workers: int,
     model: str,
     max_concurrency: int,
     dry_run: bool,
@@ -102,7 +110,7 @@ def validate(
 
     if validate_diversity:
         logging.info('Performing diversity validation')
-        results['diversity_validation'] = diversity_validation(dataset)
+        results['diversity_validation'] = diversity_validation(dataset, num_workers)
         logging.info('Finished diversity validation')
 
     if validate_llm_judge:
