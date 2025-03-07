@@ -38,9 +38,8 @@ uv run benchmarks/dpo/dpo_continual.py \
 ```sh
 accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero3.yaml \
     benchmarks/dpo/dpo_continual.py \
-    --dataset_name debug \
+    --dataset_name benchmarks/continual_data_debug.json \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --reward_model_path Qwen/Qwen2-0.5B-Reward/debug \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \

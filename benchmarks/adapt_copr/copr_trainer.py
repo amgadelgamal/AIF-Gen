@@ -40,6 +40,7 @@ from trl.trainer.utils import (
 
 @dataclass
 class COPRArguments(ScriptArguments):
+    # [No changes needed]
     dataset_name: str = field(
         default='debug',
         metadata={'help': 'The name or path of the continual dataset to use.'},
@@ -62,8 +63,7 @@ class COPRArguments(ScriptArguments):
 
 @dataclass
 class COPRConfig(DPOConfig):
-    """Configuration class for COPRTrainer with COPR-specific parameters."""
-
+    # [No changes needed]
     log_lambda: float = field(
         default=0.0001,
         metadata={'help': 'Initial value for the log of Lagrangian multiplier'},
@@ -114,6 +114,15 @@ class COPRConfig(DPOConfig):
     )
 
 
+# Needed for Zero-3 compatilbility
+class COPRState(nn.Module):
+    def __init__(self, initial_log_lambda: float):
+        super().__init__()
+        self.register_buffer(
+            'log_lambda', torch.tensor([initial_log_lambda]), persistent=True
+        )
+
+
 class COPRTrainer(DPOTrainer):
     """COPR Trainer that implements Continual Human Preference Learning via Optimal Policy Regularization."""
 
@@ -127,9 +136,7 @@ class COPRTrainer(DPOTrainer):
         reward_model: Optional[Union[PreTrainedModel, nn.Module, str]] = None,
         args: Optional[COPRConfig] = None,
         data_collator: Optional[DataCollator] = None,
-        train_dataset: Optional[
-            Dataset
-        ] = None,  # This will already contain the mixture of current task + buffer
+        train_dataset: Optional[Dataset] = None,
         eval_dataset: Optional[Union[Dataset, Dict[str, Dataset]]] = None,
         eval_policy_dataset: Optional[Union[Dataset, Dict[str, Dataset]]] = None,
         processing_class: Optional[
@@ -171,10 +178,9 @@ class COPRTrainer(DPOTrainer):
             peft_config=peft_config,
         )
 
-        # Initialize COPR-specific attributes
-        self.log_lambda = torch.tensor(
-            [getattr(args, 'log_lambda', 0.0001)], device=self.accelerator.device
-        )
+        # Instead of calling self.register_buffer directly (Trainer is not an nn.Module),
+        # create a small module to hold COPR state.
+        self._copr_state = COPRState(getattr(args, 'log_lambda', 0.0001))
 
         # Set up reward model for evaluation
         self.reward_model = reward_model
@@ -222,13 +228,7 @@ class COPRTrainer(DPOTrainer):
         self.current_task: str = 'task_0'
         self.is_final_eval: bool = False
 
-    @property
-    def lambda_value(self) -> float:
-        """Get the current value of the Lagrangian multiplier."""
-        return self.log_lambda.exp().item()
-
     def create_accelerator_and_postprocess(self) -> None:
-        """Override to reuse accelerator instance across trainers."""
         # Only initialize a new Accelerator if one does not exist
         if COPRTrainer.shared_accelerator is None:
             super().create_accelerator_and_postprocess()
@@ -252,6 +252,11 @@ class COPRTrainer(DPOTrainer):
                 getattr(self.accelerator.state, 'fsdp_plugin', None) is not None
             )
 
+    @property
+    def lambda_value(self) -> float:
+        """Get the current value of the Lagrangian multiplier."""
+        return self._copr_state.log_lambda.exp().item()
+
     def compute_loss(
         self,
         model: nn.Module,
@@ -260,155 +265,54 @@ class COPRTrainer(DPOTrainer):
         num_items_in_batch: Optional[int] = None,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Dict]]:
         """Compute the COPR loss with alternating Lagrangian multiplier updates."""
-        # Process inputs - already tokenized by the time they get here
-        chosen_ids = inputs['chosen_input_ids']
-        rejected_ids = inputs['rejected_input_ids']
+        model_output = self.concatenated_forward(model, inputs)
 
-        # Forward pass for chosen responses
-        chosen_logits = model(
-            chosen_ids, attention_mask=inputs['chosen_attention_mask']
-        ).logits
+        if 'ref_chosen_logps' in inputs and 'ref_rejected_logps' in inputs:
+            ref_chosen_logps = inputs['ref_chosen_logps']
+            ref_rejected_logps = inputs['ref_rejected_logps']
+        else:
+            ref_chosen_logps, ref_rejected_logps = self.compute_ref_log_probs(inputs)
 
-        # Forward pass for rejected responses
-        rejected_logits = model(
-            rejected_ids, attention_mask=inputs['rejected_attention_mask']
-        ).logits
+        batch_size = len(model_output['chosen_logps'])
+        n_new = batch_size // 2
 
-        # Get log probabilities
-        chosen_logprobs = F.log_softmax(chosen_logits[:, :-1], dim=-1)
-        rejected_logprobs = F.log_softmax(rejected_logits[:, :-1], dim=-1)
+        chosen_logps = model_output['chosen_logps']
+        rejected_logps = model_output['rejected_logps']
 
-        # Get reference log probabilities
-        with torch.no_grad():
-            if self.ref_model is None:
-                with self.null_ref_context():
-                    ref_chosen_logits = self.model(
-                        chosen_ids, attention_mask=inputs['chosen_attention_mask']
-                    ).logits
-                    ref_rejected_logits = self.model(
-                        rejected_ids, attention_mask=inputs['rejected_attention_mask']
-                    ).logits
-            else:
-                ref_chosen_logits = self.ref_model(
-                    chosen_ids, attention_mask=inputs['chosen_attention_mask']
-                ).logits
-                ref_rejected_logits = self.ref_model(
-                    rejected_ids, attention_mask=inputs['rejected_attention_mask']
-                ).logits
+        policy_advantage = chosen_logps - rejected_logps
 
-            ref_chosen_logprobs = F.log_softmax(ref_chosen_logits[:, :-1], dim=-1)
-            ref_rejected_logprobs = F.log_softmax(ref_rejected_logits[:, :-1], dim=-1)
-
-        batch_size = chosen_ids.shape[0]
-        n_new = batch_size // 2  # First half are new task, second half are from buffer
-
-        # Extract response token indices
-        chosen_response_indices = inputs.get('chosen_response_start_indices', None)
-        rejected_response_indices = inputs.get('rejected_response_start_indices', None)
-
-        # If indices not provided, estimate them (this is a simplification)
-        if chosen_response_indices is None:
-            # Assume prompt length is consistent per batch and is the first part of the sequence
-            prompt_length = inputs.get('prompt_length', chosen_ids.shape[1] // 2)
-            chosen_response_indices = (
-                torch.ones(batch_size, device=chosen_ids.device) * prompt_length
-            )
-            rejected_response_indices = (
-                torch.ones(batch_size, device=rejected_ids.device) * prompt_length
-            )
-
-        # Extract token probabilities for responses
-        chosen_token_logprobs = []
-        ref_chosen_token_logprobs = []
-        rejected_token_logprobs = []
-        ref_rejected_token_logprobs = []
-
-        for i in range(batch_size):
-            start_idx = int(chosen_response_indices[i].item())
-            chosen_token_logprobs.append(
-                self._get_token_logprobs(
-                    chosen_logprobs[i], chosen_ids[i, 1:], start_idx
-                )
-            )
-            ref_chosen_token_logprobs.append(
-                self._get_token_logprobs(
-                    ref_chosen_logprobs[i], chosen_ids[i, 1:], start_idx
-                )
-            )
-
-            start_idx = int(rejected_response_indices[i].item())
-            rejected_token_logprobs.append(
-                self._get_token_logprobs(
-                    rejected_logprobs[i], rejected_ids[i, 1:], start_idx
-                )
-            )
-            ref_rejected_token_logprobs.append(
-                self._get_token_logprobs(
-                    ref_rejected_logprobs[i], rejected_ids[i, 1:], start_idx
-                )
-            )
-
-        chosen_token_logprobs_tensor = torch.cat(chosen_token_logprobs)
-        ref_chosen_token_logprobs_tensor = torch.cat(ref_chosen_token_logprobs)
-        rejected_token_logprobs_tensor = torch.cat(rejected_token_logprobs)
-        ref_rejected_token_logprobs_tensor = torch.cat(ref_rejected_token_logprobs)
-
-        # Calculate advantage (chosen - rejected)
-        policy_advantage = chosen_token_logprobs_tensor - rejected_token_logprobs_tensor
-
-        # Compute DPO-style loss term
         dpo_loss = -F.logsigmoid(policy_advantage).mean()
 
-        # RDPO loss for new task samples (optimization objective)
         rdpo_loss = (
-            (
-                chosen_token_logprobs_tensor[:n_new]
-                - ref_chosen_token_logprobs_tensor[:n_new]
-            ).pow(2)
-            + (
-                rejected_token_logprobs_tensor[:n_new]
-                - ref_rejected_token_logprobs_tensor[:n_new]
-            ).pow(2)
+            (chosen_logps[:n_new] - ref_chosen_logps[:n_new]).pow(2)
+            + (rejected_logps[:n_new] - ref_rejected_logps[:n_new]).pow(2)
         ).mean()
 
-        # Regularization loss for old task samples (constraint)
         reg_loss = (
-            (
-                chosen_token_logprobs_tensor[n_new:]
-                - ref_chosen_token_logprobs_tensor[n_new:]
-            ).pow(2)
-            + (
-                rejected_token_logprobs_tensor[n_new:]
-                - ref_rejected_token_logprobs_tensor[n_new:]
-            ).pow(2)
+            (chosen_logps[n_new:] - ref_chosen_logps[n_new:]).pow(2)
+            + (rejected_logps[n_new:] - ref_rejected_logps[n_new:]).pow(2)
         ).mean()
 
-        # Ensure regularization loss is non-zero
         if reg_loss.item() == 0.0:
             reg_loss = torch.tensor(1e-9, device=reg_loss.device)
 
-        # Compute constraint violation
-        getattr(self.args, 'beta', 0.1)
         constraint_threshold = getattr(self.args, 'constraint_threshold', 0.1)
         Jc = (reg_loss - constraint_threshold).detach().cpu().item()
 
-        # Update Lagrangian multiplier
         lambda_lr = getattr(self.args, 'lambda_lr', 0.0001)
-        self.log_lambda = self.log_lambda + lambda_lr * self.lambda_value * Jc
+        with torch.no_grad():
+            self._copr_state.log_lambda += lambda_lr * self.lambda_value * Jc
 
-        # Compute final loss with Lagrangian
-        Lambda = 1 + self.lambda_value  # Normalization term
+        Lambda = 1 + self.lambda_value
         coef_dpo = getattr(self.args, 'coef_dpo', 0.8)
 
         loss = (
             coef_dpo * rdpo_loss + self.lambda_value / Lambda * reg_loss + dpo_loss
         ) / Lambda
 
-        # Handle device synchronization if needed
         if self.args.average_tokens_across_devices and num_items_in_batch is not None:
             loss *= self.accelerator.num_processes
 
-        # Prepare metrics for logging
         metrics = {
             'loss': loss.item(),
             'dpo_loss': dpo_loss.item(),
@@ -423,28 +327,9 @@ class COPRTrainer(DPOTrainer):
             return loss, {'metrics': metrics}
         return loss
 
-    def _get_token_logprobs(
-        self, logprobs: torch.Tensor, tokens: torch.Tensor, response_start_idx: int
-    ) -> torch.Tensor:
-        """Helper to extract token log probabilities for the response."""
-        # Extract only response tokens starting from response_start_idx
-        response_logprobs = logprobs[response_start_idx:]
-        response_tokens = tokens[response_start_idx:]
-
-        if len(response_tokens) == 0:
-            # Handle edge case with no response tokens
-            return torch.tensor([0.0], device=logprobs.device)
-
-        # Get log prob for each token
-        token_logprobs = torch.gather(
-            response_logprobs, dim=-1, index=response_tokens.unsqueeze(-1)
-        ).squeeze(-1)
-
-        # Return mean log prob
-        return token_logprobs.mean().unsqueeze(0)
-
     def preprocess_policy_dataset(self, dataset: Dataset) -> Dataset:
         """Preprocess dataset for policy evaluation."""
+        # [No changes needed]
         dataset_text_field = 'prompt'
 
         def tokenize(element: Dict) -> Dict[str, List[int]]:
@@ -477,6 +362,7 @@ class COPRTrainer(DPOTrainer):
 
     def evaluate_policy(self) -> Dict:
         """Evaluate the policy using the evaluation policy dataloader."""
+        # [No changes needed]
         mode = self.model.training
         self.model.eval()
         eval_metrics = defaultdict(list)
@@ -540,19 +426,14 @@ class COPRTrainer(DPOTrainer):
         self.model.train(mode)
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
+    # [No changes needed for other methods]
     def store_metrics(
         self,
         metrics: Dict,
         train_eval: Optional[str] = None,
         split: Optional[str] = None,
     ) -> None:
-        """Override store_metrics to organize metrics by task.
-
-        Args:
-            metrics: The metrics to store
-            train_eval: String indicating 'train' or 'eval' (used by DPOTrainer)
-            split: Alternative name for train_eval (for backward compatibility)
-        """
+        """Override store_metrics to organize metrics by task."""
         if not hasattr(self, '_stored_metrics'):
             self._stored_metrics: Dict = defaultdict(lambda: defaultdict(list))
 

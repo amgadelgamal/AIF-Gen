@@ -72,19 +72,18 @@ Explanation of Arguments:
 This configuration uses the accelerate library for distributed training, enabling multi-GPU and mixed-precision training.
 
 ```sh
-accelerate launch --config_file benchmarks/adapt_copr/accelerate_configs/deepspeed_zero3.yaml \
+accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero3.yaml \
     benchmarks/adapt_copr/copr.py \
-    --dataset_name debug \
-    --mock true \
+    --dataset_name benchmarks/continual_data_debug.json \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 8 \
     --gradient_checkpointing \
-    --logging_steps 25 \
+    --logging_steps 5 \
     --eval_strategy steps \
-    --eval_steps 50 \
+    --eval_steps 10 \
     --save_steps 3 \
     --bf16 \
     --output_dir Qwen2-0.5B-COPR-test \
@@ -93,7 +92,7 @@ accelerate launch --config_file benchmarks/adapt_copr/accelerate_configs/deepspe
     --lora_r 32 \
     --lora_alpha 16 \
     --memory_buffer_size 100 \
-    --buffer_ratio 0.1 \
+    --buffer_ratio 0.3 \
     --use_buffer_ratio True
 ```
 
