@@ -5,7 +5,7 @@ This repository adapts TRL for continual learning. The commands below use a cons
 ### Sync additional dependencies
 
 ```sh
-uv sync --group benchmarks.ppo
+uv sync --group benchmarks.dpo
 ```
 
 ## Run PPO
@@ -17,7 +17,7 @@ uv run benchmarks/ppo/ppo_continual.py \
     --dataset_name benchmarks/continual_data_debug.json \
     --mock False \
     --sft_model_path Qwen/Qwen2-0.5B-Instruct \
-    --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
+    --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD_0 \
     --reward_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
@@ -44,7 +44,7 @@ accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero
     --dataset_name benchmarks/continual_data_debug.json \
     --mock False \
     --sft_model_path Qwen/Qwen2-0.5B-Instruct \
-    --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
+    --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD_0 \
     --reward_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
@@ -71,7 +71,7 @@ uv run benchmarks/ppo/ppo_continual.py \
     --dataset_name benchmarks/continual_data_debug.json \
     --mock False \
     --sft_model_path Qwen/Qwen2-0.5B-Instruct \
-    --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
+    --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD_0 \
     --reward_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
     --learning_rate 5.0e-7 \
     --num_train_epochs 1 \

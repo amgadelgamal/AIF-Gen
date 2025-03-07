@@ -10,7 +10,6 @@ import torch
 import torch.nn as nn
 from accelerate import Accelerator
 from datasets import Dataset
-from torch.utils.data import DataLoader
 from transformers import (
     BaseImageProcessor,
     DataCollator,
@@ -20,7 +19,6 @@ from transformers import (
     PreTrainedTokenizerBase,
     ProcessorMixin,
     Trainer,
-    default_data_collator,
 )
 from transformers.trainer_callback import TrainerCallback
 from trl import ScriptArguments
@@ -65,18 +63,6 @@ class ContinualPPOConfig(PPOConfig):
         default=False,
         metadata={'help': 'Whether to use mock dataset.'},
     )
-    response_length: int = field(
-        default=53,
-        metadata={
-            'help': 'Length of the response. Borrowed from PPOCConfig and used only for evaluation.'
-        },
-    )
-    temperature: float = field(
-        default=0.7,
-        metadata={
-            'help': 'Temperature for sampling. Borrowed from PPOConfig and used only for evaluation, taken from OnPolicyConfig config'
-        },
-    )
     eval_greedy_policy: bool = field(
         default=False,
         metadata={'help': 'Whether to use greedy policy for evaluation.'},
@@ -112,7 +98,6 @@ class ContinualPPOTrainer(PPOTrainer):
         ),
         callbacks: Optional[list[TrainerCallback]] = None,
         peft_config: Optional[dict] = None,
-        eval_policy_dataloader: Optional[DataLoader] = None,
     ):
         # catching this here to test our implementation of the configs
         if args is None:
@@ -131,7 +116,6 @@ class ContinualPPOTrainer(PPOTrainer):
             callbacks,
             peft_config,
         )
-        self.eval_policy_dataloader = eval_policy_dataloader
 
         # No need for anything else as PPO itself is already set up with the reward model
 
@@ -159,30 +143,6 @@ class ContinualPPOTrainer(PPOTrainer):
                 getattr(self.accelerator.state, 'fsdp_plugin', None) is not None
             )
 
-    def get_eval_dataloader(self) -> DataLoader:
-        """Returns a DataLoader for the evaluation dataset.
-        If eval_dataset is a dict, the first dataset in the dict is chosen.
-        Uses self.args.eval_batch_size if it exists, defaulting to 8 otherwise.
-        Uses self.data_collator if provided, otherwise uses the default data collator.
-        """
-        if self.eval_dataset is None:
-            raise ValueError('No evaluation dataset provided.')
-        batch_size = getattr(self.args, 'eval_batch_size', 8)
-        if isinstance(self.eval_dataset, dict):
-            # Use the first dataset available in the dict
-            eval_dataset = list(self.eval_dataset.values())[0]
-        else:
-            eval_dataset = self.eval_dataset
-
-        # Use the provided data_collator if available; otherwise, fall back to default_data_collator.
-        collate_fn = (
-            self.data_collator
-            if self.data_collator is not None
-            else default_data_collator
-        )
-
-        return DataLoader(eval_dataset, batch_size=batch_size, collate_fn=collate_fn)
-
     def evaluate(self) -> dict:
         """Custom evaluation method for PPO. Generates completions from the evaluation dataloader,
         computes rewards using the reward model, and returns aggregated metrics.
@@ -208,15 +168,8 @@ class ContinualPPOTrainer(PPOTrainer):
                 do_sample=True,
             )
 
-        # Ensure eval_policy_dataloader exists
-        if (
-            not hasattr(self, 'eval_policy_dataloader')
-            or self.eval_policy_dataloader is None
-        ):
-            self.eval_policy_dataloader = self.get_eval_dataloader()
-
         with torch.no_grad():
-            for batch in self.eval_policy_dataloader:
+            for batch in self.eval_dataloader:
                 # Move the query tokens to the correct device
                 query = batch['input_ids'].to(self.accelerator.device)
                 context_length = query.shape[1]
@@ -225,16 +178,15 @@ class ContinualPPOTrainer(PPOTrainer):
                     self.model, self.accelerator
                 ) as unwrapped_model:
                     core_model = unwrapped_model
-                    # Recursively unwrap until we get a model with a generate() method.
-                    while not hasattr(core_model, 'generate'):
-                        if hasattr(core_model, 'policy'):
-                            core_model = core_model.policy
-                        elif hasattr(core_model, 'model'):
-                            core_model = core_model.model
-                        elif hasattr(core_model, 'policy_model'):
-                            core_model = core_model.policy_model
-                        else:
-                            break  # Cannot unwrap further; exit loop.
+
+                    if hasattr(core_model, 'policy'):
+                        core_model = core_model.policy
+                    elif hasattr(core_model, 'model'):
+                        core_model = core_model.model
+                    elif hasattr(core_model, 'policy_model'):
+                        core_model = core_model.policy_model
+                    else:
+                        break  # No policy attribute found - will not be able to generate
 
                     query_response, _ = batch_generation(
                         core_model,

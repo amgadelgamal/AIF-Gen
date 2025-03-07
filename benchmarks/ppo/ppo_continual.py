@@ -60,7 +60,7 @@ def main(
     if tokenizer.chat_template is None:
         tokenizer.chat_template = SIMPLE_CHAT_TEMPLATE
     value_model = AutoModelForSequenceClassification.from_pretrained(
-        script_args.value_model_path + '_0',
+        script_args.value_model_path,
         trust_remote_code=model_args.trust_remote_code,
         num_labels=1,
     )
@@ -82,7 +82,7 @@ def main(
     )
     base_output_dir = training_args.output_dir
 
-    # Extract clean dataset name (e.g. "debug" from "benchmarks/continual_data_debug.json")
+    # Extract clean dataset name (e.g. "continual_data_debug" from "benchmarks/continual_data_debug.json")
     clean_dataset_name = os.path.basename(script_args.dataset_name)
     if '.' in clean_dataset_name:
         clean_dataset_name = clean_dataset_name.split('.')[0]
@@ -91,7 +91,7 @@ def main(
         # Build a custom repository name for the ppo model
         # e.g. "Qwen2-0.5B-Instruct_debug_PPO_0"
         custom_repo_name = (
-            str(model).split('/')[-1] + '_' + clean_dataset_name + '_PPO_' + str(i)
+            model.split('/')[-1] + '_' + clean_dataset_name + '_PPO_' + str(i)
         )
         if training_args.push_to_hub:
             training_args.hub_model_id = custom_repo_name
@@ -101,9 +101,7 @@ def main(
         # Load the reward model following a similar naming convention.
         # Here we assume that the reward_model_path is expected to include the suffix.
         # e.g. "path/to/reward_model_Qwen2-0.5B-Instruct_debug_REWARD_0"
-        reward_model_repo = (
-            model.split('/')[-1] + '_' + clean_dataset_name + '_REWARD_' + str(i)
-        )
+
         # Either load using training_args.reward_model_path with the suffix or adjust as needed.
         reward_model = AutoModelForSequenceClassification.from_pretrained(
             training_args.reward_model_path + '_' + str(i), num_labels=1
