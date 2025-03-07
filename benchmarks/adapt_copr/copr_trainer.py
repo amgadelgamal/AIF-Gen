@@ -3,7 +3,7 @@ import inspect
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -219,7 +219,8 @@ class COPRTrainer(DPOTrainer):
             self.eval_policy_dataset = None
             self.eval_policy_dataloader = None
 
-        print(self.ref_model)
+        self.current_task: str = 'task_0'
+        self.is_final_eval: bool = False
 
     @property
     def lambda_value(self) -> float:
@@ -539,31 +540,99 @@ class COPRTrainer(DPOTrainer):
         self.model.train(mode)
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
+    def store_metrics(
+        self,
+        metrics: Dict,
+        train_eval: Optional[str] = None,
+        split: Optional[str] = None,
+    ) -> None:
+        """Override store_metrics to organize metrics by task.
+
+        Args:
+            metrics: The metrics to store
+            train_eval: String indicating 'train' or 'eval' (used by DPOTrainer)
+            split: Alternative name for train_eval (for backward compatibility)
+        """
+        if not hasattr(self, '_stored_metrics'):
+            self._stored_metrics: Dict = defaultdict(lambda: defaultdict(list))
+
+        # Use train_eval if provided, otherwise fall back to split
+        effective_split = train_eval if train_eval is not None else split
+
+        # Add task prefix to eval metrics for better organization
+        if effective_split == 'eval' and hasattr(self, 'current_task'):
+            # Store metrics both in default location and in task-specific location
+            for key, value in metrics.items():
+                self._stored_metrics[effective_split][key].append(value)
+                task_key = f'{self.current_task}/{key}'
+                self._stored_metrics['task'][task_key].append(value)
+
+                # For final evaluation, also store in eval.last
+                if self.is_final_eval:
+                    self._stored_metrics['eval.last'][key].append(value)
+        else:
+            # For training metrics, keep original behavior but also add to task
+            for key, value in metrics.items():
+                self._stored_metrics[effective_split or 'train'][key].append(value)
+
+                if hasattr(self, 'current_task'):
+                    task_key = f'{self.current_task}/{key}'
+                    self._stored_metrics['task'][task_key].append(value)
+
     def log(
         self, logs: Dict[str, Union[float, str]], start_time: Optional[float] = None
     ) -> None:
-        """Add COPR-specific metrics to logs including policy evaluation metrics."""
+        """Reorganize logs into train, task, and eval.last categories."""
         train_eval = 'train' if 'loss' in logs else 'eval'
 
-        # First, add averaged stored metrics to logs (from parent class)
-        for key, metrics in self._stored_metrics[train_eval].items():
-            logs[key] = torch.tensor(metrics).mean().item()
-        # Clear stored metrics after processing
-        del self._stored_metrics[train_eval]
+        # Process stored metrics
+        processed_logs = {}
 
-        # Then add COPR-specific metrics
-        if train_eval == 'eval' and self.eval_policy_dataloader is not None:
-            print('Computing policy metrics...')
-            eval_policy_metrics = self.evaluate_policy()
-            logs.update(eval_policy_metrics)
+        # Process the train/eval metrics
+        for key, metrics in self._stored_metrics.get(train_eval, {}).items():
+            if metrics:
+                processed_logs[key] = torch.tensor(metrics).mean().item()
+
+        # Process task-specific metrics
+        for key, metrics in self._stored_metrics.get('task', {}).items():
+            if metrics:
+                processed_logs[f'task/{key}'] = torch.tensor(metrics).mean().item()
+
+        # Process eval.last metrics (final evaluation results)
+        if self.is_final_eval and 'eval.last' in self._stored_metrics:
+            for key, metrics in self._stored_metrics['eval.last'].items():
+                if metrics:
+                    processed_logs[f'eval.last/{key}'] = (
+                        torch.tensor(metrics).mean().item()
+                    )
 
         # Add lambda value to logs
-        logs['lambda'] = self.lambda_value
+        processed_logs['lambda'] = self.lambda_value
 
-        # Call the grandparent's log method (Trainer.log) with version checking
-        # This matches the parent DPOTrainer implementation
+        # Clear stored metrics after processing
+        self._stored_metrics = defaultdict(lambda: defaultdict(list))
 
+        # Update the logs with our processed logs
+        logs.update(processed_logs)
+
+        # Call the parent's log method
         if version.parse(transformers.__version__) >= version.parse('4.47.0.dev0'):
             return Trainer.log(self, logs, start_time)
         else:  # transformers<=4.46
             return Trainer.log(self, logs)
+
+    def evaluate(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+        """Override evaluate to mark when we're doing final evaluation."""
+        # Check if this is the final evaluation (can be set by external code)
+        result = super().evaluate(*args, **kwargs)
+        return result
+
+    def set_task(self, task_name: str) -> 'COPRTrainer':
+        """Set the current task name for better metric organization."""
+        self.current_task = task_name
+        return self
+
+    def mark_final_eval(self, is_final: bool = True) -> 'COPRTrainer':
+        """Mark that the next evaluation will be the final one for the current task."""
+        self.is_final_eval = is_final
+        return self

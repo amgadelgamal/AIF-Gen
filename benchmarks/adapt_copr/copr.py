@@ -17,7 +17,6 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
-import wandb as wb
 from benchmarks.adapt_copr.copr_trainer import (
     COPRArguments,
     COPRConfig,
@@ -130,6 +129,7 @@ def main(
             processing_class=tokenizer,
             peft_config=peft_config,
         )
+        trainer.set_task(f'task_{i}')
 
         # Train on combined dataset (current task + buffer)
         print(f'Training dataset: {current_dataset_name}')
@@ -157,15 +157,22 @@ def main(
 
         # Evaluate and log metrics to WandB
         if training_args.eval_strategy != 'no':
+            # Mark this as the final evaluation for the current task
+            trainer.mark_final_eval(True)
+
+            # Run evaluation
             metrics = trainer.evaluate()
+
+            # Reset final eval flag
+            trainer.mark_final_eval(False)
+
+            # Save metrics to file
             if i == 0:
                 trainer.log({'dataset_name': script_args.dataset_name})
+
+            # Include dataset index in metrics
             metrics['dataset'] = i
-            print(f'eval/dataset/{i}')
-            trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics('eval', metrics)
-            wb.log({'eval': {'last': metrics}})  # type: ignore[attr-defined]
-            wb.log({f'task/{current_dataset_name}/last': metrics})  # type: ignore[attr-defined]
 
         # Save model checkpoint for the task
         trainer.save_model(os.path.join(training_args.output_dir, 'last'))
