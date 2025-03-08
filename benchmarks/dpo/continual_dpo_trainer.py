@@ -191,9 +191,6 @@ class ContinualDPOTrainer(DPOTrainer):
             self.eval_policy_dataset = None
             self.eval_policy_dataloader = None
 
-    # ToDo: I was not able to run code with @override(DPOTrainer.log), need to resolve it
-    # @override(Trainer.create_accelerator_and_postprocess)
-    @override
     def create_accelerator_and_postprocess(self) -> None:
         # Only initialize a new Accelerator if one does not exist
         if ContinualDPOTrainer.shared_accelerator is None:
@@ -311,8 +308,6 @@ class ContinualDPOTrainer(DPOTrainer):
         self.model.train(mode)
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
-    # @override(DPOTrainer.log)
-    @override
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
         """Log `logs` on the various objects watching training, including stored metrics."""
         train_eval = 'train' if 'loss' in logs else 'eval'

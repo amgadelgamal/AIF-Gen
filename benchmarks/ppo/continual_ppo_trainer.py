@@ -102,6 +102,13 @@ class ContinualPPOTrainer(PPOTrainer):
         # catching this here to test our implementation of the configs
         if args is None:
             raise ValueError('`args` cannot be None')
+
+        if ContinualPPOTrainer.shared_accelerator is None:
+            ContinualPPOTrainer.shared_accelerator = Accelerator(
+                gradient_accumulation_steps=args.gradient_accumulation_steps
+            )
+        self.accelerator = ContinualPPOTrainer.shared_accelerator
+
         super().__init__(
             args,
             processing_class,
@@ -118,6 +125,9 @@ class ContinualPPOTrainer(PPOTrainer):
         )
 
         # No need for anything else as PPO itself is already set up with the reward model
+        self.accelerator = (
+            ContinualPPOTrainer.shared_accelerator
+        )  # turn the accelerator back to the shared one
 
     def create_accelerator_and_postprocess(self) -> None:
         # Only initialize a new Accelerator if one does not exist

@@ -13,7 +13,7 @@ resolution-markers = [
 
 [[package]]
 name = "accelerate"
-version = "1.4.0"
+version = "0.34.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "huggingface-hub" },
@@ -25,9 +25,9 @@ dependencies = [
     { name = "safetensors" },
     { name = "torch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8f/02/24a4c4edb9cf0f1e0bc32bb6829e2138f1cc201442e7a24f0daf93b8a15a/accelerate-1.4.0.tar.gz", hash = "sha256:37d413e1b64cb8681ccd2908ae211cf73e13e6e636a2f598a96eccaa538773a5", size = 348745 }
+sdist = { url = "https://files.pythonhosted.org/packages/4d/82/5712c44a5a5ef7c4d375363b179a099e834491221ece02e81a1209b08233/accelerate-0.34.2.tar.gz", hash = "sha256:98c1ebe1f5a45c0a3af02dc60b5bb8b7d58d60c3326a326a06ce6d956b18ca5b", size = 328806 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/f6/791b9d7eb371a2f385da3b7f1769ced72ead7bf09744637ea2985c83d7ee/accelerate-1.4.0-py3-none-any.whl", hash = "sha256:f6e1e7dfaf9d799a20a1dc45efbf4b1546163eac133faa5acd0d89177c896e55", size = 342129 },
+    { url = "https://files.pythonhosted.org/packages/b0/5e/80cee674cdbe529ef008721d7eebb50ae5def4314211d82123aa23e828f8/accelerate-0.34.2-py3-none-any.whl", hash = "sha256:d69159e2c4e4a473d14443b27d2d732929254e826b3ab4813b3785b5ac616c7c", size = 324366 },
 ]
 
 [[package]]
@@ -55,6 +55,16 @@ benchmarks = [
     { name = "setuptools" },
 ]
 benchmarks-dpo = [
+    { name = "datasets" },
+    { name = "deepspeed" },
+    { name = "peft" },
+    { name = "submitit" },
+    { name = "transformers" },
+    { name = "trl" },
+    { name = "wandb" },
+]
+benchmarks-ppo = [
+    { name = "accelerate" },
     { name = "datasets" },
     { name = "deepspeed" },
     { name = "peft" },
@@ -97,6 +107,16 @@ benchmarks = [{ name = "setuptools", specifier = ">=75.8.0" }]
 benchmarks-dpo = [
     { name = "datasets", specifier = ">=3.2.0" },
     { name = "deepspeed", specifier = ">=0.16.3" },
+    { name = "peft", specifier = ">=0.14.0" },
+    { name = "submitit", specifier = ">=1.5.2" },
+    { name = "transformers", specifier = ">=4.48.3" },
+    { name = "trl", specifier = ">=0.14.0" },
+    { name = "wandb", specifier = ">=0.19.6" },
+]
+benchmarks-ppo = [
+    { name = "accelerate", specifier = "==0.34.2" },
+    { name = "datasets", specifier = ">=3.2.0" },
+    { name = "deepspeed", specifier = "==0.16.3" },
     { name = "peft", specifier = ">=0.14.0" },
     { name = "submitit", specifier = ">=1.5.2" },
     { name = "transformers", specifier = ">=4.48.3" },
@@ -548,7 +568,7 @@ wheels = [
 
 [[package]]
 name = "deepspeed"
-version = "0.16.4"
+version = "0.16.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "einops" },
@@ -565,11 +585,11 @@ dependencies = [
     { name = "torch" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b5/a9/f408e70e37fcd877e56e446081b40f2ce225f726a070cc4dfc478c570b58/deepspeed-0.16.4.tar.gz", hash = "sha256:495febfb6dd20423f44b1c4a1bb6da2cadbcaf9b07962e17f87d52edfeec9bba", size = 1440664 }
+sdist = { url = "https://files.pythonhosted.org/packages/69/c5/9617171e726b11a7a753315906ae0ee8944925c9b6f975f22845c382eda7/deepspeed-0.16.3.tar.gz", hash = "sha256:3877b4d825fc940e3752f4e905f911a45623aa6f9f81b072a0d5deb87a2b785a", size = 1428532 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/65/1a6394f5d6dee851e9ea59e385f6d6428e3bfe36f83c06e0336e14dcfd11/deepspeed-0.16.4-cp310-cp310-win_amd64.whl", hash = "sha256:09e0b4f10c22b8054f340d90077a8d382092491fcf90fe1779c4e6180314e234", size = 56240918 },
-    { url = "https://files.pythonhosted.org/packages/a3/aa/bb67b63cc25c5e29e4ca3f8b155e0faf74d5a33acf2ec67e249206a36b0f/deepspeed-0.16.4-cp311-cp311-win_amd64.whl", hash = "sha256:7daa0c05780dd7f95d51bace474e116707c733f4d9d8c279773e1e969db1b841", size = 56257346 },
-    { url = "https://files.pythonhosted.org/packages/d4/59/fd251661b78b049eed7ee46f0d8d51c69ae7fbb710716a1ebcc796a6b0fd/deepspeed-0.16.4-cp312-cp312-win_amd64.whl", hash = "sha256:2998a0a38fe5798d58e7575e16e032f03cc7841ee32f691cd82253745e7a97b4", size = 56259079 },
+    { url = "https://files.pythonhosted.org/packages/52/23/cfe2166f06f1817b73b8695addd2fded55f4189322bcf181cfb7feaba550/deepspeed-0.16.3-cp310-cp310-win_amd64.whl", hash = "sha256:3c083645561b6d2d7246c30d63c900a1edf07fc302e27744fe264aca5fdaa456", size = 42055395 },
+    { url = "https://files.pythonhosted.org/packages/ce/92/853de2a32b3f9c0945e0c9e145eddac98e570c1faebcd58aa85e6dcd89ba/deepspeed-0.16.3-cp311-cp311-win_amd64.whl", hash = "sha256:719b1a417c2863f32f482d9948cb575f7fa08cc6d548250e6557057101c9aeab", size = 42071961 },
+    { url = "https://files.pythonhosted.org/packages/55/8f/57ee424e114478a667c604b2f3f05bbc1addc0afc089b9ab6a64b233063d/deepspeed-0.16.3-cp312-cp312-win_amd64.whl", hash = "sha256:8b1016f8d89f1617d9e92c3f03a93dfc32bbfd173aecbb06d209fe6d593ed766", size = 42072463 },
 ]
 
 [[package]]
