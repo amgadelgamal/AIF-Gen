@@ -3,13 +3,15 @@ import inspect
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
+import transformers
 from accelerate import Accelerator
 from datasets import Dataset
+from packaging import version
 from transformers import (
     BaseImageProcessor,
     DataCollator,
@@ -34,7 +36,7 @@ from trl.trainer.ppo_trainer import (
 @dataclass
 class ContinualPPOArguments(ScriptArguments):
     value_model_path: str = field(
-        default='AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug/0',
+        default='AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug_REWARD',
         metadata={'help': 'Path to the value model or a HuggingFace model path.'},
     )
     dataset_name: str = field(
@@ -103,6 +105,11 @@ class ContinualPPOTrainer(PPOTrainer):
         if args is None:
             raise ValueError('`args` cannot be None')
 
+        # Initialize metrics tracking storage
+        self._stored_metrics: Dict = defaultdict(lambda: defaultdict(list))
+        self.current_task = 'task_0'  # Default task name
+        self.is_final_eval = False
+
         if ContinualPPOTrainer.shared_accelerator is None:
             ContinualPPOTrainer.shared_accelerator = Accelerator(
                 gradient_accumulation_steps=args.gradient_accumulation_steps
@@ -153,7 +160,7 @@ class ContinualPPOTrainer(PPOTrainer):
                 getattr(self.accelerator.state, 'fsdp_plugin', None) is not None
             )
 
-    def evaluate(self) -> dict:
+    def evaluate(self) -> Dict[str, float]:
         """Custom evaluation method for PPO. Generates completions from the evaluation dataloader,
         computes rewards using the reward model, and returns aggregated metrics.
         """
@@ -222,8 +229,121 @@ class ContinualPPOTrainer(PPOTrainer):
                 )
 
         self.model.train(mode)
-        # Aggregate and return the metrics (here, averaging the reward scores)
-        return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
+        # Calculate the aggregated metrics
+        aggregated_metrics = {
+            'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()
+        }
+
+        # Store metrics in our tracking system
+        for key, value in aggregated_metrics.items():
+            self.store_metrics({key: value}, train_eval='eval')
+
+        return aggregated_metrics
+
+    # FROM COPR: https://github.com/ComplexData-MILA/AIF-Gen/blob/a8ff4900a4415391c6ddbd003384b5a11b95254c/benchmarks/adapt_copr/copr_trainer.py
+    def store_metrics(
+        self,
+        metrics: Dict,
+        train_eval: Optional[str] = None,
+        split: Optional[str] = None,
+    ) -> None:
+        """Override store_metrics to organize metrics by task."""
+        if not hasattr(self, '_stored_metrics'):
+            self._stored_metric: Dict = defaultdict(lambda: defaultdict(list))
+
+        # Use train_eval if provided, otherwise fall back to split
+        effective_split = train_eval if train_eval is not None else split
+
+        # Add task prefix to eval metrics for better organization
+        if effective_split == 'eval' and hasattr(self, 'current_task'):
+            # Store metrics both in default location and in task-specific location
+            for key, value in metrics.items():
+                self._stored_metrics[effective_split][key].append(value)
+                task_key = f'{self.current_task}/{key}'
+                self._stored_metrics['task'][task_key].append(value)
+
+                # For final evaluation, also store in eval.last
+                if self.is_final_eval:
+                    self._stored_metrics['eval.last'][key].append(value)
+        else:
+            # For training metrics, keep original behavior but also add to task
+            for key, value in metrics.items():
+                self._stored_metrics[effective_split or 'train'][key].append(value)
+
+                if hasattr(self, 'current_task'):
+                    task_key = f'{self.current_task}/{key}'
+                    self._stored_metrics['task'][task_key].append(value)
+
+    def log(
+        self, logs: Dict[str, Union[float, str]], start_time: Optional[float] = None
+    ) -> None:
+        """Reorganize logs into train, task, and eval.last categories."""
+        # store the metrics first because the parent's log method will clear them
+        self.store_metrics(logs, 'train') if 'loss' in logs else self.store_metrics(
+            logs, 'eval'
+        )
+
+        train_eval = 'train' if 'loss' in logs else 'eval'
+
+        # Process stored metrics
+        processed_logs = {}
+
+        # Process the train/eval metrics
+        for key, metrics in self._stored_metrics.get(train_eval, {}).items():
+            if metrics:
+                if any(isinstance(m, dict) for m in metrics):
+                    # For dictionary metrics, just pass the first one through
+                    processed_logs[key] = metrics[0]
+                else:
+                    # For numerical metrics, compute mean as before
+                    processed_logs[key] = (
+                        torch.tensor(metrics, dtype=torch.float32).mean().item()
+                    )
+
+        # Process task-specific metrics
+        for key, metrics in self._stored_metrics.get('task', {}).items():
+            if metrics:
+                if any(isinstance(m, dict) for m in metrics):
+                    # For dictionary metrics, just pass the first one through
+                    processed_logs[f'task/{key}'] = metrics[0]
+                else:
+                    # For numerical metrics, compute mean as before
+                    processed_logs[f'task/{key}'] = (
+                        torch.tensor(metrics, dtype=torch.float32).mean().item()
+                    )
+
+        # Process eval.last metrics (final evaluation results)
+        if self.is_final_eval and 'eval.last' in self._stored_metrics:
+            for key, metrics in self._stored_metrics['eval.last'].items():
+                if metrics:
+                    if any(isinstance(m, dict) for m in metrics):
+                        processed_logs[f'eval.last/{key}'] = metrics[0]
+                    else:
+                        processed_logs[f'eval.last/{key}'] = (
+                            torch.tensor(metrics, dtype=torch.float32).mean().item()
+                        )
+
+        # Clear stored metrics after processing
+        self._stored_metrics = defaultdict(lambda: defaultdict(list))
+
+        # Update the logs with our processed logs
+        logs.update(processed_logs)
+
+        # Call the parent's log method
+        if version.parse(transformers.__version__) >= version.parse('4.47.0.dev0'):
+            return Trainer.log(self, logs, start_time)
+        else:  # transformers<=4.46
+            return Trainer.log(self, logs)
+
+    def set_task(self, task_name: str) -> 'ContinualPPOTrainer':
+        """Set the current task name for better metric organization."""
+        self.current_task = task_name
+        return self
+
+    def mark_final_eval(self, is_final: bool = True) -> 'ContinualPPOTrainer':
+        """Mark that the next evaluation will be the final one for the current task."""
+        self.is_final_eval = is_final
+        return self
 
     def save_model(
         self, output_dir: Optional[str] = None, _internal_call: bool = False

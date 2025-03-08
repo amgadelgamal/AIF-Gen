@@ -64,6 +64,8 @@ accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero
     --push_to_hub True
 ```
 
+*Make sure you do not add the dataset index to the reward model name as the script itself iterates over the dataset indices.*
+
 ### Full Training (without PEFT push, for local evaluation)
 
 ```sh
@@ -104,3 +106,7 @@ All details per task and hyperparameters are going to be loaded in your wandb da
 ______________________________________________________________________
 
 These commands ensure that all runs (whether via uv run or accelerate launch) use the same consistent set of parameters that you’ve confirmed to work. Adjust any parameters as needed in your configuration before running.
+
+______________________________________________________________________
+
+## Additional Notes
