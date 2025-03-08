@@ -3,7 +3,6 @@
 import os
 
 import torch
-import wandb
 from continual_dpo_trainer import (
     ContinualDPOArguments,
     ContinualDPOConfig,
@@ -24,6 +23,7 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
+import wandb as wb
 from benchmarks.dataloading import init_continual_dataset
 
 
@@ -101,8 +101,8 @@ def main(
 
             def concat_prompt_to_completions(example: dict) -> dict[str, list[int]]:
                 return {
-                    'chosen': example['prompt'] + example['chosen'],
-                    'rejected': example['prompt'] + example['rejected'],
+                    'chosen': example['prompt'] + ' ' + example['chosen'],
+                    'rejected': example['prompt'] + ' ' + example['rejected'],
                 }
 
             dataset_train = dataset[script_args.dataset_train_split].map(
@@ -149,8 +149,8 @@ def main(
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics(f'eval', metrics)
             # ToDo: we can't use trainer.log here because it repeats computations of some the metrics, that can be heavy
-            wandb.log({'eval': {'last': metrics}})
-            wandb.log({f'task/{current_dataset_name}/last': metrics})
+            wb.log({'eval': {'last': metrics}})  # type: ignore[attr-defined]
+            wb.log({f'task/{current_dataset_name}/last': metrics})  # type: ignore[attr-defined]
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + '/last')

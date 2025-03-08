@@ -1,3 +1,4 @@
+import os
 import warnings
 from dataclasses import dataclass, field
 from typing import Dict
@@ -121,6 +122,25 @@ def train_model(
             'This may lead to silent bugs. Make sure to pass --lora_task_type SEQ_CLS when using this script with PEFT.',
             UserWarning,
         )
+    # Use only the filename part without extension from the dataset name.
+    clean_dataset_name = os.path.basename(script_args.dataset_name)
+    if '.' in clean_dataset_name:
+        clean_dataset_name = clean_dataset_name.split('.')[0]
+
+    # Create a custom repo name and update the hub_model_id.
+    custom_repo_name = (
+        model_args.model_name_or_path.split('/')[-1]
+        + '_'
+        + clean_dataset_name
+        + '_REWARD_'
+        + str(index)
+    )
+    if training_args.push_to_hub:
+        training_args.hub_model_id = custom_repo_name
+
+    # Update output_dir so that saving/pushing is done to a single folder.
+    training_args.output_dir = os.path.join(training_args.output_dir, custom_repo_name)
+    print(f'Saving model {index} to: {training_args.output_dir}')
 
     # Initialize and run trainer
     trainer = RewardTrainer(
@@ -135,17 +155,19 @@ def train_model(
     )
     trainer.train()
 
-    # Save model and optionally push to the hub
-    print(f'Saving model {index} to: {training_args.output_dir}')
-    trainer.save_model(
-        training_args.output_dir + f'/{script_args.dataset_name}/{index}'
-    )
     if training_args.eval_strategy != 'no':
         metrics = trainer.evaluate()
         trainer.log_metrics('eval', metrics)
         trainer.save_metrics('eval', metrics)
-    if training_args.push_to_hub:
-        trainer.push_to_hub(dataset_name=script_args.dataset_name + str(index))
+
+    # Save locally or push to the hub.
+    if not training_args.push_to_hub:
+        trainer.save_model(training_args.output_dir)
+    else:
+        trainer.push_to_hub(
+            model_name=custom_repo_name,
+            dataset_name=clean_dataset_name + '_' + str(index),
+        )
 
 
 if __name__ == '__main__':

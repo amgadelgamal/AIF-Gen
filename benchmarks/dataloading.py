@@ -5,6 +5,10 @@ from datasets import Dataset, load_dataset
 
 from aif_gen.dataset import ContinualAlignmentDataset
 
+# TODO based on issue: #75, descriptiveness is used for prompts for dpo eval
+# but since PPO's example code works with explicit datasets, we need to define
+# a function to make the implicit datasets explicit
+
 
 def _init_mock_dataset(
     dataset_name: Union[str, ContinualAlignmentDataset, Path],
@@ -78,12 +82,18 @@ def get_ultrafeedback2anthropic_datasets_reduced() -> list[dict[str, Any]]:
             'test': load_dataset(
                 'trl-lib/ultrafeedback_binarized', split='test'
             ).select(range(1000)),
+            'descriptiveness': load_dataset(
+                'trl-lib/ultrafeedback-prompt', split='train'
+            ).select(range(600)),
         },
         {
             'train': load_dataset('Anthropic/hh-rlhf', split='train').select(
                 range(35200)
             ),
             'test': load_dataset('Anthropic/hh-rlhf', split='test').select(range(1000)),
+            'descriptiveness': load_dataset(
+                'trl-lib/ultrafeedback-prompt', split='train'
+            ).select(range(600, 1200)),
         },
     ]
     return datasets
@@ -91,7 +101,20 @@ def get_ultrafeedback2anthropic_datasets_reduced() -> list[dict[str, Any]]:
 
 def get_ultrafeedback2anthropic_datasets() -> list[dict[str, Any]]:
     datasets = [
-        load_dataset('trl-lib/ultrafeedback_binarized'),
-        load_dataset('Anthropic/hh-rlhf'),
+        {
+            'train': load_dataset('trl-lib/ultrafeedback_binarized', split='train'),
+            'test': load_dataset('trl-lib/ultrafeedback_binarized', split='test'),
+            'descriptiveness': load_dataset(
+                'trl-lib/ultrafeedback-prompt', split='train'
+            ),
+        },
+        {
+            'train': load_dataset('Anthropic/hh-rlhf', split='train'),
+            'test': load_dataset('Anthropic/hh-rlhf', split='test'),
+            'descriptiveness': load_dataset(
+                'trl-lib/ultrafeedback-prompt', split='train'
+            ),
+        },
     ]
+
     return datasets
