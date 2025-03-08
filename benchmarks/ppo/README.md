@@ -5,7 +5,7 @@ This repository adapts TRL for continual learning. The commands below use a cons
 ### Sync additional dependencies
 
 ```sh
-uv sync --group benchmarks.dpo
+uv sync --group benchmarks.ppo
 ```
 
 ## Run PPO
