@@ -3,6 +3,7 @@ import copy
 import json
 import logging
 import pathlib
+from typing import Optional
 
 import click
 import openai
@@ -53,7 +54,7 @@ def generate(
     output_file: pathlib.Path,
     max_concurrency: int,
     dry_run: bool,
-    hf_repo_id: str,
+    hf_repo_id: Optional[str],
 ) -> None:
     r"""Generate a new ContinualAlignmentDataset.
 
@@ -94,6 +95,7 @@ def generate(
         if hf_repo_id is not None:
             logging.info('Pushing dataset to HuggingFace')
             api = HfApi()
+            api.create_repo(hf_repo_id, exist_ok=True, repo_type='dataset')
             api.upload_folder(
                 folder_path=output_file.parent,
                 repo_id=hf_repo_id,
