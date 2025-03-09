@@ -8,9 +8,9 @@ from typing import Optional
 import click
 import openai
 import yaml
-from huggingface_hub import HfApi
 
 from aif_gen.generate.service import generate_continual_dataset
+from aif_gen.util.hf import upload_to_hf
 from aif_gen.util.path import get_run_id
 
 
@@ -93,13 +93,4 @@ def generate(
         logging.info(f'Wrote {len(dataset)} samples to {output_file}')
 
         if hf_repo_id is not None:
-            logging.info('Pushing dataset to HuggingFace')
-            api = HfApi()
-            api.create_repo(hf_repo_id, exist_ok=True, repo_type='dataset')
-            api.upload_folder(
-                folder_path=output_file.parent,
-                repo_id=hf_repo_id,
-                repo_type='dataset',
-                allow_patterns='*.json',
-            )
-            logging.info('Pushed dataset to HuggingFace')
+            upload_to_hf(repo_id=hf_repo_id, local_path=output_file.parent)

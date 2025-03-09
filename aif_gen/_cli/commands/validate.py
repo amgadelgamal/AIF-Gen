@@ -15,6 +15,7 @@ from aif_gen.dataset.validation import (
     entropy_validation,
     llm_judge_validation,
 )
+from aif_gen.util.hf import download_from_hf, upload_to_hf
 
 
 @click.command(context_settings={'show_default': True})
@@ -77,8 +78,10 @@ def validate(
     INPUT_DATA_FILE: Path to the input dataset.
     OUTPUT_VALIDATION_FILE: Path to the output validation file.
     """
+    if hf_repo_id is not None:
+        input_data_file = download_from_hf(hf_repo_id, input_data_file)
+
     logging.info(f'Reading dataset from: {input_data_file}')
-    # TODO: pull frmo hugging face
     dataset = ContinualAlignmentDataset.from_json(input_data_file)
     logging.info(f'Read {len(dataset)} samples from: {input_data_file}')
 
@@ -105,8 +108,10 @@ def validate(
 
     if len(results):
         logging.info(f'Writing validation results to: {output_validation_file}')
-        # TODO push to hugging face
         with output_validation_file.open('w', encoding='utf-8') as f:
             json.dump(results, f)
+
+        if hf_repo_id is not None:
+            upload_to_hf(hf_repo_id, output_validation_file)
     else:
         logging.warning('No validation measure was specified, skipping writedown.')

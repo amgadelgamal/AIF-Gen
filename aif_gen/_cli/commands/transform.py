@@ -3,12 +3,12 @@ import pathlib
 from typing import Optional
 
 import click
-from huggingface_hub import HfApi
 
 import aif_gen.dataset.transforms.functional as F
 from aif_gen.dataset.continual_alignment_dataset import (
     ContinualAlignmentDataset,
 )
+from aif_gen.util.hf import download_from_hf, upload_to_hf
 
 
 @click.group()
@@ -48,9 +48,11 @@ def preference_swap(
     INPUT_DATA_FILE: Path to the input dataset.
     OUTPUT_DATA_FILE: Path to the output (transformed) dataset.
     """
+    if hf_repo_id is not None:
+        input_data_file = download_from_hf(hf_repo_id, input_data_file)
+
     logging.info(f'Reading dataset from: {input_data_file}')
     dataset = ContinualAlignmentDataset.from_json(input_data_file)
-    # TODO: pull from hugging face
     logging.info(f'Read {len(dataset)} samples from: {input_data_file}')
 
     logging.info(f'Applying preference swap transform with p={p}')
@@ -62,13 +64,4 @@ def preference_swap(
     logging.info(f'Wrote {len(transformed_dataset)} samples from: {output_data_file}')
 
     if hf_repo_id is not None:
-        logging.info('Pushing dataset to HuggingFace')
-        api = HfApi()
-        api.create_repo(hf_repo_id, exist_ok=True, repo_type='dataset')
-        api.upload_folder(
-            folder_path=output_data_file,
-            repo_id=hf_repo_id,
-            repo_type='dataset',
-            allow_patterns='*.json',
-        )
-        logging.info('Pushed dataset to HuggingFace')
+        upload_to_hf(hf_repo_id, output_data_file)
