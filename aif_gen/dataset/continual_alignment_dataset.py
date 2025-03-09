@@ -100,6 +100,9 @@ class ContinualAlignmentDataset:
             dataset_dict['datasets'].append(dataset.to_dict())
         return dataset_dict
 
+    def to_hf(self) -> None:
+        raise NotImplementedError
+
     @classmethod
     def from_json(
         cls, file_path: Union[str, pathlib.Path]
@@ -139,6 +142,10 @@ class ContinualAlignmentDataset:
         for dataset in dataset_dict['datasets']:
             datasets.append(AlignmentDataset.from_dict(dataset))
         return cls(datasets)
+
+    @classmethod
+    def from_hf(cls) -> 'ContinualAlignmentDataset':
+        raise NotImplementedError
 
     def to_hf_compatible(self) -> List[Dict[str, Dataset]]:
         r"""Convert the ContinualAlignmentDataset to a list of dictionaries compatible with HuggingFace datasets.
