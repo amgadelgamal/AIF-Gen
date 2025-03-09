@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import pathlib
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import click
 
@@ -56,6 +56,12 @@ from aif_gen.dataset.validation import (
     help='Number of sub-process workers to spawn for computing diversity validation.',
     default=os.cpu_count(),
 )
+@click.option(
+    '--hf-repo-id',
+    type=str,
+    default=None,
+    help='If not None, pull the dataset to and from a HuggingFace remote repository with the associated repo-id.',
+)
 def validate(
     input_data_file: pathlib.Path,
     output_validation_file: pathlib.Path,
@@ -64,6 +70,7 @@ def validate(
     validate_diversity: bool,
     validate_llm_judge: bool,
     num_workers: int,
+    hf_repo_id: Optional[str],
 ) -> None:
     r"""Validate a ContinualAlignmentDataset.
 
@@ -71,6 +78,7 @@ def validate(
     OUTPUT_VALIDATION_FILE: Path to the output validation file.
     """
     logging.info(f'Reading dataset from: {input_data_file}')
+    # TODO: pull frmo hugging face
     dataset = ContinualAlignmentDataset.from_json(input_data_file)
     logging.info(f'Read {len(dataset)} samples from: {input_data_file}')
 
@@ -97,6 +105,7 @@ def validate(
 
     if len(results):
         logging.info(f'Writing validation results to: {output_validation_file}')
+        # TODO push to hugging face
         with output_validation_file.open('w', encoding='utf-8') as f:
             json.dump(results, f)
     else:
