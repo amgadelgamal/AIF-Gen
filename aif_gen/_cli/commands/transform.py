@@ -27,7 +27,7 @@ def transform() -> None:
 )
 @click.option(
     '--hf-repo-id',
-    type=str,
+    type=click.STRING,
     default=None,
     help='If not None, pull and push the transformed dataset to and from a HuggingFace remote repository with the associated repo-id.',
 )

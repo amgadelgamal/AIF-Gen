@@ -59,7 +59,7 @@ from aif_gen.util.hf import download_from_hf, upload_to_hf
 )
 @click.option(
     '--hf-repo-id',
-    type=str,
+    type=click.STRING,
     default=None,
     help='If not None, pull the dataset to and from a HuggingFace remote repository with the associated repo-id.',
 )

@@ -44,7 +44,7 @@ from aif_gen.util.path import get_run_id
 )
 @click.option(
     '--hf-repo-id',
-    type=str,
+    type=click.STRING,
     default=None,
     help='If not None, push the generated dataset to a HuggingFace remote repository with the associated repo-id.',
 )
