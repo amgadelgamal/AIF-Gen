@@ -17,12 +17,7 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
-# TODO change the path when the directories are swapped in the next PR
-from benchmarks.adapt_copr.copr_trainer import (
-    COPRArguments,
-    COPRConfig,
-    COPRTrainer,
-)
+from benchmarks.copr.copr_trainer import COPRArguments, COPRConfig, COPRTrainer
 from benchmarks.dataloading import init_continual_dataset
 
 

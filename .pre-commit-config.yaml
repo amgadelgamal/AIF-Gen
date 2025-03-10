@@ -11,14 +11,11 @@ repos:
         name: No commits to master
       - id: end-of-file-fixer
         name: End-of-file fixer
-        exclude: benchmarks/COPR
       - name: mixed-line-ending
         id: mixed-line-ending
         args: [--fix, lf]
-        exclude: benchmarks/COPR
       - id: trailing-whitespace
         name: Remove trailing whitespaces
-        exclude: benchmarks/COPR
       - id: check-toml
         name: Check toml
       - id: check-yaml
@@ -30,10 +27,6 @@ repos:
       - id: yamllint
         name: Lint yaml
         args: [-d, '{extends: default, rules: {line-length: disable, document-start: disable, truthy: {level: error}, braces: {max-spaces-inside: 1}, comments: {min-spaces-from-content: 1}}}']
-        exclude: |
-          (?x)^(
-            benchmarks/COPR/.*
-          )$
 
   - repo: https://github.com/PyCQA/autoflake
     rev: v2.3.1
@@ -47,14 +40,12 @@ repos:
           --ignore-init-module-imports,
           --in-place,
         ]
-        exclude: benchmarks/COPR
 
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
       - id: isort
         name: Sort imports
-        exclude: benchmarks/COPR
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.6.9
@@ -62,7 +53,6 @@ repos:
       - id: ruff
         name: Ruff Linting
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: benchmarks/COPR
       - id: ruff-format
         name: Ruff formatting
 
@@ -81,11 +71,10 @@ repos:
     hooks:
       - id: sphinx-lint
         name: Check Sphinx
-        exclude: benchmarks/COPR
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.13.0
     hooks:
       - id: mypy
         name: mypy
-        exclude: '^benchmarks/COPR|test/'
+        exclude: test/
