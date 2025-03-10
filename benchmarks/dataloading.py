@@ -165,9 +165,9 @@ def get_ultrafeedback2anthropic_datasets() -> list[dict[str, Any]]:
 def save_CPPO_datasets_to_hub() -> None:
     """Process CPPO datasets and save them to Hugging Face Hub."""
 
-    def _preprocess_CPPO_datasets() -> (
-        tuple[list[dict[str, Dataset]], list[dict[str, Dataset]]]
-    ):
+    def _preprocess_CPPO_datasets() -> tuple[
+        list[dict[str, Dataset]], list[dict[str, Dataset]]
+    ]:
         """Datasets used for task incremental learning in CPPO: https://openreview.net/forum?id=86zAUE80pP.
 
         Dataset: https://huggingface.co/datasets/CarperAI/openai_summarize_comparisons?row=0
