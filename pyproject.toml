@@ -80,6 +80,7 @@ multi_line_output = 3
 include_trailing_comma = true
 skip = [".gitignore", "__init__.py"]
 
+# TODO make sure the exclusions are removed after COPR dependency is dropped
 [tool.ruff]
 exclude = ["benchmarks/COPR/*"]
 force-exclude = true
