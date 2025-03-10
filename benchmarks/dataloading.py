@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from datasets import Dataset, DatasetDict, load_dataset
+from huggingface_hub import hf_hub_download
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
 from trl.data_utils import maybe_apply_chat_template, maybe_extract_prompt
@@ -76,7 +77,7 @@ def _init_mock_dataset(
 
 def init_continual_dataset(
     dataset: Union[str, ContinualAlignmentDataset, Path],
-    mock: bool = True,
+    mock: bool = False,
     tokenizer: Optional[PreTrainedTokenizerBase] = None,
     tools: Optional[list] = None,
 ) -> list[dict[str, Dataset]]:
@@ -84,7 +85,17 @@ def init_continual_dataset(
     if mock:
         return _init_mock_dataset(dataset, tokenizer=tokenizer, tools=tools)
     if not isinstance(dataset, ContinualAlignmentDataset):
-        data = ContinualAlignmentDataset.from_json(dataset)
+        try:
+            data = ContinualAlignmentDataset.from_json(dataset)
+        except OSError:  # need to try downloading from hub
+            try:
+                # TODO replace this from ContinualAlignmentDataset.from_hub
+                local_path = hf_hub_download(
+                    repo_id=dataset, filename='dataset.json', repo_type='dataset'
+                )
+                data = ContinualAlignmentDataset.from_json(local_path)
+            except:
+                raise ValueError(f'Unknown dataset: {dataset}')
     return data.to_hf_compatible()
 
 
