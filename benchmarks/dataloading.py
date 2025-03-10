@@ -81,7 +81,7 @@ def init_continual_dataset(
     tokenizer: Optional[PreTrainedTokenizerBase] = None,
     tools: Optional[list] = None,
 ) -> list[dict[str, Dataset]]:
-    r"""Initialize a continual dataset from a given dataset name or path or a ContinualAlignmentDataset Object."""
+    """Initialize a continual dataset from a given dataset name or path or a ContinualAlignmentDataset Object."""
     if mock:
         return _init_mock_dataset(dataset, tokenizer=tokenizer, tools=tools)
     if not isinstance(dataset, ContinualAlignmentDataset):
@@ -341,14 +341,16 @@ def save_CPPO_datasets_to_hub() -> None:
     # Save reward model datasets to Hugging Face Hub
     print('Saving reward model datasets to Hugging Face Hub...')
     reward_model_dataset_dicts[0].push_to_hub(
-        'cppo_continual_dataset_reward_relationships'
+        'Shahradmz/cppo_continual_dataset_reward_relationships'
     )
-    reward_model_dataset_dicts[1].push_to_hub('cppo_continual_dataset_reward_others')
+    reward_model_dataset_dicts[1].push_to_hub(
+        'Shahradmz/cppo_continual_dataset_reward_others'
+    )
 
     # Save RL datasets to Hugging Face Hub
     print('Saving RL datasets to Hugging Face Hub...')
-    rl_dataset_dicts[0].push_to_hub('cppo_continual_dataset_rl_relationships')
-    rl_dataset_dicts[1].push_to_hub('cppo_continual_dataset_rl_others')
+    rl_dataset_dicts[0].push_to_hub('Shahradmz/cppo_continual_dataset_rl_relationships')
+    rl_dataset_dicts[1].push_to_hub('Shahradmz/cppo_continual_dataset_rl_others')
 
     print('Datasets saved successfully.')
 
