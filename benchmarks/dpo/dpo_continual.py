@@ -101,8 +101,8 @@ def main(
 
             def concat_prompt_to_completions(example: dict) -> dict[str, list[int]]:
                 return {
-                    'chosen': example['prompt'] + example['chosen'],
-                    'rejected': example['prompt'] + example['rejected'],
+                    'chosen': example['prompt'] + ' ' + example['chosen'],
+                    'rejected': example['prompt'] + ' ' + example['rejected'],
                 }
 
             dataset_train = dataset[script_args.dataset_train_split].map(
