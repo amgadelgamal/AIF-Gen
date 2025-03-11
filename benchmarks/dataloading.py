@@ -89,7 +89,6 @@ def init_continual_dataset(
             data = ContinualAlignmentDataset.from_json(dataset)
         except OSError:  # need to try downloading from hub
             try:
-                # TODO replace this from ContinualAlignmentDataset.from_hub
                 local_path = hf_hub_download(
                     repo_id=dataset, filename='dataset.json', repo_type='dataset'
                 )
