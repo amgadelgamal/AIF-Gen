@@ -62,6 +62,7 @@ benchmarks-ppo = [
 ]
 benchmarks = [
     "setuptools>=75.8.0",
+    "huggingface-hub==0.29.2",
 ]
 
 [tool.mypy]
