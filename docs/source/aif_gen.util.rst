@@ -4,6 +4,14 @@ aif\_gen.util package
 Submodules
 ----------
 
+aif\_gen.util.hf module
+-----------------------
+
+.. automodule:: aif_gen.util.hf
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 aif\_gen.util.logging module
 ----------------------------
 

@@ -3,12 +3,14 @@ import copy
 import json
 import logging
 import pathlib
+from typing import Optional
 
 import click
 import openai
 import yaml
 
 from aif_gen.generate.service import generate_continual_dataset
+from aif_gen.util.hf import upload_to_hf
 from aif_gen.util.path import get_run_id
 
 
@@ -40,12 +42,19 @@ from aif_gen.util.path import get_run_id
     default=False,
     help='Ignore the input config and generate a dummy sample ensuring the model endpoint is setup.',
 )
+@click.option(
+    '--hf-repo-id',
+    type=click.STRING,
+    default=None,
+    help='If not None, push the generated dataset to a HuggingFace remote repository with the associated repo-id.',
+)
 def generate(
     data_config_name: pathlib.Path,
     model: str,
     output_file: pathlib.Path,
     max_concurrency: int,
     dry_run: bool,
+    hf_repo_id: Optional[str],
 ) -> None:
     r"""Generate a new ContinualAlignmentDataset.
 
@@ -82,3 +91,6 @@ def generate(
         logging.info(f'Writing {len(dataset)} samples to {output_file}')
         dataset.to_json(output_file)
         logging.info(f'Wrote {len(dataset)} samples to {output_file}')
+
+        if hf_repo_id is not None:
+            upload_to_hf(repo_id=hf_repo_id, local_path=output_file.parent)
