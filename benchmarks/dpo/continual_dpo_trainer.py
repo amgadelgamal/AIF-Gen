@@ -255,6 +255,7 @@ class ContinualDPOTrainer(DPOTrainer):
         """
         # The code is heavily based on the training loop of TRL PPOTrainer function https://github.com/huggingface/trl/blob/main/trl/trainer/ppo_trainer.py#L677
         mode = self.model.training
+        # there is no self.model? TODO
         self.model.eval()
         eval_metrics = defaultdict(list)
         processing_class = self.processing_class
@@ -308,7 +309,9 @@ class ContinualDPOTrainer(DPOTrainer):
         self.model.train(mode)
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
-    def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
+    def log(
+        self, logs: dict[str, Union[float, dict]], start_time: Optional[float] = None
+    ) -> None:
         """Log `logs` on the various objects watching training, including stored metrics."""
         train_eval = 'train' if 'loss' in logs else 'eval'
         print(f'Logging {train_eval} metrics...')

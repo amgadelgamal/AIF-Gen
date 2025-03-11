@@ -1,13 +1,6 @@
 """Adaptation of the DPO TRL training script for continual learning."""
 
-import os
-
 import torch
-from continual_dpo_trainer import (
-    ContinualDPOArguments,
-    ContinualDPOConfig,
-    ContinualDPOTrainer,
-)
 from datasets import Dataset
 from transformers import (
     AutoModelForCausalLM,
@@ -25,6 +18,11 @@ from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
 import wandb as wb
 from benchmarks.dataloading import init_continual_dataset
+from benchmarks.dpo.continual_dpo_trainer import (
+    ContinualDPOArguments,
+    ContinualDPOConfig,
+    ContinualDPOTrainer,
+)
 
 
 # The code is based on TRL DPO script https://github.com/huggingface/trl/blob/main/trl/scripts/dpo.py
@@ -79,14 +77,6 @@ def main(
     )
     output_dir = training_args.output_dir
 
-    if training_args.reward_model_path is not None:
-        for i, _ in enumerate(continual_dataset):
-            reward_path = os.path.join(training_args.reward_model_path, str(i))
-            if not os.path.exists(reward_path):
-                raise FileNotFoundError(
-                    f'Reward model not found for dataset {i} at {reward_path}'
-                )
-
     for i, dataset in enumerate(continual_dataset):
         current_dataset_name: str = f'dataset-{i}'
         training_args.output_dir = f'{output_dir}/{current_dataset_name}'
@@ -94,28 +84,12 @@ def main(
         # Reward model only for logging metrics purpose
         if training_args.reward_model_path is not None:
             reward_model = AutoModelForSequenceClassification.from_pretrained(
-                training_args.reward_model_path + f'/{str(i)}', num_labels=1
+                training_args.reward_model_path + f'_{str(i)}', num_labels=1
             )
 
-        if not training_args.mock:
-
-            def concat_prompt_to_completions(example: dict) -> dict[str, list[int]]:
-                return {
-                    'chosen': example['prompt'] + ' ' + example['chosen'],
-                    'rejected': example['prompt'] + ' ' + example['rejected'],
-                }
-
-            dataset_train = dataset[script_args.dataset_train_split].map(
-                concat_prompt_to_completions, remove_columns='prompt'
-            )
-            dataset_test = dataset[script_args.dataset_test_split].map(
-                concat_prompt_to_completions, remove_columns='prompt'
-            )
-            eval_policy_dataset = dataset[script_args.dataset_test_split]
-        else:
-            dataset_train = dataset[script_args.dataset_train_split]
-            dataset_test = dataset[script_args.dataset_test_split]
-            eval_policy_dataset = dataset['descriptiveness']
+        eval_policy_dataset = dataset[script_args.dataset_test_split]
+        dataset_train = dataset[script_args.dataset_train_split]
+        dataset_test = dataset[script_args.dataset_test_split]
 
         trainer = ContinualDPOTrainer(
             model,
