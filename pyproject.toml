@@ -48,6 +48,7 @@ benchmarks-dpo = [
     "transformers>=4.48.3",
     "trl>=0.14.0",
     "wandb>=0.19.6",
+    "huggingface-hub==0.29.2",
 ]
 benchmarks-ppo = [
     "accelerate==0.34.2",
