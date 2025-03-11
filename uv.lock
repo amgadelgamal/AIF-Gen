@@ -56,12 +56,12 @@ dependencies = [
 
 [package.dev-dependencies]
 benchmarks = [
+    { name = "huggingface-hub" },
     { name = "setuptools" },
 ]
 benchmarks-dpo = [
     { name = "datasets" },
     { name = "deepspeed" },
-    { name = "huggingface-hub" },
     { name = "peft" },
     { name = "submitit" },
     { name = "transformers" },
@@ -109,11 +109,13 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-benchmarks = [{ name = "setuptools", specifier = ">=75.8.0" }]
+benchmarks = [
+    { name = "huggingface-hub", specifier = "==0.29.2" },
+    { name = "setuptools", specifier = ">=75.8.0" },
+]
 benchmarks-dpo = [
     { name = "datasets", specifier = ">=3.2.0" },
     { name = "deepspeed", specifier = ">=0.16.3" },
-    { name = "huggingface-hub", specifier = "==0.29.2" },
     { name = "peft", specifier = ">=0.14.0" },
     { name = "submitit", specifier = ">=1.5.2" },
     { name = "transformers", specifier = ">=4.48.3" },
