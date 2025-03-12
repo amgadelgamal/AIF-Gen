@@ -49,6 +49,10 @@ class ContinualDPOArguments(ScriptArguments):
         default=None,
         metadata={'help': 'The WandB entity (team) to use.'},
     )
+    wandb_run_name: Optional[str] = field(
+        default=None,
+        metadata={'help': 'The WandB run name.'},
+    )
 
     def __post_init__(self) -> None:
         if self.wandb_project:

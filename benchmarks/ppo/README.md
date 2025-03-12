@@ -15,7 +15,6 @@ uv sync --group benchmarks.ppo
 ```sh
 uv run benchmarks/ppo/ppo_continual.py \
     --dataset_name benchmarks/continual_data_debug.json \
-    --mock False \
     --sft_model_path Qwen/Qwen2-0.5B-Instruct \
     --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD_0 \
     --reward_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \

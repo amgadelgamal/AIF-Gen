@@ -36,6 +36,9 @@ def main(
         if model_args.torch_dtype in ['auto', None]
         else getattr(torch, model_args.torch_dtype)
     )
+    if script_args.wandb_run_name is not None:
+        training_args.run_name = script_args.wandb_run_name
+
     quantization_config = get_quantization_config(model_args)
     model_kwargs = dict(
         revision=model_args.model_revision,
