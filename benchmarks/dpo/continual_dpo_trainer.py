@@ -102,7 +102,6 @@ class ContinualDPOTrainer(DPOTrainer):
         data_collator: Optional[DataCollator] = None,
         train_dataset: Optional[Dataset] = None,
         eval_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
-        eval_policy_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
         processing_class: Optional[
             Union[
                 PreTrainedTokenizerBase,
@@ -125,6 +124,9 @@ class ContinualDPOTrainer(DPOTrainer):
     ):
         if args is None:
             raise ValueError('`args` cannot be None')
+
+        eval_policy_dataset = eval_dataset
+
         super().__init__(
             model,
             ref_model,

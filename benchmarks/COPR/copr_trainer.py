@@ -138,7 +138,6 @@ class COPRTrainer(DPOTrainer):
         data_collator: Optional[DataCollator] = None,
         train_dataset: Optional[Dataset] = None,
         eval_dataset: Optional[Union[Dataset, Dict[str, Dataset]]] = None,
-        eval_policy_dataset: Optional[Union[Dataset, Dict[str, Dataset]]] = None,
         processing_class: Optional[
             Union[
                 PreTrainedTokenizerBase,
@@ -161,6 +160,8 @@ class COPRTrainer(DPOTrainer):
     ):
         if args is None:
             raise ValueError('`args` cannot be None')
+
+        eval_policy_dataset = eval_dataset
 
         super().__init__(
             model=model,

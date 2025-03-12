@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import transformers
-from accelerate import Accelerator
+from accelerate import Accelerator, PartialState
 from datasets import Dataset
 from packaging import version
 from transformers import (
@@ -23,7 +23,7 @@ from transformers import (
     Trainer,
 )
 from transformers.trainer_callback import TrainerCallback
-from trl import ScriptArguments
+from trl import ScriptArguments, apply_chat_template
 from trl.trainer.ppo_config import PPOConfig
 from trl.trainer.ppo_trainer import (
     PPOTrainer,
@@ -115,6 +115,9 @@ class ContinualPPOTrainer(PPOTrainer):
                 gradient_accumulation_steps=args.gradient_accumulation_steps
             )
         self.accelerator = ContinualPPOTrainer.shared_accelerator
+
+        train_dataset = self.preprocess_dataset(train_dataset)
+        eval_dataset = self.preprocess_dataset(eval_dataset)
 
         super().__init__(
             args,
@@ -273,6 +276,38 @@ class ContinualPPOTrainer(PPOTrainer):
                 if hasattr(self, 'current_task'):
                     task_key = f'{self.current_task}/{key}'
                     self._stored_metrics['task'][task_key].append(value)
+
+    def preprocess_dataset(self, dataset: Dataset) -> Dataset:
+        # The code is from TRL PPO script https://github.com/huggingface/trl/blob/main/examples/scripts/ppo/ppo.py
+        dataset_text_field = 'prompt'
+
+        def tokenize(element: dict) -> dict[str, list[int]]:
+            outputs = self.processing_class(
+                element[dataset_text_field],
+                padding=False,
+            )
+            return {'input_ids': outputs['input_ids']}
+
+        def prepare_dataset(ds: Dataset, tokenizer: PreTrainedTokenizerBase) -> Dataset:
+            return ds.map(
+                tokenize,
+                batched=True,
+                remove_columns=ds.column_names,
+                num_proc=self.args.dataset_num_proc,
+            )
+
+        dataset = (
+            dataset.map(
+                apply_chat_template, fn_kwargs={'tokenizer': self.processing_class}
+            )
+            if self.args.mock
+            else dataset
+        )
+
+        # Compute only on main process for faster data processing.
+        with PartialState().local_main_process_first():
+            dataset = prepare_dataset(dataset, self.processing_class)
+        return dataset
 
     def log(
         self, logs: Dict[str, Union[float, str]], start_time: Optional[float] = None
