@@ -31,6 +31,7 @@ from trl.trainer.ppo_trainer import (
     get_reward,
     unwrap_model_for_generation,
 )
+from trl.data_utils import maybe_apply_chat_template, maybe_extract_prompt
 
 
 @dataclass
@@ -138,6 +139,9 @@ class ContinualPPOTrainer(PPOTrainer):
         self.accelerator = (
             ContinualPPOTrainer.shared_accelerator
         )  # turn the accelerator back to the shared one
+
+        # ToDo: check how it influences the dataset preprocessing in DPOTrainer
+        self.args.tools = None # needed for dataset preprocessing
 
     def create_accelerator_and_postprocess(self) -> None:
         # Only initialize a new Accelerator if one does not exist
@@ -277,6 +281,27 @@ class ContinualPPOTrainer(PPOTrainer):
                     task_key = f'{self.current_task}/{key}'
                     self._stored_metrics['task'][task_key].append(value)
 
+    def chat_prompt_preprocessing(self, dataset: Dataset) -> Dataset:
+        # adapted from TRL DPO Trainer https://github.com/huggingface/trl/blob/main/trl/trainer/dpo_trainer.py#L527
+        map_kwargs = {"writer_batch_size": 10}
+
+        if isinstance(dataset, Dataset):  # IterableDataset does not support num_proc
+            map_kwargs["num_proc"] = self.args.dataset_num_proc
+
+        with PartialState().local_main_process_first():
+            # Extract prompt if needed
+            if isinstance(dataset, Dataset):  # `IterableDataset.map` does not support `desc`
+                map_kwargs["desc"] = f"Extracting prompt in dataset"
+            dataset = dataset.map(maybe_extract_prompt, **map_kwargs)
+
+            # Apply the chat template if needed
+            if isinstance(dataset, Dataset):  # `IterableDataset.map` does not support `desc`
+                map_kwargs["desc"] = f"Applying chat template to dataset"
+            dataset = dataset.map(
+                maybe_apply_chat_template, fn_kwargs={"tokenizer": self.processing_class, "tools": self.args.tools}, **map_kwargs
+            )
+        return dataset
+
     def preprocess_dataset(self, dataset: Dataset) -> Dataset:
         # The code is from TRL PPO script https://github.com/huggingface/trl/blob/main/examples/scripts/ppo/ppo.py
         dataset_text_field = 'prompt'
@@ -288,7 +313,7 @@ class ContinualPPOTrainer(PPOTrainer):
             )
             return {'input_ids': outputs['input_ids']}
 
-        def prepare_dataset(ds: Dataset, tokenizer: PreTrainedTokenizerBase) -> Dataset:
+        def prepare_dataset(ds: Dataset) -> Dataset:
             return ds.map(
                 tokenize,
                 batched=True,
@@ -296,17 +321,18 @@ class ContinualPPOTrainer(PPOTrainer):
                 num_proc=self.args.dataset_num_proc,
             )
 
-        dataset = (
-            dataset.map(
-                apply_chat_template, fn_kwargs={'tokenizer': self.processing_class}
-            )
-            if self.args.mock
-            else dataset
-        )
+        # dataset = (
+        #     dataset.map(
+        #         apply_chat_template, fn_kwargs={'tokenizer': self.processing_class}
+        #     )
+        #     if self.args.mock
+        #     else dataset
+        # )
+        dataset = self.chat_prompt_preprocessing(dataset)
 
         # Compute only on main process for faster data processing.
         with PartialState().local_main_process_first():
-            dataset = prepare_dataset(dataset, self.processing_class)
+            dataset = prepare_dataset(dataset)
         return dataset
 
     def log(
