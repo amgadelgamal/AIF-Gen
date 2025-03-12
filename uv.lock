@@ -41,6 +41,7 @@ dependencies = [
     { name = "backoff" },
     { name = "click" },
     { name = "datasets" },
+    { name = "huggingface-hub" },
     { name = "nltk" },
     { name = "numpy", version = "2.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "numpy", version = "2.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -55,6 +56,7 @@ dependencies = [
 
 [package.dev-dependencies]
 benchmarks = [
+    { name = "huggingface-hub" },
     { name = "setuptools" },
 ]
 benchmarks-dpo = [
@@ -94,6 +96,7 @@ requires-dist = [
     { name = "backoff", specifier = ">=2.2.1" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "datasets", specifier = ">=3.3.1" },
+    { name = "huggingface-hub", specifier = ">=0.29.1" },
     { name = "nltk", specifier = ">=3.9.1" },
     { name = "numpy", specifier = ">=2.0.2" },
     { name = "openai", specifier = ">=1.61.1" },
@@ -106,7 +109,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-benchmarks = [{ name = "setuptools", specifier = ">=75.8.0" }]
+benchmarks = [
+    { name = "huggingface-hub", specifier = "==0.29.2" },
+    { name = "setuptools", specifier = ">=75.8.0" },
+]
 benchmarks-dpo = [
     { name = "datasets", specifier = ">=3.2.0" },
     { name = "deepspeed", specifier = ">=0.16.3" },
