@@ -22,40 +22,6 @@ from trl import (
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 from wandb import log as wandb_logger
 
-# TODO PR:41 Remove the dependency on DPO, get the algorithm name as an argument and process based on that
-# or Create an intermediate class called ContinualTrainer and only depend on this, DPOTrainer will later inherit from this.
-
-
-# @dataclass
-# class EvalScriptArguments(ScriptArguments):
-#     checkpoint_dir: Optional[str] = field(
-#         default=None,
-#         metadata={'help': 'The directory containing the checkpoints to evaluate.'},
-#     )
-#     dataset_name: str = field(
-#         default='debug',
-#         metadata={'help': 'The name or path of the continual dataset to use.'},
-#     )
-#
-#     wandb_project: Optional[str] = field(
-#         default='AIFGen-continual-test-eval',
-#         metadata={'help': 'Override the default WandB project name.'},
-#     )
-#     wandb_entity: Optional[str] = field(
-#         default=None,
-#         metadata={'help': 'The WandB entity (team) to use.'},
-#     )
-#     mock: bool = field(
-#         default=False,
-#         metadata={'help': 'Whether to use mock datasets.'},
-#     )
-#
-#     def __post_init__(self) -> None:
-#         if self.wandb_project is not None:
-#             os.environ['WANDB_PROJECT'] = self.wandb_project
-#         if self.wandb_entity is not None:
-#             os.environ['WANDB_ENTITY'] = self.wandb_entity
-
 
 def main(
     script_args: ScriptArguments,
