@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import transformers
-from accelerate import Accelerator
+from accelerate import Accelerator, PartialState
 from datasets import Dataset
 from packaging import version
 from transformers import (
@@ -119,6 +119,13 @@ class ContinualPPOTrainer(PPOTrainer):
                 gradient_accumulation_steps=args.gradient_accumulation_steps
             )
         self.accelerator = ContinualPPOTrainer.shared_accelerator
+
+        train_dataset = self.preprocess_dataset(
+            train_dataset, processing_class, args.dataset_num_proc
+        )
+        eval_dataset = self.preprocess_dataset(
+            eval_dataset, processing_class, args.dataset_num_proc
+        )
 
         super().__init__(
             args,
@@ -277,6 +284,35 @@ class ContinualPPOTrainer(PPOTrainer):
                 if hasattr(self, 'current_task'):
                     task_key = f'{self.current_task}/{key}'
                     self._stored_metrics['task'][task_key].append(value)
+
+    def preprocess_dataset(
+        self,
+        dataset: Dataset,
+        processing_class: PreTrainedTokenizerBase,
+        dataset_num_proc: int,
+    ) -> Dataset:
+        # The code is from TRL PPO script https://github.com/huggingface/trl/blob/main/examples/scripts/ppo/ppo.py
+        dataset_text_field = 'prompt'
+
+        def tokenize(element: dict) -> dict[str, list[int]]:
+            outputs = processing_class(
+                element[dataset_text_field],
+                padding=False,
+            )
+            return {'input_ids': outputs['input_ids']}
+
+        def prepare_dataset(ds: Dataset) -> Dataset:
+            return ds.map(
+                tokenize,
+                batched=True,
+                remove_columns=ds.column_names,
+                num_proc=dataset_num_proc,
+            )
+
+        # Compute only on main process for faster data processing.
+        with PartialState().local_main_process_first():
+            dataset = prepare_dataset(dataset)
+        return dataset
 
     def log(
         self, logs: Dict[str, Union[float, str]], start_time: Optional[float] = None
