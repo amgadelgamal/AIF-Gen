@@ -39,6 +39,8 @@ def main(
         else getattr(torch, model_args.torch_dtype)
     )
     quantization_config = get_quantization_config(model_args)
+    if script_args.wandb_run_name is not None:
+        training_args.run_name = script_args.wandb_run_name
 
     # Model & Tokenizer Setup
     model_kwargs = dict(

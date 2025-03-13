@@ -1,7 +1,5 @@
 """Adaptation of the DPO TRL training script for continual learning."""
 
-import os
-
 import torch
 import wandb as wb
 from continual_dpo_trainer import (
@@ -25,6 +23,11 @@ from trl import (
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
 from benchmarks.dataloading import init_continual_dataset
+from benchmarks.dpo.continual_dpo_trainer import (
+    ContinualDPOArguments,
+    ContinualDPOConfig,
+    ContinualDPOTrainer,
+)
 
 
 # The code is based on TRL DPO script https://github.com/huggingface/trl/blob/main/trl/scripts/dpo.py
@@ -39,6 +42,9 @@ def main(
         if model_args.torch_dtype in ['auto', None]
         else getattr(torch, model_args.torch_dtype)
     )
+    if script_args.wandb_run_name is not None:
+        training_args.run_name = script_args.wandb_run_name
+
     quantization_config = get_quantization_config(model_args)
 
     # Model & Tokenizer Setup
@@ -106,7 +112,7 @@ def main(
         # Load reward model if path provided
         if training_args.reward_model_path is not None:
             reward_model = AutoModelForSequenceClassification.from_pretrained(
-                training_args.reward_model_path + f'/{str(i)}', num_labels=1
+                training_args.reward_model_path + f'_{str(i)}', num_labels=1
             )
 
         trainer = ContinualDPOTrainer(
