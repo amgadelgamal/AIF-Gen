@@ -148,26 +148,22 @@ async def _generate_sample(
         async with async_semaphore:
             response = await client.chat.completions.create(
                 model=model_name,
-                messages=[{"role": "user", "content": meta_prompt}],
+                messages=[{'role': 'user', 'content': meta_prompt}],
                 max_tokens=256,
                 response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "PromptProposal",
-                        "schema": _PromptProposal.model_json_schema(),
-                        "strict": True,
+                    'type': 'json_schema',
+                    'json_schema': {
+                        'name': 'PromptProposal',
+                        'schema': _PromptProposal.model_json_schema(),
+                        'strict': True,
                     },
                 },
             )
 
         response_text = response.choices[0].message.content
         if response_text is None:
-            raise ValueError(f"Received None response to prompt: {meta_prompt}")
-        if response.choices[0].finish_reason != "finish":
-            raise ValueError(
-                f"Prompt request did not finish gracefully: {meta_prompt}; "
-                f"{response}"
-            )
+            raise ValueError(f'Received None response to prompt: {meta_prompt}')
+
         assert response_text is not None  # This is for mypy
 
         prompt = _PromptProposal.model_validate_json(response_text).prompt
