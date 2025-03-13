@@ -45,12 +45,6 @@ class COPRArguments(ScriptArguments):
         default='debug',
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
-    checkpoint_dir: Optional[str] = field(
-        default=None,
-        metadata={
-            'help': 'The directory containing the checkpoints to evaluate (used only in eval checkpoints sctipt)'
-        },
-    )
     wandb_project: Optional[str] = field(
         default='AIFGen-copr-continual-test',
         metadata={'help': 'Override the default WandB project name.'},
