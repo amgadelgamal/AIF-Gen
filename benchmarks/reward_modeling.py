@@ -1,7 +1,7 @@
 import os
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Optional
 
 import submitit
 import torch
@@ -65,6 +65,24 @@ class ExtendedScriptArguments(ScriptArguments):
         default='volta',
         metadata={'help': 'Slurm constraint to use.'},
     )
+    wandb_project: Optional[str] = field(
+        default='AIFGen-dpo-continual-test',
+        metadata={'help': 'Override the default WandB project name.'},
+    )
+    wandb_entity: Optional[str] = field(
+        default=None,
+        metadata={'help': 'The WandB entity (team) to use.'},
+    )
+    wandb_run_name: Optional[str] = field(
+        default=None,
+        metadata={'help': 'The WandB run name.'},
+    )
+
+    def __post_init__(self) -> None:
+        if self.wandb_project:
+            os.environ['WANDB_PROJECT'] = self.wandb_project
+        if self.wandb_entity:
+            os.environ['WANDB_ENTITY'] = self.wandb_entity
 
 
 # This code is heavily based on the reward_modeling script from the TRL library:
@@ -80,6 +98,9 @@ def train_model(
     index: int,
 ) -> None:
     training_args.gradient_checkpointing_kwargs = dict(use_reentrant=False)
+
+    if script_args.wandb_run_name is not None:
+        training_args.run_name = script_args.wandb_run_name
 
     ################
     # Model & Tokenizer
@@ -153,6 +174,7 @@ def train_model(
         else None,
         peft_config=get_peft_config(model_args),
     )
+
     trainer.train()
 
     if training_args.eval_strategy != 'no':
