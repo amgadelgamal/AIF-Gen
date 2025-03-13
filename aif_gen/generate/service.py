@@ -149,6 +149,7 @@ async def _generate_sample(
             response = await client.chat.completions.create(
                 model=model_name,
                 messages=[{"role": "user", "content": meta_prompt}],
+                max_tokens=256,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -186,6 +187,7 @@ async def _generate_sample(
                         'strict': True,
                     },
                 },
+                max_tokens=256,  # TODO: Make this configurable
             )
 
         output = response.choices[0].message.content

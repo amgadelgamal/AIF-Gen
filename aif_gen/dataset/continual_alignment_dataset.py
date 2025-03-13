@@ -2,6 +2,8 @@ import json
 import pathlib
 from typing import Any, Dict, List, Union
 
+from datasets import Dataset
+
 from aif_gen.dataset.alignment_sample import AlignmentDatasetSample
 
 from .alignment_dataset import AlignmentDataset
@@ -137,3 +139,11 @@ class ContinualAlignmentDataset:
         for dataset in dataset_dict['datasets']:
             datasets.append(AlignmentDataset.from_dict(dataset))
         return cls(datasets)
+
+    def to_hf_compatible(self) -> List[Dict[str, Dataset]]:
+        r"""Convert the ContinualAlignmentDataset to a list of dictionaries compatible with HuggingFace datasets.
+
+        Returns:
+            List[Dict[str, Dataset]]: The list of dictionaries compatible with HuggingFace datasets.
+        """
+        return [dataset.to_hf_compatible() for dataset in self.datasets]
