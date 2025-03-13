@@ -86,7 +86,10 @@ def main(
 
     # Initialize continual dataset
     continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
-        script_args.dataset_name, mock=training_args.mock
+        script_args.dataset_name,
+        mock=training_args.mock,
+        tokenizer=tokenizer,
+        tools=None,
     )
     output_dir = training_args.output_dir
 
@@ -115,7 +118,7 @@ def main(
 
         # Load reward model based on naming convention (expects suffix with task index)
         reward_model = AutoModelForSequenceClassification.from_pretrained(
-            training_args.reward_model_path + '_' + str(i), num_labels=1
+            os.path.join(training_args.reward_model_path, str(i)), num_labels=1
         )
 
         ################

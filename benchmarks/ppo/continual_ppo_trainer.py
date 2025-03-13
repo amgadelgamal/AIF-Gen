@@ -43,6 +43,12 @@ class ContinualPPOArguments(ScriptArguments):
         default='debug',
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
+    checkpoint_dir: Optional[str] = field(
+        default=None,
+        metadata={
+            'help': 'The directory containing the checkpoints to evaluate (used only in eval checkpoints sctipt)'
+        },
+    )
     wandb_project: Optional[str] = field(
         default='AIFGen-ppo-continual-test',
         metadata={'help': 'Override the default WandB project name.'},
@@ -116,8 +122,12 @@ class ContinualPPOTrainer(PPOTrainer):
             )
         self.accelerator = ContinualPPOTrainer.shared_accelerator
 
-        train_dataset = self.preprocess_dataset(train_dataset)
-        eval_dataset = self.preprocess_dataset(eval_dataset)
+        train_dataset = self.preprocess_dataset(
+            train_dataset, processing_class, args.dataset_num_proc
+        )
+        eval_dataset = self.preprocess_dataset(
+            eval_dataset, processing_class, args.dataset_num_proc
+        )
 
         super().__init__(
             args,
@@ -277,12 +287,17 @@ class ContinualPPOTrainer(PPOTrainer):
                     task_key = f'{self.current_task}/{key}'
                     self._stored_metrics['task'][task_key].append(value)
 
-    def preprocess_dataset(self, dataset: Dataset) -> Dataset:
+    def preprocess_dataset(
+        self,
+        dataset: Dataset,
+        processing_class: PreTrainedTokenizerBase,
+        dataset_num_proc: int,
+    ) -> Dataset:
         # The code is from TRL PPO script https://github.com/huggingface/trl/blob/main/examples/scripts/ppo/ppo.py
         dataset_text_field = 'prompt'
 
         def tokenize(element: dict) -> dict[str, list[int]]:
-            outputs = self.processing_class(
+            outputs = processing_class(
                 element[dataset_text_field],
                 padding=False,
             )
@@ -293,7 +308,7 @@ class ContinualPPOTrainer(PPOTrainer):
                 tokenize,
                 batched=True,
                 remove_columns=ds.column_names,
-                num_proc=self.args.dataset_num_proc,
+                num_proc=dataset_num_proc,
             )
 
         # Compute only on main process for faster data processing.

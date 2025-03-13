@@ -4,12 +4,19 @@ import glob
 import os
 
 import torch
-from COPR.copr_trainer import COPRTrainer
+import wandb
 from dataloading import init_continual_dataset
 from datasets import Dataset
-from dpo.continual_dpo_trainer import ContinualDPOTrainer
-from ppo.continual_ppo_trainer import ContinualPPOTrainer
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from dpo.continual_dpo_trainer import (
+    ContinualDPOArguments,
+    ContinualDPOConfig,
+    ContinualDPOTrainer,
+)
+from transformers import (
+    AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+)
 from trl import (
     DPOConfig,
     ModelConfig,
@@ -20,7 +27,6 @@ from trl import (
     get_quantization_config,
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
-from wandb import log as wandb_logger
 
 
 def main(
@@ -71,47 +77,49 @@ def main(
 
     # Initialize continual dataset
     continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
-        script_args.dataset_name, mock=training_args.mock
+        script_args.dataset_name,
+        mock=training_args.mock,
+        tokenizer=tokenizer,
+        tools=getattr(training_args, 'tools', None),
     )
     output_dir = training_args.output_dir
 
     # Validate reward model paths if provided
-    if training_args.reward_model_path is not None:
-        for i, _ in enumerate(continual_dataset):
-            reward_path = os.path.join(training_args.reward_model_path, str(i))
-            if not os.path.exists(reward_path):
-                raise FileNotFoundError(
-                    f'Reward model not found for dataset {i} at {reward_path}'
-                )
+    for i, _ in enumerate(continual_dataset):
+        reward_path = os.path.join(training_args.reward_model_path, str(i))
+        if not os.path.exists(reward_path):
+            raise FileNotFoundError(
+                f'Reward model not found for dataset {i} at {reward_path}'
+            )
 
     checkpoint_paths = glob.glob(f'{script_args.checkpoint_dir}/*/*')
     checkpoint_paths = sorted([ch for ch in checkpoint_paths if 'checkpoint' in ch])
 
-    if TEST_METHOD == 'PPO':
-        EvalTrainer = ContinualPPOTrainer
-    elif TEST_METHOD == 'DPO':
-        EvalTrainer = ContinualDPOTrainer
-    elif TEST_METHOD == 'COPR':
-        EvalTrainer = COPRTrainer
-    else:
-        raise ValueError(f'Invalid test method: {TEST_METHOD}')
-
     # Checkpoint loop
     for checkpoint_path in checkpoint_paths:
-        dataset_name = checkpoint_path.split('/')[-2]
-        checkpoint_step = checkpoint_path.split('/')[-1]
+        dataset_name = checkpoint_path.split('/')[-2].replace('.', '')
+        checkpoint_step = checkpoint_path.split('/')[-1].replace('.', '')
+        print(
+            f'Evaluating checkpoint: {checkpoint_step} trained on dataset: {dataset_name} on all tasks'
+        )
         adapter_name = dataset_name + checkpoint_step
         model.load_adapter(checkpoint_path, adapter_name=adapter_name)
         metrics = {}
 
         # Task Loop
         for i, dataset in enumerate(continual_dataset):
+            reward_model = AutoModelForSequenceClassification.from_pretrained(
+                training_args.reward_model_path + f'/{str(i)}', num_labels=1
+            )
+
             training_args.output_dir = f'{output_dir}/dataset-{i}'
-            trainer = EvalTrainer(
+            # using ContinualDPOTrainer for all pipelines (PPO, DPO, COPR, ..) only for evaluation
+            trainer = ContinualDPOTrainer(
                 args=training_args,
                 processing_class=tokenizer,
                 model=model,
                 ref_model=ref_model,
+                reward_model=reward_model,
                 train_dataset=dataset[script_args.dataset_test_split],
                 eval_dataset=dataset[script_args.dataset_test_split],
                 peft_config=peft_config,
@@ -121,34 +129,13 @@ def main(
             ev_metrics = {f'dataset-{i}/' + k: v for k, v in ev_metrics.items()}
             metrics.update(ev_metrics)
 
-        wandb_logger(metrics)
+        wandb.log(metrics)
 
+    print('Evaluation completed for all tasks and checkpoints!')
 
-# ToDo: what's the better way to handle this?
-TEST_METHOD = 'PPO'
 
 if __name__ == '__main__':
-    if TEST_METHOD == 'PPO':
-        from ppo.continual_ppo_trainer import (
-            ContinualPPOArguments,
-            ContinualPPOConfig,
-        )
-
-        dataclass_types = (ContinualPPOArguments, ContinualPPOConfig, ModelConfig)
-    elif TEST_METHOD == 'DPO':
-        from dpo.continual_dpo_trainer import (
-            ContinualDPOArguments,
-            ContinualDPOConfig,
-        )
-
-        dataclass_types = (ContinualDPOArguments, ContinualDPOConfig, ModelConfig)
-    elif TEST_METHOD == 'COPR':
-        from COPR.copr_trainer import COPRArguments, COPRConfig
-
-        dataclass_types = (COPRArguments, COPRConfig, ModelConfig)
-    else:
-        raise ValueError(f'Invalid test method: {TEST_METHOD}')
-
+    dataclass_types = (ContinualDPOArguments, ContinualDPOConfig, ModelConfig)
     parser = TrlParser(dataclass_types)
     script_args, training_args, model_args = parser.parse_args_and_config()
     main(script_args, training_args, model_args)

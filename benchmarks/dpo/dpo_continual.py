@@ -82,7 +82,10 @@ def main(
 
     # Initialize continual dataset
     continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
-        script_args.dataset_name, mock=training_args.mock
+        script_args.dataset_name,
+        mock=training_args.mock,
+        tokenizer=tokenizer,
+        tools=training_args.tools,
     )
     output_dir = training_args.output_dir
 
