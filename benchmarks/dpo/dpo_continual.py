@@ -1,12 +1,9 @@
 """Adaptation of the DPO TRL training script for continual learning."""
 
+import os
+
 import torch
 import wandb as wb
-from continual_dpo_trainer import (
-    ContinualDPOArguments,
-    ContinualDPOConfig,
-    ContinualDPOTrainer,
-)
 from datasets import Dataset
 from transformers import (
     AutoModelForCausalLM,
