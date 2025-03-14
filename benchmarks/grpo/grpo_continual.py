@@ -28,7 +28,7 @@ from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 from benchmarks.dataloading import init_continual_dataset
 
 
-# The code is based on TRL DPO script https://github.com/huggingface/trl/blob/main/trl/scripts/grpo.py
+# The code is based on TRL GRPO script https://github.com/huggingface/trl/blob/main/trl/scripts/grpo.py
 def main(script_args, training_args, model_args):
     # Determine torch dtype and quantization configs
     torch_dtype = (

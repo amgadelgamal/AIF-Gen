@@ -124,7 +124,6 @@ class ContinualGRPOTrainer(GRPOTrainer):
             peft_config=peft_config,
         )
 
-        # No need for anything else as PPO itself is already set up with the reward model
         self.accelerator = (
             ContinualGRPOTrainer.shared_accelerator
         )  # turn the accelerator back to the shared one
