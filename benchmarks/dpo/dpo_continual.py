@@ -109,7 +109,7 @@ def main(
         # Load reward model if path provided
         if training_args.reward_model_path is not None:
             reward_model = AutoModelForSequenceClassification.from_pretrained(
-                training_args.reward_model_path + f'_{str(i)}', num_labels=1
+                os.path.join(training_args.reward_model_path, str(i)), num_labels=1
             )
 
         trainer = ContinualDPOTrainer(

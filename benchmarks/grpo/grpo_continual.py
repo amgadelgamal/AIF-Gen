@@ -4,6 +4,7 @@ import argparse
 import os
 
 import torch
+import wandb as wb
 from continual_grpo_trainer import (
     ContinualGRPOConfig,
     ContinualGRPOTrainer,
@@ -70,7 +71,7 @@ def main(script_args, training_args, model_args):
         script_args.dataset_name,
         mock=training_args.mock,
         tokenizer=tokenizer,
-        tools=training_args.tools,
+        tools=None,
     )
     output_dir = training_args.output_dir
 
@@ -85,17 +86,13 @@ def main(script_args, training_args, model_args):
 
     # Task Loop
     for i, dataset in enumerate(continual_dataset):
-        # Dataset
-        # dataset = dataset[script_args.dataset_train_split]
-        # dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": tokenizer})
-        # train_dataset = dataset.select(range(len(dataset) - eval_samples))
-        # eval_dataset = dataset.select(range(len(dataset) - eval_samples, len(dataset)))
+        current_dataset_name: str = f'dataset-{i}'
+        training_args.output_dir = f'{output_dir}/dataset-{i}'
 
         # Reward model
         reward_model = AutoModelForSequenceClassification.from_pretrained(
-            f'{script_args.reward_model_path}/{i}', num_labels=1
+            f'{training_args.reward_model_path}/{i}', num_labels=1
         )
-        training_args.output_dir = f'{output_dir}/dataset-{i}'
 
         # Initialize the GRPO trainer
         trainer = ContinualGRPOTrainer(
@@ -108,15 +105,29 @@ def main(script_args, training_args, model_args):
             peft_config=peft_config,
         )
 
-        # Train and push the model to the Hub
+        # Train
         trainer.train()
 
-        # ToDo: GRPOTrainer doesn't have a evaluate method, so we need to implement it to track the performance at each dataset
+        # Evaluate
+        metrics = trainer.evaluate_policy()
+        print(f'eval/dataset/{i}')
+        metrics['dataset'] = i
+        trainer.log_metrics(f'eval/dataset/{i}', metrics)
+        trainer.save_metrics(f'eval', metrics)
+        wb.log({'eval': {'last': metrics}})  # type: ignore[attr-defined]
+        wb.log({f'task/{current_dataset_name}/last': metrics})  # type: ignore[attr-defined]
 
         # Save and push to hub
         trainer.save_model(training_args.output_dir + f'/dataset-{i}')
         if training_args.push_to_hub:
             trainer.push_to_hub(dataset_name=script_args.dataset_name + f'/dataset-{i}')
+
+        # If using DeepSpeed through Accelerate, tear down the engine after training.
+        if hasattr(trainer, 'deepspeed') and trainer.deepspeed is not None:
+            # Remove reference to the DeepSpeed engine to allow proper cleanup.
+            del trainer.deepspeed
+        # Free cached GPU memory.
+        torch.cuda.empty_cache()
 
 
 def make_parser(subparsers: argparse._SubParsersAction = None):
