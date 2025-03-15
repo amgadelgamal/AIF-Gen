@@ -136,6 +136,9 @@ async def _generate_sample(
     """
     try:
 
+        class _PromptProposal(pydantic.BaseModel):
+            prompt: str
+
         class _ResponsePair(pydantic.BaseModel):
             chosen: str
             rejected: str
@@ -146,13 +149,23 @@ async def _generate_sample(
             response = await client.chat.completions.create(
                 model=model_name,
                 messages=[{'role': 'user', 'content': meta_prompt}],
-                max_tokens=256,  # TODO: Make this configurable
+                max_tokens=1024,
+                response_format={
+                    'type': 'json_schema',
+                    'json_schema': {
+                        'name': 'PromptProposal',
+                        'schema': _PromptProposal.model_json_schema(),
+                        'strict': True,
+                    },
+                },
             )
 
-        prompt = response.choices[0].message.content
-        if prompt is None:
+        output = response.choices[0].message.content
+        if output is None:
             raise ValueError(f'Received None response to prompt: {meta_prompt}')
-        assert prompt is not None  # This is for mypy
+        assert output is not None  # This is for mypy
+
+        prompt = _PromptProposal.model_validate_json(output).prompt
 
         task_prompt = response_mapper.generate_prompt(task, prompt)
         logging.debug(f'Meta Prompt: {meta_prompt}, Model Response: {prompt}')
@@ -161,6 +174,7 @@ async def _generate_sample(
             response = await client.chat.completions.create(
                 model=model_name,
                 messages=[{'role': 'user', 'content': task_prompt}],
+                max_tokens=2048,  # TODO: Make this configurable
                 response_format={
                     'type': 'json_schema',
                     'json_schema': {
@@ -169,7 +183,6 @@ async def _generate_sample(
                         'strict': True,
                     },
                 },
-                max_tokens=256,  # TODO: Make this configurable
             )
 
         output = response.choices[0].message.content

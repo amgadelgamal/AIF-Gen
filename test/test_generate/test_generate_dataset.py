@@ -17,15 +17,28 @@ def async_mock_return(result):
 
 @pytest.fixture
 def mock_client(mocker):
-    mock_response = mocker.MagicMock(name='response')
-    mock_response.choices[0].message.content = json.dumps(
+    mock_prompt_response = mocker.MagicMock(name='response')
+    mock_prompt_response.choices[0].message.content = json.dumps(
+        {'prompt': 'Mock prompt'}
+    )
+
+    mock_chosen_rejected_response = mocker.MagicMock(name='response')
+    mock_chosen_rejected_response.choices[0].message.content = json.dumps(
         {
             'chosen': 'Mock chosen response',
             'rejected': 'Mock rejected response',
         }
     )
+
+    # Crude way of ensuring that every time we call 'chate_completion',
+    # the mock client switches between a valid prompt_response schema
+    # and a valid chosen_rejected_response schema.
     mock_client = mocker.MagicMock(name='client')
-    mock_client.chat.completions.create.return_value = async_mock_return(mock_response)
+    mock_client.chat.completions.create.side_effect = [
+        async_mock_return(mock_prompt_response),
+        async_mock_return(mock_chosen_rejected_response),
+    ] * 100
+
     return mock_client
 
 
@@ -54,11 +67,17 @@ def mock_client_uncaught_exception(mocker):
 )
 def mock_client_schema_parse_exception(mocker, request):
     # Fail the first sample schema parse, then switch to good schema, and ensure the other samples are generated
-    mock_bad_response = mocker.MagicMock(name='response')
-    mock_bad_response.choices[0].message.content = json.dumps(request.param)
+    mock_bad_chosen_rejected_response = mocker.MagicMock(name='response')
+    mock_bad_chosen_rejected_response.choices[0].message.content = json.dumps(
+        request.param
+    )
 
-    mock_good_response = mocker.MagicMock(name='response')
-    mock_good_response.choices[0].message.content = json.dumps(
+    mock_prompt_response = mocker.MagicMock(name='response')
+    mock_prompt_response.choices[0].message.content = json.dumps(
+        {'prompt': 'Mock prompt'}
+    )
+    mock_good_chosen_rejected_response = mocker.MagicMock(name='response')
+    mock_good_chosen_rejected_response.choices[0].message.content = json.dumps(
         {
             'chosen': 'Mock chosen response',
             'rejected': 'Mock rejected response',
@@ -67,15 +86,19 @@ def mock_client_schema_parse_exception(mocker, request):
 
     mock_client = mocker.MagicMock(name='client')
 
-    # This is a crude way of making the mock return a 'bad response' the first 5 times,
+    # This is a crude way of making the mock return a 'bad response' the first time,
     # then 'good response' for the next 100 calls. 100 is arbitrary, but it should be
     # larger than the mock dataset we test here. If we do run on more than 100 samples,
     # this will raise a StopIteration exception, causes a flaky test. The proper way to
     # mock this would involve looking at the calling args, since the first API call doesn't
     # actually check for json schema.
-    mock_client.chat.completions.create.side_effect = 5 * [
-        async_mock_return(mock_bad_response)
-    ] + 100 * [async_mock_return(mock_good_response)]
+    mock_client.chat.completions.create.side_effect = [
+        async_mock_return(mock_prompt_response),
+        async_mock_return(mock_bad_chosen_rejected_response),
+    ] + 100 * [
+        async_mock_return(mock_prompt_response),
+        async_mock_return(mock_good_chosen_rejected_response),
+    ]
 
     return mock_client
 
