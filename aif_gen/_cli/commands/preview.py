@@ -102,7 +102,7 @@ def preview(
                 sample_dict = {
                     f'{split_names[split_idx]} Index': f'{sample_idx + 1}/{len(splits[split_idx])}'
                 }
-                sample_dict |= asdict(splits[split_idx][sample_idx])  # type: ignore
+                sample_dict.update(asdict(splits[split_idx][sample_idx]))
 
                 pprint.pp(tasks[dataset_idx])
                 pprint.pp(sample_dict)
