@@ -22,6 +22,7 @@ async def llm_judge_validation(
     model_name: str,
     client: openai.AsyncOpenAI,
     async_semaphore: asyncio.Semaphore,
+    max_tokens_judge_response: int = 32,
     dry_run: bool = False,
 ) -> Optional[List[Optional[Dict[str, float]]]]:
     r"""Use an LLM to judge the quality of the dataset..
@@ -31,6 +32,7 @@ async def llm_judge_validation(
         model_name (str): The vLLM-compatible model alias to use for validating the data.
         client (openai.AsyncOpenAI): Handle to openAI client.
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
+        max_tokens_judge_response (int): Configurable limit on the max_tokens for the generated judge response.
         dry_run (bool): If True, validate a dummy sample to ensure the model is setup correctly.
 
     Returns:
@@ -54,6 +56,7 @@ async def llm_judge_validation(
             client,
             model_name,
             async_semaphore,
+            max_tokens_judge_response,
             dataset_idx=-1,
             metric_name='',
         )
@@ -83,6 +86,7 @@ async def llm_judge_validation(
                 client,
                 model_name,
                 async_semaphore,
+                max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='alignment',
             )
@@ -91,6 +95,7 @@ async def llm_judge_validation(
                 client,
                 model_name,
                 async_semaphore,
+                max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_chosen',
             )
@@ -99,6 +104,7 @@ async def llm_judge_validation(
                 client,
                 model_name,
                 async_semaphore,
+                max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_rejected',
             )
@@ -150,6 +156,7 @@ async def _get_score(
     client: openai.AsyncOpenAI,
     model_name: str,
     async_semaphore: asyncio.Semaphore,
+    max_tokens_judge_response: int,
     dataset_idx: int,
     metric_name: str,
 ) -> Tuple[Optional[float], int, str]:
@@ -162,6 +169,7 @@ async def _get_score(
             response = await client.chat.completions.create(
                 model=model_name,
                 messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=max_tokens_judge_response,
                 response_format={
                     'type': 'json_schema',
                     'json_schema': {
@@ -170,7 +178,6 @@ async def _get_score(
                         'strict': True,
                     },
                 },
-                max_tokens=128,  # TODO: Make this configurable
             )
 
         model_response = response.choices[0].message.content
