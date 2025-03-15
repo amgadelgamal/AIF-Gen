@@ -18,6 +18,7 @@ dependencies = [
     "backoff>=2.2.1",
     "click>=8.1.8",
     "datasets>=3.3.1",
+    "huggingface-hub>=0.29.1",
     "nltk>=3.9.1",
     "numpy>=2.0.2",
     "openai>=1.61.1",
@@ -48,8 +49,19 @@ benchmarks-dpo = [
     "trl>=0.14.0",
     "wandb>=0.19.6",
 ]
+benchmarks-ppo = [
+    "accelerate==0.34.2",
+    "datasets>=3.2.0",
+    "deepspeed==0.16.3",
+    "peft>=0.14.0",
+    "submitit>=1.5.2",
+    "transformers>=4.48.3",
+    "trl>=0.14.0",
+    "wandb>=0.19.6",
+]
 benchmarks = [
     "setuptools>=75.8.0",
+    "huggingface-hub==0.29.2",
 ]
 
 [tool.mypy]
@@ -70,6 +82,7 @@ include_trailing_comma = true
 skip = [".gitignore", "__init__.py"]
 
 [tool.ruff]
+force-exclude = true
 src = ["aif_gen"]
 line-length = 88
 indent-width = 4

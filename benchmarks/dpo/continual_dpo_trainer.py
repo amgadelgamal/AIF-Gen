@@ -23,7 +23,7 @@ from transformers import (
 )
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
-from trl import DPOTrainer, ScriptArguments, apply_chat_template
+from trl import DPOTrainer, ScriptArguments
 from trl.models.utils import unwrap_model_for_generation
 from trl.trainer.dpo_config import DPOConfig
 from trl.trainer.utils import (
@@ -41,6 +41,12 @@ class ContinualDPOArguments(ScriptArguments):
         default='debug',
         metadata={'help': 'The name or path of the continual dataset to use.'},
     )
+    checkpoint_dir: Optional[str] = field(
+        default=None,
+        metadata={
+            'help': 'The directory containing the checkpoints to evaluate (used only in eval checkpoints sctipt)'
+        },
+    )
     wandb_project: Optional[str] = field(
         default='AIFGen-dpo-continual-test',
         metadata={'help': 'Override the default WandB project name.'},
@@ -48,6 +54,10 @@ class ContinualDPOArguments(ScriptArguments):
     wandb_entity: Optional[str] = field(
         default=None,
         metadata={'help': 'The WandB entity (team) to use.'},
+    )
+    wandb_run_name: Optional[str] = field(
+        default=None,
+        metadata={'help': 'The WandB run name.'},
     )
 
     def __post_init__(self) -> None:
@@ -102,7 +112,6 @@ class ContinualDPOTrainer(DPOTrainer):
         data_collator: Optional[DataCollator] = None,
         train_dataset: Optional[Dataset] = None,
         eval_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
-        eval_policy_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
         processing_class: Optional[
             Union[
                 PreTrainedTokenizerBase,
@@ -125,6 +134,9 @@ class ContinualDPOTrainer(DPOTrainer):
     ):
         if args is None:
             raise ValueError('`args` cannot be None')
+
+        eval_policy_dataset = eval_dataset
+
         super().__init__(
             model,
             ref_model,
@@ -191,9 +203,6 @@ class ContinualDPOTrainer(DPOTrainer):
             self.eval_policy_dataset = None
             self.eval_policy_dataloader = None
 
-    # ToDo: I was not able to run code with @override(DPOTrainer.log), need to resolve it
-    # @override(Trainer.create_accelerator_and_postprocess)
-    @override
     def create_accelerator_and_postprocess(self) -> None:
         # Only initialize a new Accelerator if one does not exist
         if ContinualDPOTrainer.shared_accelerator is None:
@@ -229,7 +238,7 @@ class ContinualDPOTrainer(DPOTrainer):
             )
             return {'input_ids': outputs['input_ids']}
 
-        def prepare_dataset(ds: Dataset, tokenizer: PreTrainedTokenizerBase) -> Dataset:
+        def prepare_dataset(ds: Dataset) -> Dataset:
             return ds.map(
                 tokenize,
                 batched=True,
@@ -237,17 +246,9 @@ class ContinualDPOTrainer(DPOTrainer):
                 num_proc=self.args.dataset_num_proc,
             )
 
-        dataset = (
-            dataset.map(
-                apply_chat_template, fn_kwargs={'tokenizer': self.processing_class}
-            )
-            if self.args.mock
-            else dataset
-        )
-
         # Compute only on main process for faster data processing.
         with PartialState().local_main_process_first():
-            dataset = prepare_dataset(dataset, self.processing_class)
+            dataset = prepare_dataset(dataset)
         return dataset
 
     def evaluate_policy(self) -> dict:
@@ -258,6 +259,7 @@ class ContinualDPOTrainer(DPOTrainer):
         """
         # The code is heavily based on the training loop of TRL PPOTrainer function https://github.com/huggingface/trl/blob/main/trl/trainer/ppo_trainer.py#L677
         mode = self.model.training
+        # there is no self.model? TODO
         self.model.eval()
         eval_metrics = defaultdict(list)
         processing_class = self.processing_class
@@ -311,9 +313,9 @@ class ContinualDPOTrainer(DPOTrainer):
         self.model.train(mode)
         return {'eval_' + k: float(np.mean(v)) for k, v in eval_metrics.items()}
 
-    # @override(DPOTrainer.log)
-    @override
-    def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
+    def log(
+        self, logs: dict[str, Union[float, dict]], start_time: Optional[float] = None
+    ) -> None:
         """Log `logs` on the various objects watching training, including stored metrics."""
         train_eval = 'train' if 'loss' in logs else 'eval'
         print(f'Logging {train_eval} metrics...')

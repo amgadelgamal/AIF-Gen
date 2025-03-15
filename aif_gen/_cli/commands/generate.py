@@ -1,13 +1,17 @@
 import asyncio
+import copy
+import json
 import logging
 import pathlib
-import time
+from typing import Optional
 
 import click
 import openai
 import yaml
 
 from aif_gen.generate.service import generate_continual_dataset
+from aif_gen.util.hf import upload_to_hf
+from aif_gen.util.path import get_run_id
 
 
 @click.command(context_settings={'show_default': True})
@@ -23,7 +27,7 @@ from aif_gen.generate.service import generate_continual_dataset
     '--output_file',
     type=click.Path(dir_okay=False, path_type=pathlib.Path),
     help='Path to write the generated dataset.',
-    default=f'data/{time.time()}/data.json',
+    default=lambda: f'data/{get_run_id(name=click.get_current_context().params["data_config_name"].stem)}/data.json',
 )
 @click.option(
     '--max_concurrency',
@@ -38,12 +42,19 @@ from aif_gen.generate.service import generate_continual_dataset
     default=False,
     help='Ignore the input config and generate a dummy sample ensuring the model endpoint is setup.',
 )
+@click.option(
+    '--hf-repo-id',
+    type=click.STRING,
+    default=None,
+    help='If not None, push the generated dataset to a HuggingFace remote repository with the associated repo-id.',
+)
 def generate(
     data_config_name: pathlib.Path,
     model: str,
     output_file: pathlib.Path,
     max_concurrency: int,
     dry_run: bool,
+    hf_repo_id: Optional[str],
 ) -> None:
     r"""Generate a new ContinualAlignmentDataset.
 
@@ -57,6 +68,13 @@ def generate(
     logging.debug(f'Configuration: {data_config}')
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if not dry_run:
+        config = copy.deepcopy(data_config)
+        config['model'] = model
+        config['max_concurrency'] = max_concurrency
+        with open(output_file.parent / 'config.json', 'w') as f:
+            json.dump(config, f)
 
     try:
         client = openai.AsyncOpenAI()
@@ -73,3 +91,6 @@ def generate(
         logging.info(f'Writing {len(dataset)} samples to {output_file}')
         dataset.to_json(output_file)
         logging.info(f'Wrote {len(dataset)} samples to {output_file}')
+
+        if hf_repo_id is not None:
+            upload_to_hf(repo_id=hf_repo_id, local_path=output_file.parent)

@@ -1,6 +1,7 @@
+import os
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Optional
 
 import submitit
 import torch
@@ -64,6 +65,24 @@ class ExtendedScriptArguments(ScriptArguments):
         default='volta',
         metadata={'help': 'Slurm constraint to use.'},
     )
+    wandb_project: Optional[str] = field(
+        default='AIFGen-dpo-continual-test',
+        metadata={'help': 'Override the default WandB project name.'},
+    )
+    wandb_entity: Optional[str] = field(
+        default=None,
+        metadata={'help': 'The WandB entity (team) to use.'},
+    )
+    wandb_run_name: Optional[str] = field(
+        default=None,
+        metadata={'help': 'The WandB run name.'},
+    )
+
+    def __post_init__(self) -> None:
+        if self.wandb_project:
+            os.environ['WANDB_PROJECT'] = self.wandb_project
+        if self.wandb_entity:
+            os.environ['WANDB_ENTITY'] = self.wandb_entity
 
 
 # This code is heavily based on the reward_modeling script from the TRL library:
@@ -79,6 +98,9 @@ def train_model(
     index: int,
 ) -> None:
     training_args.gradient_checkpointing_kwargs = dict(use_reentrant=False)
+
+    if script_args.wandb_run_name is not None:
+        training_args.run_name = script_args.wandb_run_name
 
     ################
     # Model & Tokenizer
@@ -121,6 +143,25 @@ def train_model(
             'This may lead to silent bugs. Make sure to pass --lora_task_type SEQ_CLS when using this script with PEFT.',
             UserWarning,
         )
+    # Use only the filename part without extension from the dataset name.
+    clean_dataset_name = os.path.basename(script_args.dataset_name)
+    if '.' in clean_dataset_name:
+        clean_dataset_name = clean_dataset_name.split('.')[0]
+
+    # Create a custom repo name and update the hub_model_id.
+    custom_repo_name = (
+        model_args.model_name_or_path.split('/')[-1]
+        + '_'
+        + clean_dataset_name
+        + '_REWARD_'
+        + str(index)
+    )
+    if training_args.push_to_hub:
+        training_args.hub_model_id = custom_repo_name
+
+    # Update output_dir so that saving/pushing is done to a single folder.
+    training_args.output_dir = os.path.join(training_args.output_dir, custom_repo_name)
+    print(f'Saving model {index} to: {training_args.output_dir}')
 
     # Initialize and run trainer
     trainer = RewardTrainer(
@@ -133,19 +174,22 @@ def train_model(
         else None,
         peft_config=get_peft_config(model_args),
     )
+
     trainer.train()
 
-    # Save model and optionally push to the hub
-    print(f'Saving model {index} to: {training_args.output_dir}')
-    trainer.save_model(
-        training_args.output_dir + f'/{script_args.dataset_name}/{index}'
-    )
     if training_args.eval_strategy != 'no':
         metrics = trainer.evaluate()
         trainer.log_metrics('eval', metrics)
         trainer.save_metrics('eval', metrics)
-    if training_args.push_to_hub:
-        trainer.push_to_hub(dataset_name=script_args.dataset_name + str(index))
+
+    # Save locally or push to the hub.
+    if not training_args.push_to_hub:
+        trainer.save_model(training_args.output_dir)
+    else:
+        trainer.push_to_hub(
+            model_name=custom_repo_name,
+            dataset_name=clean_dataset_name + '_' + str(index),
+        )
 
 
 if __name__ == '__main__':
