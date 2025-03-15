@@ -21,7 +21,7 @@ class ResponseMapper(ResponseMapperBase):
         Generate a 'chosen' and 'rejected' response pair to the following prompt: '{task_prompt}'.\n
 
         The 'chosen' response should better respond to the prompt according to the following preference: '{task.preference}'.
-        The 'rejected' response should be a worse response to the prompt according to the following preference: '{task.preference}'.
+        The 'rejected' response should still respond to the prompt in a meaningful way, but should be worse according to the following preference: '{task.preference}'.
 
         You don't need to start your prompt by saying 'User asks'.
         {self.ETHICAL_GUIDELINES}
