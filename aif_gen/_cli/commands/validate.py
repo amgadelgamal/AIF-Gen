@@ -74,7 +74,7 @@ from aif_gen.util.hf import download_from_hf, upload_to_hf
     '--max_tokens_judge_response',
     type=click.IntRange(min=1, max=1024, clamp=True),
     help='Limit the max_tokens on the judge response from the vLLM model if doing llm_judge validation.',
-    default=1024,
+    default=32,
 )
 @click.option(
     '-n',
