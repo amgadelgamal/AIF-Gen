@@ -36,6 +36,18 @@ from aif_gen.util.path import get_run_id
     default=256,
 )
 @click.option(
+    '--max_tokens_prompt_response',
+    type=click.IntRange(min=1, max=32768, clamp=True),
+    help='Limit the max_tokens on the prompt response from the vLLM model.',
+    default=1024,
+)
+@click.option(
+    '--max_tokens_chosen_rejected_response',
+    type=click.IntRange(min=1, max=65536, clamp=True),
+    help='Limit the max_tokens on the chosen/rejected response pair from the vLLM model.',
+    default=2048,
+)
+@click.option(
     '-n',
     '--dry-run',
     is_flag=True,
@@ -53,6 +65,8 @@ def generate(
     model: str,
     output_file: pathlib.Path,
     max_concurrency: int,
+    max_tokens_prompt_response: int,
+    max_tokens_chosen_rejected_response: int,
     dry_run: bool,
     hf_repo_id: Optional[str],
 ) -> None:
@@ -84,7 +98,13 @@ def generate(
 
     async_semaphore = asyncio.Semaphore(max_concurrency)
     future = generate_continual_dataset(
-        data_config, model, client, async_semaphore, dry_run
+        data_config,
+        model,
+        client,
+        async_semaphore,
+        max_tokens_prompt_response,
+        max_tokens_chosen_rejected_response,
+        dry_run,
     )
     dataset = asyncio.get_event_loop().run_until_complete(future)
     if dataset is not None:
