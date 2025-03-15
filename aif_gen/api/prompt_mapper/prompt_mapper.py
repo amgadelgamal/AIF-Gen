@@ -15,12 +15,12 @@ class PromptMapper(PromptMapperBase):
     The sampling is parameterized by the weight of each component of the domain.
 
     Args:
-        max_seed_word_samples (int): Maximum number of seed words to sample across all domain components (default=10)
+        max_seed_word_samples (int): Maximum number of seed words to sample across all domain components (default=2)
         suffix_context (Optional[str]=None): Optionally add arbitrary context at the end of the generated prompt.
     """
 
     def __init__(
-        self, max_seed_word_samples: int = 10, suffix_context: Optional[str] = None
+        self, max_seed_word_samples: int = 2, suffix_context: Optional[str] = None
     ) -> None:
         if max_seed_word_samples <= 0:
             raise ValueError(
