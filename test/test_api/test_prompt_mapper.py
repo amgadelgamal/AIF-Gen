@@ -6,7 +6,7 @@ from aif_gen.task import AlignmentTask, Domain, DomainComponent
 
 def test_init():
     mapper = PromptMapper()
-    assert mapper.max_seed_word_samples == 10
+    assert mapper.max_seed_word_samples == 2
     assert mapper.suffix_context is None
 
     mapper = PromptMapper(max_seed_word_samples=20, suffix_context='foo')
