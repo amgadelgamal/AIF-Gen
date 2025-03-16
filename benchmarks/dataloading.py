@@ -165,8 +165,8 @@ def save_CPPO_datasets_to_hub() -> None:
     """Process CPPO datasets and save them to Hugging Face Hub."""
 
     def _preprocess_CPPO_datasets() -> (
-        tuple[list[dict[str, Dataset]], list[dict[str, Dataset]]]
-    ):  # noqa: E501
+        tuple[list[dict[str, Dataset]], list[dict[str, Dataset]]]  # noqa: E501
+    ):
         """Datasets used for task incremental learning in CPPO: https://openreview.net/forum?id=86zAUE80pP.
 
         Dataset: https://huggingface.co/datasets/CarperAI/openai_summarize_comparisons?row=0
