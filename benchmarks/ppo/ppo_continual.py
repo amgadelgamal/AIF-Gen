@@ -3,7 +3,6 @@
 import os
 
 import torch
-import wandb as wb
 from continual_ppo_trainer import (
     ContinualPPOArguments,
     ContinualPPOConfig,
@@ -24,6 +23,7 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
+import wandb as wb
 from benchmarks.dataloading import init_continual_dataset
 
 
@@ -95,14 +95,6 @@ def main(
     )
     output_dir = training_args.output_dir
 
-    # Validate reward model paths if provided
-    for i, _ in enumerate(continual_dataset):
-        reward_path = os.path.join(training_args.reward_model_path, str(i))
-        if not os.path.exists(reward_path):
-            raise FileNotFoundError(
-                f'Reward model not found for dataset {i} at {reward_path}'
-            )
-
     # Extract clean dataset name for repo naming
     clean_dataset_name = os.path.basename(script_args.dataset_name)
     if '.' in clean_dataset_name:
@@ -120,7 +112,7 @@ def main(
 
         # Load reward model based on naming convention (expects suffix with task index)
         reward_model = AutoModelForSequenceClassification.from_pretrained(
-            os.path.join(training_args.reward_model_path, str(i)), num_labels=1
+            training_args.reward_model_path + '_' + str(i), num_labels=1
         )
 
         ################

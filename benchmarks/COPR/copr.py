@@ -82,15 +82,6 @@ def main(
     )
     output_dir = training_args.output_dir
 
-    # Validate reward model paths if provided
-    if training_args.reward_model_path is not None:
-        for i, _ in enumerate(continual_dataset):
-            reward_path = os.path.join(training_args.reward_model_path, str(i))
-            if not os.path.exists(reward_path):
-                raise FileNotFoundError(
-                    f'Reward model not found for dataset {i} at {reward_path}'
-                )
-
     # Initialize the memory buffer at the script level
     memory_buffer: list = []
 
@@ -178,7 +169,10 @@ def main(
         trainer.save_model(os.path.join(training_args.output_dir, 'last'))
         if training_args.push_to_hub:
             trainer.push_to_hub(
-                dataset_name=f'Continual_COPR_{script_args.dataset_name}/dataset-{i}'
+                dataset_name=f'Continual_COPR_'
+                + script_args.dataset_name
+                + '_'
+                + str(i),
             )
 
         # If using DeepSpeed, cleanup the engine and free GPU memory

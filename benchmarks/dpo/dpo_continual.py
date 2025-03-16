@@ -1,7 +1,8 @@
 """Adaptation of the DPO TRL training script for continual learning."""
 
+import os
+
 import torch
-import wandb as wb
 from continual_dpo_trainer import (
     ContinualDPOArguments,
     ContinualDPOConfig,
@@ -22,6 +23,7 @@ from trl import (
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
+import wandb as wb
 from benchmarks.dataloading import init_continual_dataset
 from benchmarks.dpo.continual_dpo_trainer import (
     ContinualDPOArguments,
@@ -95,15 +97,6 @@ def main(
     )
     output_dir = training_args.output_dir
 
-    # Validate reward model paths if provided
-    if training_args.reward_model_path is not None:
-        for i, _ in enumerate(continual_dataset):
-            reward_path = os.path.join(training_args.reward_model_path, str(i))
-            if not os.path.exists(reward_path):
-                raise FileNotFoundError(
-                    f'Reward model not found for dataset {i} at {reward_path}'
-                )
-
     # Task Loop
     for i, dataset in enumerate(continual_dataset):
         current_dataset_name: str = f'dataset-{i}'
@@ -153,7 +146,7 @@ def main(
         if training_args.push_to_hub:
             trainer.push_to_hub(
                 dataset_name=(
-                    'Continual_DPO_' + script_args.dataset_name + f'/dataset-{i}'
+                    'Continual_DPO_' + script_args.dataset_name + '_' + str(i),
                 )
             )
 
