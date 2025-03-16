@@ -71,6 +71,12 @@ from aif_gen.util.hf import download_from_hf, upload_to_hf
     default=256,
 )
 @click.option(
+    '--max_tokens_judge_response',
+    type=click.IntRange(min=1, max=1024, clamp=True),
+    help='Limit the max_tokens on the judge response from the vLLM model if doing llm_judge validation.',
+    default=32,
+)
+@click.option(
     '-n',
     '--dry-run',
     is_flag=True,
@@ -93,6 +99,7 @@ def validate(
     num_workers: int,
     model: str,
     max_concurrency: int,
+    max_tokens_judge_response: int,
     dry_run: bool,
     hf_repo_id: Optional[str],
 ) -> None:
@@ -130,7 +137,14 @@ def validate(
         try:
             client = openai.AsyncOpenAI()
             async_semaphore = asyncio.Semaphore(max_concurrency)
-            fut = llm_judge_validation(dataset, model, client, async_semaphore, dry_run)
+            fut = llm_judge_validation(
+                dataset,
+                model,
+                client,
+                async_semaphore,
+                max_tokens_judge_response,
+                dry_run,
+            )
             result = asyncio.get_event_loop().run_until_complete(fut)
         except (openai.OpenAIError, Exception) as e:
             logging.exception(f'Error occured trying to validate data with vLLM: {e}')
