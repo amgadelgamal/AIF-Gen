@@ -4,8 +4,6 @@ import os
 
 from elasticsearch import AsyncElasticsearch
 
-logger = logging.getLogger(__name__)
-
 
 class AsyncElasticsearchCache:
     def __init__(self, es: AsyncElasticsearch, index_name: str):
@@ -23,7 +21,7 @@ class AsyncElasticsearchCache:
 
         required_env_keys = ['ELASTIC_SEARCH_HOST', 'ELASTIC_SEARCH_API_KEY']
         if not all((_key in os.environ) for _key in required_env_keys):
-            logger.warning(
+            logging.warning(
                 'All of these are required to enable ElasticsearchCache: '
                 f'{required_env_keys}.'
                 ' Not enabling ElasticsearchCache since some keys are not set.'
@@ -51,10 +49,10 @@ class AsyncElasticsearchCache:
         try:
             response = await self.es.get(index=self.index_name, id=query_hash)
             if response.get('found'):
-                logger.info(f'Cache hit: {query_hash}')
+                logging.info(f'Cache hit: {query_hash}')
                 return response['_source']['result']
         except Exception:
-            logger.debug(f'Cache miss: {query_hash}')
+            logging.debug(f'Cache miss: {query_hash}')
 
         return None  # Cache miss or index doesn't exist
 
