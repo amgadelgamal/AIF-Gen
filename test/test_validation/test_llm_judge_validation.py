@@ -1,3 +1,6 @@
+import asyncio
+import json
+
 import pytest
 
 from aif_gen.dataset import (
@@ -7,63 +10,135 @@ from aif_gen.dataset import (
 )
 from aif_gen.dataset.validation.llm_judge import llm_judge_validation
 
+_EXP_KEYS = [
+    'alignment_max',
+    'alignment_mean',
+    'alignment_median',
+    'alignment_min',
+    'coherence_chosen_max',
+    'coherence_chosen_mean',
+    'coherence_chosen_median',
+    'coherence_chosen_min',
+    'coherence_rejected_max',
+    'coherence_rejected_mean',
+    'coherence_rejected_median',
+    'coherence_rejected_min',
+]
 
-@pytest.mark.parametrize('judge_rating', [-1, -1.23, -0.23, 0.12, 0.23, 0.5, 1.23, 10])
-def test_llm_judge_validation(mocker, judge_rating):
-    mocker.patch(
-        'aif_gen.dataset.validation.llm_judge._init_llm_judge',
-        return_value=lambda _: [{'generated_text': f'LLM Response: {judge_rating}'}],
+
+def async_mock_return(result):
+    fut = asyncio.Future()
+    fut.set_result(result)
+    return fut
+
+
+@pytest.fixture(params=[-1, -1.23, -0.23, 0.12, 0.23, 0.5, 1.23, 10])
+def mock_client(mocker, request):
+    mock_response = mocker.MagicMock(name='response')
+    mock_response.choices[0].message.content = json.dumps(
+        {
+            'score': request.param,
+        }
+    )
+    mock_client = mocker.MagicMock(name='client')
+    mock_client.chat.completions.create.return_value = async_mock_return(mock_response)
+    mock_client.score = request.param
+    return mock_client
+
+
+@pytest.fixture
+def mock_client_uncaught_exception(mocker):
+    mock_response = mocker.MagicMock(name='response')
+    mock_response.choices[0].message.content = json.dumps(
+        {
+            'score': 0.1337,
+        }
+    )
+    mock_client = mocker.MagicMock(name='client')
+    # Some uncaught exception (e.g. openai.NotFound)
+    mock_client.chat.completions.create.side_effect = Exception
+    mock_client.score = 0.1337
+    return mock_client
+
+
+@pytest.fixture(
+    params=[
+        {'score': 'Bad response'},  # 'score' is not a float
+        {'foo': 'Mock response'},  # Missing the 'score'
+    ]
+)
+def mock_client_schema_parse_exception(mocker, request):
+    # Fail the first sample schema parse, then switch to good schema, and ensure the other samples are generated
+    mock_bad_response = mocker.MagicMock(name='response')
+    mock_bad_response.choices[0].message.content = json.dumps(request.param)
+
+    mock_good_response = mocker.MagicMock(name='response')
+    mock_good_response.choices[0].message.content = json.dumps(
+        {
+            'score': 0.1337,
+        }
     )
 
+    mock_client = mocker.MagicMock(name='client')
+
+    # This is a crude way of making the mock return a 'bad response' the first 5 times,
+    # then 'good response' for the next 100 calls. 100 is arbitrary, but it should be
+    # larger than the mock dataset we test here. If we do run on more than 100 samples,
+    # this will raise a StopIteration exception, causes a flaky test. The proper way to
+    # mock this would involve looking at the calling args, since the first API call doesn't
+    # actually check for json schema.
+    mock_client.chat.completions.create.side_effect = 5 * [
+        async_mock_return(mock_bad_response)
+    ] + 100 * [async_mock_return(mock_good_response)]
+
+    mock_client.score = 0.1337
+    return mock_client
+
+
+@pytest.fixture
+def mock_semaphore(mocker):
+    mock_sem = mocker.MagicMock(name='async_semaphore')
+    mock_sem.return_value.__aenter__.return_value = None
+    return mock_sem
+
+
+@pytest.fixture
+def mock_model():
+    return 'GPT-1337'
+
+
+@pytest.mark.asyncio
+async def test_llm_judge_validation(mock_model, mock_client, mock_semaphore):
     samples = [
         AlignmentDatasetSample(
             'Mock prompt A', 'Winning Response A 1', 'Losing Response A 1'
         ),
     ]
     dataset = AlignmentDataset(task=None, samples=samples)
-    result = llm_judge_validation(dataset)
-    exp_keys = [
-        'alignment_chosen_max',
-        'alignment_chosen_mean',
-        'alignment_chosen_median',
-        'alignment_chosen_min',
-        'alignment_rejected_max',
-        'alignment_rejected_mean',
-        'alignment_rejected_median',
-        'alignment_rejected_min',
-        'coherence_chosen_max',
-        'coherence_chosen_mean',
-        'coherence_chosen_median',
-        'coherence_chosen_min',
-        'coherence_rejected_max',
-        'coherence_rejected_mean',
-        'coherence_rejected_median',
-        'coherence_rejected_min',
-    ]
-    assert isinstance(result, list)
-    assert sorted(list(result[0].keys())) == sorted(exp_keys)
-    for v in result[0].values():
-        assert v == max(0.0, min(1.0, judge_rating))
-
-
-def test_llm_judge_validation_empty_dataset(mocker):
-    mocker.patch(
-        'aif_gen.dataset.validation.llm_judge._init_llm_judge',
-        return_value=lambda _: f'LLM Response: 0.1234',
+    result = await llm_judge_validation(
+        dataset, mock_model, mock_client, mock_semaphore
     )
+    assert isinstance(result, list)
+    assert sorted(list(result[0].keys())) == sorted(_EXP_KEYS)
+    for v in result[0].values():
+        assert v == max(0.0, min(1.0, mock_client.score))
 
+
+@pytest.mark.asyncio
+async def test_llm_judge_validation_empty_dataset(
+    mock_model, mock_client, mock_semaphore
+):
     dataset = AlignmentDataset(task=None, samples=[])
-    result = llm_judge_validation(dataset)
+    result = await llm_judge_validation(
+        dataset, mock_model, mock_client, mock_semaphore
+    )
     assert result == [None]
 
 
-@pytest.mark.parametrize('judge_rating', [-1, -1.23, -0.23, 0.12, 0.23, 0.5, 1.23, 10])
-def test_llm_judge_validation_continual_dataset(mocker, judge_rating):
-    mocker.patch(
-        'aif_gen.dataset.validation.llm_judge._init_llm_judge',
-        return_value=lambda _: [{'generated_text': f'LLM response {judge_rating}'}],
-    )
-
+@pytest.mark.asyncio
+async def test_llm_judge_validation_continual_dataset(
+    mock_model, mock_client, mock_semaphore
+):
     samples = [
         AlignmentDatasetSample(
             'Mock prompt', 'Winning Response A 1', 'Losing Response A 1'
@@ -79,39 +154,21 @@ def test_llm_judge_validation_continual_dataset(mocker, judge_rating):
     dataset2 = AlignmentDataset(task=None, samples=[])
     dataset = ContinualAlignmentDataset(datasets=[dataset1, dataset2])
 
-    result = llm_judge_validation(dataset)
+    result = await llm_judge_validation(
+        dataset, mock_model, mock_client, mock_semaphore
+    )
 
-    exp_keys = [
-        'alignment_chosen_max',
-        'alignment_chosen_mean',
-        'alignment_chosen_median',
-        'alignment_chosen_min',
-        'alignment_rejected_max',
-        'alignment_rejected_mean',
-        'alignment_rejected_median',
-        'alignment_rejected_min',
-        'coherence_chosen_max',
-        'coherence_chosen_mean',
-        'coherence_chosen_median',
-        'coherence_chosen_min',
-        'coherence_rejected_max',
-        'coherence_rejected_mean',
-        'coherence_rejected_median',
-        'coherence_rejected_min',
-    ]
     assert isinstance(result, list)
-    assert sorted(list(result[0].keys())) == sorted(exp_keys)
+    assert sorted(list(result[0].keys())) == sorted(_EXP_KEYS)
     for v in result[0].values():
-        assert v == max(0.0, min(1.0, judge_rating))
+        assert v == max(0.0, min(1.0, mock_client.score))
     assert result[1] == None
 
 
-def test_diversity_validation_all_parses_failed(mocker):
-    mocker.patch(
-        'aif_gen.dataset.validation.llm_judge._init_llm_judge',
-        return_value=lambda _: [{'generated_text': f'Bad LLM response with no rating'}],
-    )
-
+@pytest.mark.asyncio
+async def test_llm_judge_validation_with_parse_failures(
+    mock_model, mock_client_schema_parse_exception, mock_semaphore
+):
     samples = [
         AlignmentDatasetSample(
             'Mock prompt A 1', 'Winning Response A 1', 'Losing Response A 1'
@@ -124,5 +181,35 @@ def test_diversity_validation_all_parses_failed(mocker):
         ),
     ]
     dataset = AlignmentDataset(task=None, samples=samples)
-    with pytest.raises(RuntimeError):
-        llm_judge_validation(dataset)
+
+    result = await llm_judge_validation(
+        dataset, mock_model, mock_client_schema_parse_exception, mock_semaphore
+    )
+
+    assert isinstance(result, list)
+    assert sorted(list(result[0].keys())) == sorted(_EXP_KEYS)
+    for v in result[0].values():
+        assert v == max(0.0, min(1.0, mock_client_schema_parse_exception.score))
+
+
+@pytest.mark.asyncio
+async def test_llm_judge_validation_uncaught_exception(
+    mock_model, mock_client_uncaught_exception, mock_semaphore
+):
+    samples = [
+        AlignmentDatasetSample(
+            'Mock prompt A 1', 'Winning Response A 1', 'Losing Response A 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt B 1', 'Winning Response B 1', 'Losing Response B 1'
+        ),
+        AlignmentDatasetSample(
+            'Mock prompt C 1', 'Winning Response C 1', 'Losing Response C 1'
+        ),
+    ]
+    dataset = AlignmentDataset(task=None, samples=samples)
+    with pytest.raises(Exception):
+        results = await llm_judge_validation(
+            dataset, mock_model, mock_client_uncaught_exception, mock_semaphore
+        )
+        assert results is None
