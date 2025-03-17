@@ -1,0 +1,69 @@
+import hashlib
+import logging
+import os
+
+from elasticsearch import AsyncElasticsearch
+
+logger = logging.getLogger(__name__)
+
+
+class AsyncElasticsearchCache:
+    def __init__(self, es: AsyncElasticsearch, index_name: str):
+        """Ensure the Elasticsearch index exists before querying or inserting data."""
+        self.es = es
+        self.index_name = index_name
+
+    @staticmethod
+    async def maybe_from_env_var(index_name: str) -> 'AsyncElasticsearchCache | None':
+        """Initialize from env var.
+
+        Return None if any of the required env var is missing.
+        """
+        index_name = index_name.lower()
+
+        required_env_keys = ['ELASTIC_SEARCH_HOST', 'ELASTIC_SEARCH_API_KEY']
+        if not all((_key in os.environ) for _key in required_env_keys):
+            logger.warning(
+                'All of these are required to enable ElasticsearchCache: '
+                f'{required_env_keys}.'
+                ' Not enabling ElasticsearchCache since some keys are not set.'
+            )
+            return None
+
+        es = AsyncElasticsearch(
+            os.environ['ELASTIC_SEARCH_HOST'],
+            api_key=os.environ['ELASTIC_SEARCH_API_KEY'],
+            request_timeout=None,
+        )
+
+        # Ensure the index exists at startup
+        exists = await es.indices.exists(index=index_name)
+        if not exists:
+            await es.indices.create(index=index_name)
+
+        return AsyncElasticsearchCache(es=es, index_name=index_name)
+
+    async def get(self, query: str) -> 'str | None':
+        """Try reading response from cache."""
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+
+        # Cache lookup
+        try:
+            response = await self.es.get(index=self.index_name, id=query_hash)
+            if response.get('found'):
+                logger.info(f'Cache hit: {query_hash}')
+                return response['_source']['result']
+        except Exception:
+            logger.debug(f'Cache miss: {query_hash}')
+
+        return None  # Cache miss or index doesn't exist
+
+    async def set(self, query: str, value: str) -> None:
+        """Set/Update cache."""
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        doc = {'query': query, 'result': value}
+        await self.es.index(index=self.index_name, id=query_hash, document=doc)
+
+    async def close(self) -> None:
+        """Close Elasticsearch connection."""
+        await self.es.close()

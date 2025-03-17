@@ -63,6 +63,10 @@ uvx --with setuptools serve allenai/OLMo-1B-hf --dtype auto --api-key MY_KEY --c
 ```sh
 export OPENAI_BASE_URL=http://localhost:8000
 export OPENAI_API_KEY=MY_KEY
+
+# Optionally, set the following to cache OpenAI requests in Elasticsearch.
+# export ELASTIC_SEARCH_HOST="..."
+# export ELASTIC_SEARCH_API_KEY="..."
 ```
 
 #### Generate some data (dry-run)
