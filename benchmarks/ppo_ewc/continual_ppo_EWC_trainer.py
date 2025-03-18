@@ -169,10 +169,10 @@ class ContinualPPOEWCTrainer(ContinualPPOTrainer):
 
         return ewc_loss
 
-    def train(self, *args: Any, **kwargs: Any) -> Dict[str, float]:
+    def train(self) -> None:
         """Override train method to update Fisher information after training."""
-        # Regular training
-        result = super().train(*args, **kwargs)
+        # Regular training (parent train() doesn't return anything)
+        super().train()
 
         # After training on this task, update Fisher information
         self._update_fisher_information()
@@ -197,8 +197,6 @@ class ContinualPPOEWCTrainer(ContinualPPOTrainer):
         self.task_id += 1
         if self.first_task:
             self.first_task = False
-
-        return result
 
     def _update_fisher_information(self) -> None:
         """Update Fisher information matrix using the current task's data.

@@ -157,7 +157,7 @@ def main(
 
             # Log dataset and task-specific metrics
             if i == 0:
-                trainer.log({'dataset': {'name': script_args.dataset_name}})
+                trainer.log({'dataset_name': script_args.dataset_name})
             metrics['dataset'] = i
             print(f'Evaluation metrics for dataset {i}: {metrics}')
             trainer.log_metrics(f'eval/dataset/{i}', metrics)

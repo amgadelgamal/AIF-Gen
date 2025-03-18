@@ -13,25 +13,26 @@ uv sync --group benchmarks.ppo
 ### Lora with EWC
 
 ```sh
-uv run benchmarks/ppo_ewc/ppo_continual_ewc.py \
+uv run benchmarks/ppo_ewc/ppo_EWC_continual.py \
     --dataset_name benchmarks/continual_data_debug.json \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --value_model_path AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug_REWARD \
+    --sft_model_path Qwen/Qwen2-0.5B-Instruct \
+    --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD_0 \
+    --reward_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 8 \
     --gradient_checkpointing \
-    --logging_steps 5 \
+    --logging_steps 20 \
     --eval_strategy steps \
-    --eval_steps 5 \
-    --save_steps 5 \
+    --eval_steps 20 \
+    --save_steps 20 \
     --bf16 \
-    --output_dir "$SCRATCH"/Qwen2-0.5B-PPO-EWC-test \
+    --output_dir "$SCRATCH/Qwen2-0.5B-PPO-test" \
     --no_remove_unused_columns \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16 \
+    --push_to_hub True \
     --ewc_lambda 20.0 \
     --ewc_importance_decay 0.5 \
     --fisher_estimation_samples 20
@@ -41,10 +42,11 @@ uv run benchmarks/ppo_ewc/ppo_continual_ewc.py \
 
 ```sh
 accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero3.yaml \
-    benchmarks/ppo_ewc/ppo_continual_ewc.py \
+    benchmarks/ppo_ewc/ppo_EWC_continual.py \
     --dataset_name benchmarks/continual_data_debug.json \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --value_model_path AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug_REWARD \
+    --sft_model_path Qwen/Qwen2-0.5B-Instruct \
+    --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD_0 \
+    --reward_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
@@ -69,10 +71,11 @@ accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero
 ### Full training with EWC
 
 ```sh
-uv run benchmarks/ppo_ewc/ppo_continual_ewc.py \
+uv run benchmarks/ppo_ewc/ppo_EWC_continual.py \
     --dataset_name benchmarks/continual_data_debug.json \
-    --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --value_model_path AIF-Gen/Qwen/Qwen2-0.5B-Reward/debug_REWARD \
+    --sft_model_path Qwen/Qwen2-0.5B-Instruct \
+    --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD_0 \
+    --reward_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
     --learning_rate 5.0e-7 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 2 \
