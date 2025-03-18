@@ -31,6 +31,8 @@ def main(
         else getattr(torch, model_args.torch_dtype)
     )
     quantization_config = get_quantization_config(model_args)
+
+    # Model & Tokenizer Setup
     model_kwargs = dict(
         revision=model_args.model_revision,
         attn_implementation=model_args.attn_implementation,
@@ -73,22 +75,31 @@ def main(
 
     # Initialize continual dataset
     continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
-        script_args.dataset_name, mock=training_args.mock
+        script_args.dataset_name,
+        mock=training_args.mock,
+        tokenizer=tokenizer,
+        tools=training_args.tools,
     )
     output_dir = training_args.output_dir
-
-    # Validate reward model paths if provided
-    if training_args.reward_model_path is not None:
-        for i, _ in enumerate(continual_dataset):
-            reward_path = os.path.join(training_args.reward_model_path, str(i))
-            if not os.path.exists(reward_path):
-                raise FileNotFoundError(
-                    f'Reward model not found for dataset {i} at {reward_path}'
-                )
 
     # Initialize the memory buffer at the script level
     memory_buffer: list = []
 
+    # check if the reward models are present either in the path or in the hub
+    if training_args.reward_model_path is not None:
+        for i in range(len(continual_dataset)):
+            reward_path = training_args.reward_model_path + '_' + str(i)
+            # first check the hub if the model is present
+            try:
+                AutoModelForSequenceClassification.from_pretrained(
+                    reward_path, num_labels=1
+                )
+            except:
+                # if not found in the hub, check the local path
+                if not os.path.exists(reward_path):
+                    raise ValueError(f'Reward model not found at {reward_path}')
+
+    # Task Loop
     for i, dataset in enumerate(continual_dataset):
         current_dataset_name = f'dataset-{i}'
         training_args.output_dir = f'{output_dir}/{current_dataset_name}'
@@ -101,7 +112,6 @@ def main(
             )
 
         # Process dataset
-        eval_policy_dataset = dataset[script_args.dataset_test_split]
         dataset_train = dataset[script_args.dataset_train_split]
         dataset_test = dataset[script_args.dataset_test_split]
 
@@ -115,14 +125,13 @@ def main(
 
         # Initialize trainer with combined dataset
         trainer = COPRTrainer(
+            args=training_args,
+            processing_class=tokenizer,
             model=model,
             ref_model=ref_model,
             reward_model=reward_model,
-            args=training_args,
             train_dataset=combined_dataset,
             eval_dataset=dataset_test if training_args.eval_strategy != 'no' else None,
-            eval_policy_dataset=eval_policy_dataset,
-            processing_class=tokenizer,
             peft_config=peft_config,
         )
         trainer.set_task(f'task_{i}')
@@ -174,7 +183,10 @@ def main(
         trainer.save_model(os.path.join(training_args.output_dir, 'last'))
         if training_args.push_to_hub:
             trainer.push_to_hub(
-                dataset_name=f'Continual_COPR_{script_args.dataset_name}/dataset-{i}'
+                dataset_name=f'Continual_COPR_'
+                + script_args.dataset_name
+                + '_'
+                + str(i),
             )
 
         # If using DeepSpeed, cleanup the engine and free GPU memory

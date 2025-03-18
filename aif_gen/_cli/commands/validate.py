@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -5,6 +6,7 @@ import pathlib
 from typing import Any, Dict, Optional
 
 import click
+import openai
 
 from aif_gen.dataset.continual_alignment_dataset import (
     ContinualAlignmentDataset,
@@ -58,6 +60,30 @@ from aif_gen.util.hf import download_from_hf, upload_to_hf
     default=os.cpu_count(),
 )
 @click.option(
+    '--model',
+    type=click.STRING,
+    help='vLLM model to use as a judge if doing llm_judge validation',
+)
+@click.option(
+    '--max_concurrency',
+    type=click.IntRange(min=1, max=1024, clamp=True),
+    help='Max number of concurrent inference requests to send to the vLLM model',
+    default=256,
+)
+@click.option(
+    '--max_tokens_judge_response',
+    type=click.IntRange(min=1, max=1024, clamp=True),
+    help='Limit the max_tokens on the judge response from the vLLM model if doing llm_judge validation.',
+    default=32,
+)
+@click.option(
+    '-n',
+    '--dry-run',
+    is_flag=True,
+    default=False,
+    help='Ignore the dataset and generate validate a dummy sample to ensure vLLM setup.',
+)
+@click.option(
     '--hf-repo-id',
     type=click.STRING,
     default=None,
@@ -71,6 +97,10 @@ def validate(
     validate_diversity: bool,
     validate_llm_judge: bool,
     num_workers: int,
+    model: str,
+    max_concurrency: int,
+    max_tokens_judge_response: int,
+    dry_run: bool,
     hf_repo_id: Optional[str],
 ) -> None:
     r"""Validate a ContinualAlignmentDataset.
@@ -102,8 +132,25 @@ def validate(
         logging.info('Finished diversity validation')
 
     if validate_llm_judge:
-        logging.info('Performing LLM judge validation')
-        results['llm_judge_validation'] = llm_judge_validation(dataset)
+        logging.info(f'Performing LLM judge validation with model: {model}')
+
+        try:
+            client = openai.AsyncOpenAI()
+            async_semaphore = asyncio.Semaphore(max_concurrency)
+            fut = llm_judge_validation(
+                dataset,
+                model,
+                client,
+                async_semaphore,
+                max_tokens_judge_response,
+                dry_run,
+            )
+            result = asyncio.get_event_loop().run_until_complete(fut)
+        except (openai.OpenAIError, Exception) as e:
+            logging.exception(f'Error occured trying to validate data with vLLM: {e}')
+            result = None
+
+        results['llm_judge_validation'] = result
         logging.info('Finished LLM judge validation')
 
     if len(results):

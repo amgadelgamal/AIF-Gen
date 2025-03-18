@@ -23,7 +23,7 @@ from transformers import (
 )
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalLoopOutput
-from trl import DPOTrainer, ScriptArguments, apply_chat_template
+from trl import DPOTrainer, ScriptArguments
 from trl.models.utils import unwrap_model_for_generation
 from trl.trainer.dpo_config import DPOConfig
 from trl.trainer.utils import (
@@ -40,6 +40,12 @@ class ContinualDPOArguments(ScriptArguments):
     dataset_name: str = field(
         default='debug',
         metadata={'help': 'The name or path of the continual dataset to use.'},
+    )
+    checkpoint_dir: Optional[str] = field(
+        default=None,
+        metadata={
+            'help': 'The directory containing the checkpoints to evaluate (used only in eval checkpoints sctipt)'
+        },
     )
     wandb_project: Optional[str] = field(
         default='AIFGen-dpo-continual-test',
@@ -106,7 +112,6 @@ class ContinualDPOTrainer(DPOTrainer):
         data_collator: Optional[DataCollator] = None,
         train_dataset: Optional[Dataset] = None,
         eval_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
-        eval_policy_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
         processing_class: Optional[
             Union[
                 PreTrainedTokenizerBase,
@@ -129,6 +134,9 @@ class ContinualDPOTrainer(DPOTrainer):
     ):
         if args is None:
             raise ValueError('`args` cannot be None')
+
+        eval_policy_dataset = eval_dataset
+
         super().__init__(
             model,
             ref_model,
@@ -230,7 +238,7 @@ class ContinualDPOTrainer(DPOTrainer):
             )
             return {'input_ids': outputs['input_ids']}
 
-        def prepare_dataset(ds: Dataset, tokenizer: PreTrainedTokenizerBase) -> Dataset:
+        def prepare_dataset(ds: Dataset) -> Dataset:
             return ds.map(
                 tokenize,
                 batched=True,
@@ -238,17 +246,9 @@ class ContinualDPOTrainer(DPOTrainer):
                 num_proc=self.args.dataset_num_proc,
             )
 
-        dataset = (
-            dataset.map(
-                apply_chat_template, fn_kwargs={'tokenizer': self.processing_class}
-            )
-            if self.args.mock
-            else dataset
-        )
-
         # Compute only on main process for faster data processing.
         with PartialState().local_main_process_first():
-            dataset = prepare_dataset(dataset, self.processing_class)
+            dataset = prepare_dataset(dataset)
         return dataset
 
     def evaluate_policy(self) -> dict:

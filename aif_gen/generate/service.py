@@ -22,6 +22,8 @@ async def generate_continual_dataset(
     model_name: str,
     client: openai.AsyncOpenAI,
     async_semaphore: asyncio.Semaphore,
+    max_tokens_prompt_response: int = 1024,
+    max_tokens_chosen_rejected_response: int = 2048,
     dry_run: bool = False,
 ) -> Optional[ContinualAlignmentDataset]:
     r"""Generate a ContinualAlignmentDataset dataset given the AlignmentTask, and model.
@@ -31,6 +33,8 @@ async def generate_continual_dataset(
         model_name (str): The vLLM-compatible model alias to use for generation synthetic samples.
         client (openai.AsyncOpenAI): Handle to openAI client.
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
+        max_tokens_prompt_response (int): Configurable limit on the max_tokens for the generated prompt response.
+        max_tokens_chosen_rejected_response (int): Configurable limit on the max_tokens for the generated chosen and rejected response.
         dry_run (bool): If True, ignore the config and generate a dummy sample to ensure the model is setup correctly.
 
     Returns:
@@ -51,6 +55,8 @@ async def generate_continual_dataset(
             prompt_mapper,
             response_mapper,
             async_semaphore,
+            max_tokens_prompt_response,
+            max_tokens_chosen_rejected_response,
             dataset_idx=-1,
         )
         try:
@@ -77,6 +83,8 @@ async def generate_continual_dataset(
                 prompt_mapper,
                 response_mapper,
                 async_semaphore,
+                max_tokens_prompt_response,
+                max_tokens_chosen_rejected_response,
                 dataset_idx=dataset_idx,
             )
             futures.append(asyncio.create_task(coro))
@@ -115,6 +123,8 @@ async def _generate_sample(
     prompt_mapper: PromptMapper,
     response_mapper: ResponseMapper,
     async_semaphore: asyncio.Semaphore,
+    max_tokens_prompt_response: int,
+    max_tokens_chosen_rejected_response: int,
     dataset_idx: int,
 ) -> Optional[Tuple[AlignmentDatasetSample, int]]:
     r"""Generate a AlignmentDataset dataset given the AlignmentTask, and model.
@@ -126,6 +136,8 @@ async def _generate_sample(
         prompt_mapper (PromptMapper): Creates the 'meta-prompt' for this sample's task prompt.
         response_mapper (ResponseMapper): Created the 'meta-prompt' for this sample's response prompt.
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
+        max_tokens_prompt_response (int): Configurable limit on the max_tokens for the generated prompt response.
+        max_tokens_chosen_rejected_response (int): Configurable limit on the max_tokens for the generated chosen and rejected response.
         dataset_idx (int): The idx of the dataset that the sample is requested for to align out-of-order asyn execution.
 
     Returns:
@@ -135,6 +147,9 @@ async def _generate_sample(
         openai.NotFoundError: If the openAI model cannot be accessed at the configured endpoint.
     """
     try:
+
+        class _PromptProposal(pydantic.BaseModel):
+            prompt: str
 
         class _ResponsePair(pydantic.BaseModel):
             chosen: str
@@ -146,13 +161,23 @@ async def _generate_sample(
             response = await client.chat.completions.create(
                 model=model_name,
                 messages=[{'role': 'user', 'content': meta_prompt}],
-                max_tokens=256,  # TODO: Make this configurable
+                max_tokens=max_tokens_prompt_response,
+                response_format={
+                    'type': 'json_schema',
+                    'json_schema': {
+                        'name': 'PromptProposal',
+                        'schema': _PromptProposal.model_json_schema(),
+                        'strict': True,
+                    },
+                },
             )
 
-        prompt = response.choices[0].message.content
-        if prompt is None:
+        output = response.choices[0].message.content
+        if output is None:
             raise ValueError(f'Received None response to prompt: {meta_prompt}')
-        assert prompt is not None  # This is for mypy
+        assert output is not None  # This is for mypy
+
+        prompt = _PromptProposal.model_validate_json(output).prompt
 
         task_prompt = response_mapper.generate_prompt(task, prompt)
         logging.debug(f'Meta Prompt: {meta_prompt}, Model Response: {prompt}')
@@ -161,6 +186,7 @@ async def _generate_sample(
             response = await client.chat.completions.create(
                 model=model_name,
                 messages=[{'role': 'user', 'content': task_prompt}],
+                max_tokens=max_tokens_chosen_rejected_response,
                 response_format={
                     'type': 'json_schema',
                     'json_schema': {
@@ -169,7 +195,6 @@ async def _generate_sample(
                         'strict': True,
                     },
                 },
-                max_tokens=256,  # TODO: Make this configurable
             )
 
         output = response.choices[0].message.content
