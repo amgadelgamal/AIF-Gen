@@ -305,7 +305,7 @@ class ContinualPPOTrainer(PPOTrainer):
         if args.whiten_rewards:
             assert (
                 args.local_mini_batch_size >= 8
-            ), f'Per-rank minibatch size {args.local_mini_batch_size} is insufficient for whitening'
+            ), f'Per-rank minibatch size {args.local_mini_batch_size} is insufficient for whitening'  # noqa: E501
 
         # Training scheduling
         args.num_total_batches = math.ceil(args.total_episodes / args.batch_size)
