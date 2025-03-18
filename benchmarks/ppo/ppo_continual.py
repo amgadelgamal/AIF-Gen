@@ -162,11 +162,6 @@ def main(
                 dataset_name='Continual_PPO_' + clean_dataset_name + '_' + str(i),
             )
 
-        # Cleanup DeepSpeed engine if used and free GPU memory
-        if hasattr(trainer, 'deepspeed') and trainer.deepspeed is not None:
-            del trainer.deepspeed
-        torch.cuda.empty_cache()
-
     print('Training completed for all tasks!')
 
 
