@@ -97,6 +97,20 @@ def main(
     )
     output_dir = training_args.output_dir
 
+    # check if the reward models are present either in the path or in the hub
+    if training_args.reward_model_path is not None:
+        for i in range(len(continual_dataset)):
+            reward_path = training_args.reward_model_path + '_' + str(i)
+            # first check the hub if the model is present
+            try:
+                AutoModelForSequenceClassification.from_pretrained(
+                    reward_path, num_labels=1
+                )
+            except:
+                # if not found in the hub, check the local path
+                if not os.path.exists(reward_path):
+                    raise ValueError(f'Reward model not found at {reward_path}')
+
     # Task Loop
     for i, dataset in enumerate(continual_dataset):
         current_dataset_name: str = f'dataset-{i}'
