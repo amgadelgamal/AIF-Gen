@@ -43,6 +43,9 @@ class AsyncElasticsearchCache:
 
     async def get(self, query: str) -> 'str | None':
         """Try reading response from cache."""
+        if bool(os.environ.get('FORCE_CACHE_REFRESH')):
+            return None
+
         query_hash = hashlib.sha256(query.encode()).hexdigest()
 
         # Cache lookup

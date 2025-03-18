@@ -73,6 +73,9 @@ export OPENAI_API_KEY=MY_KEY
 
 ```sh
 uv run aif generate config/aif_config.yaml allenai/OLMo-1B-hf --dry-run
+
+# To ignore cache hit and update cache, set FORCE_CACHE_REFRESH=True .
+# FORCE_CACHE_REFRESH=True uv run aif generate config/aif_config.yaml allenai/OLMo-1B-hf --dry-run
 ```
 
 #### Generate some data (for real)

@@ -70,7 +70,7 @@ async def generate_continual_dataset(
             logging.exception(f'Exception occured on dry-run, skipping generation: {e}')
             raise e
         finally:
-            if cache:
+            if cache is not None:
                 await cache.close()
 
         logging.info('Dry run was a success.')
@@ -127,7 +127,7 @@ async def generate_continual_dataset(
         await tqdm.gather(*futures)
         return None
     finally:
-        if cache:
+        if cache is not None:
             await cache.close()
 
 
@@ -180,12 +180,12 @@ async def _generate_sample(
         meta_prompt = prompt_mapper.generate_prompt(task)
 
         async with async_semaphore:
-            if cache:
+            if cache is not None:
                 output = await cache.get(meta_prompt)
             else:
                 output = None
 
-            if not output:
+            if output is None:
                 response = await client.chat.completions.create(
                     model=model_name,
                     messages=[{'role': 'user', 'content': meta_prompt}],
@@ -202,24 +202,25 @@ async def _generate_sample(
                 output = response.choices[0].message.content
                 assert output is not None  # This is for mypy
 
-                if cache:
-                    await cache.set(query=meta_prompt, value=output)
-
         if output is None:
             raise ValueError(f'Received None response to prompt: {meta_prompt}')
 
         prompt = _PromptProposal.model_validate_json(output).prompt
 
+        # Update/set cache only after validating output JSON.
+        if cache is not None:
+            await cache.set(query=meta_prompt, value=output)
+
         task_prompt = response_mapper.generate_prompt(task, prompt)
         logging.debug(f'Meta Prompt: {meta_prompt}, Model Response: {prompt}')
 
         async with async_semaphore:
-            if cache:
+            if cache is not None:
                 output = await cache.get(task_prompt)
             else:
                 output = None
 
-            if not output:
+            if output is None:
                 response = await client.chat.completions.create(
                     model=model_name,
                     messages=[{'role': 'user', 'content': task_prompt}],
@@ -236,13 +237,13 @@ async def _generate_sample(
                 output = response.choices[0].message.content
                 assert output is not None  # This is for mypy
 
-                if cache:
-                    await cache.set(query=meta_prompt, value=output)
-
         if prompt is None:
             raise ValueError(f'Received None response to prompt: {prompt}')
 
         structured_response = _ResponsePair.model_validate_json(output)
+        if cache is not None:
+            await cache.set(query=task_prompt, value=output)
+
         sample = AlignmentDatasetSample(
             prompt,
             chosen=structured_response.chosen,

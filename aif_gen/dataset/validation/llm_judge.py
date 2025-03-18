@@ -14,6 +14,7 @@ from aif_gen.dataset import (
     AlignmentDatasetSample,
     ContinualAlignmentDataset,
 )
+from aif_gen.generate.caching import AsyncElasticsearchCache
 from aif_gen.typing import Dataset
 
 
@@ -46,25 +47,33 @@ async def llm_judge_validation(
     Note:
         - If the dataset is empty, we put None in place of the dictionary.
     """
+    cache = await AsyncElasticsearchCache.maybe_from_env_var(f'CACHE_{model_name}')
+
     if dry_run:
         logging.info(f'Doing dry-run data validation on a single sample...')
         mock_sample = AlignmentDatasetSample('Mock', 'Mock', 'Mock')
+        _prompt = _get_alignment_prompt(
+            mock_sample.prompt, mock_sample.chosen, mock_sample.rejected
+        )
         coro = _get_score(
-            _get_alignment_prompt(
-                mock_sample.prompt, mock_sample.chosen, mock_sample.rejected
-            ),
+            _prompt,
             client,
             model_name,
             async_semaphore,
             max_tokens_judge_response,
             dataset_idx=-1,
             metric_name='',
+            cache=cache,
         )
         try:
             _ = await coro
         except BaseException as e:
             logging.exception(f'Exception occured on dry-run, skipping validation: {e}')
             raise e
+        finally:
+            if cache is not None:
+                await cache.close()
+
         logging.info('Dry run was a success.')
         return None
 
@@ -89,6 +98,7 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='alignment',
+                cache=cache,
             )
             coherence_chosen_coro = _get_score(
                 _get_coherence_prompt(sample.chosen),
@@ -98,6 +108,7 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_chosen',
+                cache=cache,
             )
             coherence_rejected_coro = _get_score(
                 _get_coherence_prompt(sample.rejected),
@@ -107,6 +118,7 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_rejected',
+                cache=cache,
             )
             futures.append(asyncio.create_task(alignment_coro))
             futures.append(asyncio.create_task(coherence_chosen_coro))
@@ -149,6 +161,10 @@ async def llm_judge_validation(
         await tqdm.gather(*futures, return_exceptions=True)
         return None
 
+    finally:
+        if cache is not None:
+            await cache.close()
+
 
 @backoff.on_exception(backoff.expo, (openai.RateLimitError,))
 async def _get_score(
@@ -159,6 +175,7 @@ async def _get_score(
     max_tokens_judge_response: int,
     dataset_idx: int,
     metric_name: str,
+    cache: Optional[AsyncElasticsearchCache] = None,
 ) -> Tuple[Optional[float], int, str]:
     try:
 
@@ -166,26 +183,35 @@ async def _get_score(
             score: float
 
         async with async_semaphore:
-            response = await client.chat.completions.create(
-                model=model_name,
-                messages=[{'role': 'user', 'content': prompt}],
-                max_tokens=max_tokens_judge_response,
-                response_format={
-                    'type': 'json_schema',
-                    'json_schema': {
-                        'name': 'SyntheticPreference',
-                        'schema': _ValidationResponse.model_json_schema(),
-                        'strict': True,
-                    },
-                },
-            )
+            model_response: Optional[str] = None
+            if cache is not None:
+                model_response = await cache.get(prompt)
 
-        model_response = response.choices[0].message.content
-        if model_response is None:
-            raise ValueError(f'Received None response to prompt: {prompt}')
-        assert model_response is not None  # This is for mypy
+            if model_response is None:
+                response = await client.chat.completions.create(
+                    model=model_name,
+                    messages=[{'role': 'user', 'content': prompt}],
+                    max_tokens=max_tokens_judge_response,
+                    response_format={
+                        'type': 'json_schema',
+                        'json_schema': {
+                            'name': 'SyntheticPreference',
+                            'schema': _ValidationResponse.model_json_schema(),
+                            'strict': True,
+                        },
+                    },
+                )
+                model_response = response.choices[0].message.content
+                if model_response is None:
+                    raise ValueError(f'Received None response to prompt: {prompt}')
+                assert model_response is not None  # This is for mypy
 
         score = _ValidationResponse.model_validate_json(model_response).score
+
+        # Write to cache only if JSON is valid.
+        if cache:
+            await cache.set(query=prompt, value=model_response)
+
         score = max(0, min(1, score))
         logging.debug(f'Prompt: {prompt}, Response: {model_response}, Score: {score}')
         return score, dataset_idx, metric_name
