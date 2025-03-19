@@ -186,7 +186,7 @@ class ContinualRewardTrainer(RewardTrainer):
             )
 
         end = time.time()
-        print(f'Importance weight computation took {end-start:.2f} seconds')
+        print(f'Importance weight computation took {end - start:.2f} seconds')
 
     def store_model_parameters(self) -> None:
         """Store model parameters efficiently."""
@@ -207,7 +207,7 @@ class ContinualRewardTrainer(RewardTrainer):
                 MASState.previous_params[name] = param.data.clone()
 
         end = time.time()
-        print(f'Parameter storage took {end-start:.2f} seconds')
+        print(f'Parameter storage took {end - start:.2f} seconds')
 
     def prediction_step(
         self,
@@ -397,7 +397,7 @@ def train_continually(
 
     # Train sequentially on each task
     for task_id, dataset in enumerate(continual_dataset):
-        print(f'Training on task {task_id+1}/{len(continual_dataset)}')
+        print(f'Training on task {task_id + 1}/{len(continual_dataset)}')
 
         # Create a new trainer for this task
         trainer = ContinualRewardTrainer(
