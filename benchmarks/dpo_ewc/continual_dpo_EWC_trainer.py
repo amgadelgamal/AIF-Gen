@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -32,18 +32,6 @@ class ContinualDPOEWCConfig(ContinualDPOConfig):
             'help': 'EWC regularization strength. Higher values give stronger regularization.'
         },
     )
-    ewc_importance_decay: float = field(
-        default=0.5,
-        metadata={
-            'help': 'Decay factor for previous task importance (0-1). 0 means only care about most recent task.'
-        },
-    )
-    fisher_estimation_samples: int = field(
-        default=200,
-        metadata={
-            'help': 'Number of samples to use when estimating Fisher information matrix'
-        },
-    )
 
 
 class ContinualDPOEWCTrainer(ContinualDPOTrainer):
@@ -52,6 +40,11 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
     EWC keeps a memory of parameter importance from previous tasks and penalizes
     changes to important parameters when learning new tasks.
     """
+
+    # Class-level variables to store Fisher Information and old parameters across tasks
+    class_fisher_information: Dict[str, torch.Tensor] = {}
+    class_old_params: Dict[str, torch.Tensor] = {}
+    current_task_index: int = 0
 
     def __init__(
         self,
@@ -63,34 +56,41 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
     ):
         super().__init__(model, ref_model, reward_model, args, **kwargs)
 
-        # EWC-specific attributes
-        self.fisher_information: dict = {}  # Stores parameter importance
-        self.old_params: dict = {}  # Stores parameter values after training on previous task
-        self.task_id: int = 0  # Current task ID
-        self.first_task: bool = True  # Flag for the first task
+        # Store EWC-specific parameters
+        self.ewc_lambda = args.ewc_lambda if args is not None else 100.0
+
+        # Track if we're on the first task
+        is_first_task = ContinualDPOEWCTrainer.current_task_index == 0
+        if is_first_task:
+            # Initialize empty dictionaries for first task
+            ContinualDPOEWCTrainer.class_fisher_information = {}
+            ContinualDPOEWCTrainer.class_old_params = {}
 
     def compute_loss(
         self,
         model: Union[PreTrainedModel, nn.Module],
         inputs: dict[str, Union[torch.Tensor, Any]],
         return_outputs: bool = False,
+        num_items_in_batch: Optional[int] = None,
     ) -> Union[torch.Tensor, tuple[torch.Tensor, dict[str, torch.Tensor]]]:
         """Compute the DPO loss with additional EWC regularization to prevent
         catastrophic forgetting of previously learned tasks.
         """
         # Regular DPO loss calculation
-        regular_loss, outputs = super().compute_loss(model, inputs, return_outputs=True)
+        regular_loss, outputs = super().compute_loss(
+            model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch
+        )
 
         # Skip EWC loss on first task since there's nothing to preserve yet
-        if self.first_task:
+        is_first_task = ContinualDPOEWCTrainer.current_task_index == 0
+        if is_first_task:
             return (regular_loss, outputs) if return_outputs else regular_loss
 
         # Calculate EWC regularization loss
-        ewc_loss = self._compute_ewc_loss()
+        ewc_loss = self.compute_ewc_loss()
 
         # Combine losses
-        ewc_lambda = getattr(self.args, 'ewc_lambda', 100.0)
-        total_loss = regular_loss + ewc_lambda * ewc_loss
+        total_loss = regular_loss + ewc_loss
 
         self.log(
             {
@@ -102,66 +102,69 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
         return (total_loss, outputs) if return_outputs else total_loss
 
-    def _compute_ewc_loss(self) -> torch.Tensor:
-        """Compute EWC regularization loss - penalizes changes to
-        parameters that were important for previous tasks.
+    def compute_ewc_loss(self) -> torch.Tensor:
+        """Compute the EWC regularization loss.
+
+        This loss penalizes changes to parameters that were important for previous tasks,
+        as determined by their Fisher information matrix.
+
+        Returns:
+            EWC regularization loss tensor
         """
+        if not ContinualDPOEWCTrainer.class_fisher_information:
+            # No previous tasks, so no regularization needed
+            return torch.tensor(0.0, device=self.accelerator.device)
+
         ewc_loss = torch.tensor(0.0, device=self.accelerator.device)
 
-        # Get the unwrapped model
+        # Calculate the EWC penalty for each parameter
         model = self.accelerator.unwrap_model(self.model)
-
-        # Calculate the EWC loss for all named parameters with fisher information
         for name, param in model.named_parameters():
-            if name in self.fisher_information:
-                # L2 distance between current and old parameters, weighted by importance
-                ewc_loss += torch.sum(
-                    self.fisher_information[name]
-                    * (param - self.old_params[name]).pow(2)
+            if (
+                name in ContinualDPOEWCTrainer.class_fisher_information
+                and param.requires_grad
+            ):
+                # Get the Fisher information and old parameter values
+                fisher = ContinualDPOEWCTrainer.class_fisher_information[name].to(
+                    param.device
+                )
+                old_param = ContinualDPOEWCTrainer.class_old_params[name].to(
+                    param.device
                 )
 
-        return ewc_loss
+                # Calculate squared distance weighted by Fisher information
+                delta = param - old_param
+                ewc_loss += (fisher * delta.pow(2)).sum()
 
-    def train(self, *args: Any, **kwargs: Any) -> Any:
-        """Override train method to update Fisher information after training."""
-        # Regular training
-        result = super().train(*args, **kwargs)
+        # Apply the EWC lambda coefficient and return
+        return 0.5 * self.ewc_lambda * ewc_loss
 
-        # After training on this task, update Fisher information
-        self._update_fisher_information()
+    def compute_fisher_information(
+        self, num_samples: int = 120
+    ) -> Dict[str, torch.Tensor]:
+        """Compute Fisher Information matrix for the current model parameters.
 
-        # Store current parameter values for next task's EWC loss
-        model = self.accelerator.unwrap_model(self.model)
-        self.old_params = {
-            name: param.clone().detach() for name, param in model.named_parameters()
-        }
+        Args:
+            num_samples: Number of samples to use for Fisher computation
 
-        # Update task counter
-        self.task_id += 1
-        if self.first_task:
-            self.first_task = False
-
-        return result
-
-    def _update_fisher_information(self) -> None:
-        """Update Fisher information matrix using the current task's data.
-        The Fisher information approximates the importance of each parameter.
+        Returns:
+            Dictionary mapping parameter names to their Fisher information values
         """
         # Get unwrapped model for computing Fisher
         model = self.accelerator.unwrap_model(self.model)
+        self.accelerator.device
 
-        # Initialize a new Fisher information dictionary
-        new_fisher = {
-            name: torch.zeros_like(param) for name, param in model.named_parameters()
-        }
+        # Make sure parameters require gradients
+        for param in model.parameters():
+            param.requires_grad_(True)
 
-        # Number of samples to use for Fisher estimation
-        num_samples = min(
-            getattr(self.args, 'fisher_estimation_samples', 200),
-            len(self.train_dataset),
-        )
+        # Initialize fisher information dictionary
+        fisher_info = {}
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                fisher_info[name] = torch.zeros_like(param)
 
-        # Create a small dataloader for Fisher estimation
+        # Create a dataloader for Fisher estimation
         fisher_dataloader = self.get_train_dataloader()
 
         # Collect samples for Fisher estimation
@@ -170,36 +173,112 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             if sample_count >= num_samples:
                 break
 
+            # Check what keys are available in the batch (for debugging)
+            batch_keys = list(batch.keys())
+
+            # Try to determine the batch size from available keys
+            batch_size = None
+            for key in ['input_ids', 'chosen_input_ids', 'policy_input_ids']:
+                if (
+                    key in batch
+                    and hasattr(batch[key], 'shape')
+                    and len(batch[key].shape) > 0
+                ):
+                    batch_size = batch[key].shape[0]
+                    break
+
+            if batch_size is None:
+                print(
+                    f'Warning: Could not determine batch size. Available keys: {batch_keys}'
+                )
+                batch_size = 1  # Default fallback
+
             # Forward pass with gradients
             model.zero_grad()
-            loss, _ = self.compute_loss(model, batch, return_outputs=True)
-            self.accelerator.backward(loss)
 
-            # Accumulate squared gradients as Fisher information estimate
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    new_fisher[name] += param.grad.pow(2).detach() / num_samples
+            try:
+                loss, _ = self.compute_loss(model, batch, return_outputs=True)
 
-            sample_count += batch['policy_chosen_ids'].shape[0]
-
-        # Decay old Fisher information and add new information
-        if self.first_task:
-            # For first task, just use the new Fisher information
-            self.fisher_information = new_fisher
-        else:
-            # For subsequent tasks, apply decay and add new Fisher information
-            decay = getattr(self.args, 'ewc_importance_decay', 0.5)
-            for name in new_fisher.keys():
-                if name in self.fisher_information:
-                    self.fisher_information[name] = (
-                        decay * self.fisher_information[name]
-                        + (1 - decay) * new_fisher[name]
+                # Check if loss requires gradient
+                if not loss.requires_grad:
+                    print(
+                        "Warning: Loss doesn't require gradients. Adding requires_grad=True"
                     )
-                else:
-                    self.fisher_information[name] = new_fisher[name]
+                    loss = loss.clone().detach().requires_grad_(True)
 
-        # Log Fisher information statistics
-        total_fisher = sum(
-            torch.sum(f).item() for f in self.fisher_information.values()
+                self.accelerator.backward(loss)
+
+                # Accumulate squared gradients as Fisher information estimate
+                for name, param in model.named_parameters():
+                    if param.requires_grad and param.grad is not None:
+                        fisher_info[name] += param.grad.detach().pow(2)
+            except Exception as e:
+                print(f'Error during Fisher computation: {e}')
+                continue
+
+            # Safely increment sample count
+            sample_count += batch_size
+
+        # Normalize by the number of samples
+        if sample_count > 0:
+            for name in fisher_info.keys():
+                fisher_info[name] /= sample_count
+        else:
+            print('Warning: No samples were processed for Fisher computation')
+
+        print(f'Computed Fisher information for {sample_count} examples')
+        return fisher_info
+
+    def store_current_parameters(self) -> Dict[str, torch.Tensor]:
+        """Store the current model parameters.
+
+        Returns:
+            Dictionary mapping parameter names to their current values
+        """
+        model = self.accelerator.unwrap_model(self.model)
+        old_params = {}
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                old_params[name] = param.data.clone().detach()
+        return old_params
+
+    def train(self) -> Any:
+        """Override train method to incorporate EWC regularization."""
+        # Regular training
+        result = super().train()
+
+        # After training completes, update the Fisher information and old parameters
+        # for the next task
+        self.accelerator.print(
+            'Computing Fisher information matrix for the next task...'
         )
-        self.log({'task_id': self.task_id, 'total_fisher_importance': total_fisher})
+
+        # Calculate and log EWC loss statistics before computing new Fisher information
+        if ContinualDPOEWCTrainer.current_task_index > 0:
+            ewc_loss = self.compute_ewc_loss()
+            # Log EWC loss details
+            self.log(
+                {
+                    'ewc_stats/total_loss': ewc_loss.item(),
+                    'ewc_stats/per_param_avg': ewc_loss.item()
+                    / sum(
+                        p.numel() for p in self.model.parameters() if p.requires_grad
+                    ),
+                    'ewc_stats/lambda': self.ewc_lambda,
+                    'ewc_stats/task_index': ContinualDPOEWCTrainer.current_task_index,
+                }
+            )
+            self.accelerator.print(
+                f'EWC loss for task {ContinualDPOEWCTrainer.current_task_index}: {ewc_loss.item():.4f}'
+            )
+
+        # Compute new Fisher information and parameters
+        ContinualDPOEWCTrainer.class_fisher_information = (
+            self.compute_fisher_information()
+        )
+        ContinualDPOEWCTrainer.class_old_params = self.store_current_parameters()
+
+        # Increment task index for next time
+        ContinualDPOEWCTrainer.current_task_index += 1
+
+        return result

@@ -33,8 +33,6 @@ uv run benchmarks/dpo_ewc/dpo_EWC_continual.py \
     --lora_r 32 \
     --lora_alpha 16 \
     --ewc_lambda 20.0 \
-    --ewc_importance_decay 0.5 \
-    --fisher_estimation_samples 20
 ```
 
 ### Lora with EWC using accelerate
@@ -61,8 +59,6 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
     --lora_r 32 \
     --lora_alpha 16 \
     --ewc_lambda 20.0 \
-    --ewc_importance_decay 0.5 \
-    --fisher_estimation_samples 20 \
     --wandb_project Qwen2-0.5B-DPO_EWC_lora_test
 ```
 
@@ -83,9 +79,7 @@ uv run benchmarks/dpo_ewc/dpo_EWC_continual.py \
     --eval_steps 50 \
     --output_dir Qwen2-0.5B-DPO-EWC \
     --no_remove_unused_columns \
-    --ewc_lambda 20.0 \
-    --ewc_importance_decay 0.5 \
-    --fisher_estimation_samples 20
+    --ewc_lambda 20.0
 ```
 
 ## EWC Parameters

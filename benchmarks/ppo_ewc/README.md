@@ -20,7 +20,7 @@ uv run benchmarks/ppo_ewc/ppo_EWC_continual.py \
     --reward_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
     --learning_rate 5.0e-6 \
     --num_train_epochs 1 \
-    --gradient_accumulation_steps 8 \
+    --gradient_accumulation_steps 10 \
     --gradient_checkpointing \
     --logging_steps 20 \
     --eval_strategy steps \
@@ -34,8 +34,6 @@ uv run benchmarks/ppo_ewc/ppo_EWC_continual.py \
     --lora_alpha 16 \
     --push_to_hub True \
     --ewc_lambda 20.0 \
-    --ewc_importance_decay 0.5 \
-    --fisher_estimation_samples 20
 ```
 
 ### Lora with EWC using accelerate
@@ -63,8 +61,6 @@ accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero
     --lora_r 32 \
     --lora_alpha 16 \
     --ewc_lambda 20.0 \
-    --ewc_importance_decay 0.5 \
-    --fisher_estimation_samples 20 \
     --wandb_project Qwen2-0.5B-PPO_EWC_lora_test
 ```
 
@@ -87,8 +83,6 @@ uv run benchmarks/ppo_ewc/ppo_EWC_continual.py \
     --output_dir Qwen2-0.5B-PPO-EWC \
     --no_remove_unused_columns \
     --ewc_lambda 20.0 \
-    --ewc_importance_decay 0.5 \
-    --fisher_estimation_samples 20
 ```
 
 ## EWC Parameters
