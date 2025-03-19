@@ -181,7 +181,7 @@ async def _generate_sample(
 
         async with async_semaphore:
             if cache is not None:
-                output = await cache.get(meta_prompt)
+                output = await cache.get(meta_prompt, nonce=f'{dataset_idx}')
             else:
                 output = None
 
@@ -209,7 +209,7 @@ async def _generate_sample(
 
         # Update/set cache only after validating output JSON.
         if cache is not None:
-            await cache.set(query=meta_prompt, value=output)
+            await cache.set(query=meta_prompt, value=output, nonce=f'{dataset_idx}')
 
         task_prompt = response_mapper.generate_prompt(task, prompt)
         logging.debug(f'Meta Prompt: {meta_prompt}, Model Response: {prompt}')

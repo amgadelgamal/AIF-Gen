@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+from typing import Optional
 
 from elasticsearch import AsyncElasticsearch
 
@@ -41,12 +42,24 @@ class AsyncElasticsearchCache:
 
         return AsyncElasticsearchCache(es=es, index_name=index_name)
 
-    async def get(self, query: str) -> 'str | None':
-        """Try reading response from cache."""
+    async def get(self, query: str, nonce: Optional[str] = None) -> 'str | None':
+        """Try reading response from cache.
+
+        Args:
+            query (str): The query to fetch from cache.
+            nonce (str, optional): An optional nonce to differentiate cache entries.
+
+        Returns:
+            str | None: Cached result if available.
+        """
         if bool(os.environ.get('FORCE_CACHE_REFRESH')):
             return None
 
-        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        query_key = query
+        if nonce is not None:
+            query_key += f'\n\n{nonce}'
+
+        query_hash = hashlib.sha256(query_key.encode()).hexdigest()
 
         # Cache lookup
         try:
@@ -59,10 +72,16 @@ class AsyncElasticsearchCache:
 
         return None  # Cache miss or index doesn't exist
 
-    async def set(self, query: str, value: str) -> None:
-        """Set/Update cache."""
+    async def set(self, query: str, value: str, nonce: Optional[str] = None) -> None:
+        """Set/Update cache.
+
+        Args:
+            query (str): The query whose result is to be cached.
+            value (str): The value to store in cache.
+            nonce (str, optional): An optional nonce to differentiate cache entries.
+        """
         query_hash = hashlib.sha256(query.encode()).hexdigest()
-        doc = {'query': query, 'result': value}
+        doc = {'query': query, 'result': value, 'nonce': nonce}
         await self.es.index(index=self.index_name, id=query_hash, document=doc)
 
     async def close(self) -> None:
