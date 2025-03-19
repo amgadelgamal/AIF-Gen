@@ -182,7 +182,7 @@ async def _generate_sample(
             rejected: str
 
         meta_prompt = prompt_mapper.generate_prompt(task)
-        meta_prompt_nonce = f'{dataset_idx}:{prompt_idx}'
+        meta_prompt_nonce = f'{prompt_idx}'
 
         async with async_semaphore:
             if cache is not None:
