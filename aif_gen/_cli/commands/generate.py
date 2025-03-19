@@ -6,13 +6,13 @@ import pathlib
 from typing import Optional
 
 import click
-import numpy as np
 import openai
 import yaml
 
 from aif_gen.generate.service import generate_continual_dataset
 from aif_gen.util.hf import upload_to_hf
 from aif_gen.util.path import get_run_id
+from aif_gen.util.seed import seed_everything
 
 
 @click.command(context_settings={'show_default': True})
@@ -86,7 +86,7 @@ def generate(
     logging.info(f'Using data configuration file: {data_config_name}')
     logging.info(f'Using model: {model}')
     logging.info(f'Random seed: {random_seed}')
-    np.random.seed(random_seed)
+    seed_everything(random_seed)
 
     data_config = yaml.safe_load(data_config_name.read_text())
     logging.debug(f'Configuration: {data_config}')

@@ -12,6 +12,7 @@ class AsyncElasticsearchCache:
         self.es = es
         self.index_name = index_name
         self.is_refresh_required = bool(os.environ.get('FORCE_CACHE_REFRESH'))
+        logging.info(f'Elastic Index Name: {self.index_name}')
 
         if self.is_refresh_required:
             logging.warning('FORCE_CACHE_REFRESH is enabled. All queries will miss.')
@@ -47,7 +48,7 @@ class AsyncElasticsearchCache:
         return AsyncElasticsearchCache(es=es, index_name=index_name)
 
     @staticmethod
-    def _get_querey_hash(query: str, nonce: Optional[str] = None) -> str:
+    def _get_query_hash(query: str, nonce: Optional[str] = None) -> str:
         """Obtain query hash given query and- optionally- nonce."""
         query_key = query
         if nonce is not None:
@@ -69,7 +70,7 @@ class AsyncElasticsearchCache:
             return None
 
         # Cache lookup
-        query_hash = self._get_querey_hash(query=query, nonce=nonce)
+        query_hash = self._get_query_hash(query=query, nonce=nonce)
         try:
             response = await self.es.get(index=self.index_name, id=query_hash)
             if response.get('found'):
@@ -88,7 +89,7 @@ class AsyncElasticsearchCache:
             value (str): The value to store in cache.
             nonce (str, optional): An optional nonce to differentiate cache entries.
         """
-        query_hash = self._get_querey_hash(query=query, nonce=nonce)
+        query_hash = self._get_query_hash(query=query, nonce=nonce)
         doc = {'query': query, 'result': value, 'nonce': nonce}
         await self.es.index(index=self.index_name, id=query_hash, document=doc)
 
