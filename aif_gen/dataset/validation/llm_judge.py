@@ -47,7 +47,9 @@ async def llm_judge_validation(
     Note:
         - If the dataset is empty, we put None in place of the dictionary.
     """
-    cache = await AsyncElasticsearchCache.maybe_from_env_var(f'CACHE_{model_name}')
+    cache = await AsyncElasticsearchCache.maybe_from_env_var(
+        f'CACHE_VALIDATION_{model_name}'
+    )
 
     if dry_run:
         logging.info(f'Doing dry-run data validation on a single sample...')

@@ -50,7 +50,7 @@ async def generate_continual_dataset(
         logging.info(f'Doing dry-run data generation on a single sample...')
         mock_task = AlignmentTask.from_dict(task_specs[0]['alignment_task'])
         cache = await AsyncElasticsearchCache.maybe_from_env_var(
-            index_name=f'CACHE_{model_name}'
+            index_name=f'CACHE_DATA_GENERATION_{model_name}'
         )
         coro = _generate_sample(
             mock_task,
@@ -62,6 +62,7 @@ async def generate_continual_dataset(
             max_tokens_prompt_response,
             max_tokens_chosen_rejected_response,
             dataset_idx=-1,
+            prompt_idx=-1,
             cache=cache,
         )
         try:
@@ -81,13 +82,13 @@ async def generate_continual_dataset(
         task = AlignmentTask.from_dict(task_spec['alignment_task'])
         dataset_size = task_spec['num_samples']
         cache = await AsyncElasticsearchCache.maybe_from_env_var(
-            index_name=f'CACHE_{model_name}'
+            index_name=f'CACHE_DATA_GENERATION_{model_name}'
         )
         logging.info(f'Generating Dataset ({dataset_size} samples) {task}')
 
         tasks.append(task)
         dataset_sizes.append(dataset_size)
-        for _ in range(dataset_size):
+        for _sample_idx in range(dataset_size):
             coro = _generate_sample(
                 task,
                 client,
@@ -98,6 +99,7 @@ async def generate_continual_dataset(
                 max_tokens_prompt_response,
                 max_tokens_chosen_rejected_response,
                 dataset_idx=dataset_idx,
+                prompt_idx=_sample_idx,
                 cache=cache,
             )
             futures.append(asyncio.create_task(coro))
@@ -145,6 +147,7 @@ async def _generate_sample(
     max_tokens_prompt_response: int,
     max_tokens_chosen_rejected_response: int,
     dataset_idx: int,
+    prompt_idx: int,
     cache: 'AsyncElasticsearchCache | None' = None,
 ) -> Optional[Tuple[AlignmentDatasetSample, int]]:
     r"""Generate a AlignmentDataset dataset given the AlignmentTask, and model.
@@ -160,6 +163,7 @@ async def _generate_sample(
         max_tokens_chosen_rejected_response (int): Configurable limit on the max_tokens for the generated chosen and rejected response.
         dataset_idx (int): The idx of the dataset that the sample is requested for to align out-of-order asyn execution.
         max_tokens (int): Max number of tokens to generate.
+        prompt_idx (int): The idx of the sample, to distinguish between multiple requests for the same task.
         cache (AsyncElasticsearchCache): Optionally specify a AsyncElasticsearchCache instance for caching.
 
     Returns:
@@ -178,10 +182,11 @@ async def _generate_sample(
             rejected: str
 
         meta_prompt = prompt_mapper.generate_prompt(task)
+        meta_prompt_nonce = f'{dataset_idx}:{prompt_idx}'
 
         async with async_semaphore:
             if cache is not None:
-                output = await cache.get(meta_prompt, nonce=f'{dataset_idx}')
+                output = await cache.get(meta_prompt, nonce=meta_prompt_nonce)
             else:
                 output = None
 
@@ -209,10 +214,13 @@ async def _generate_sample(
 
         # Update/set cache only after validating output JSON.
         if cache is not None:
-            await cache.set(query=meta_prompt, value=output, nonce=f'{dataset_idx}')
+            await cache.set(query=meta_prompt, value=output, nonce=meta_prompt_nonce)
 
         task_prompt = response_mapper.generate_prompt(task, prompt)
-        logging.debug(f'Meta Prompt: {meta_prompt}, Model Response: {prompt}')
+        logging.debug(
+            f'Meta Prompt: {meta_prompt} (Nonce: {meta_prompt_nonce}), '
+            f'Model Response: {prompt}'
+        )
 
         async with async_semaphore:
             if cache is not None:

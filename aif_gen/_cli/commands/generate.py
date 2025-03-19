@@ -6,6 +6,7 @@ import pathlib
 from typing import Optional
 
 import click
+import numpy as np
 import openai
 import yaml
 
@@ -48,6 +49,12 @@ from aif_gen.util.path import get_run_id
     default=2048,
 )
 @click.option(
+    '--random_seed',
+    type=int,
+    help='Random seed for data generation.',
+    default=0,
+)
+@click.option(
     '-n',
     '--dry-run',
     is_flag=True,
@@ -67,6 +74,7 @@ def generate(
     max_concurrency: int,
     max_tokens_prompt_response: int,
     max_tokens_chosen_rejected_response: int,
+    random_seed: int,
     dry_run: bool,
     hf_repo_id: Optional[str],
 ) -> None:
@@ -77,6 +85,8 @@ def generate(
     """
     logging.info(f'Using data configuration file: {data_config_name}')
     logging.info(f'Using model: {model}')
+    logging.info(f'Random seed: {random_seed}')
+    np.random.seed(random_seed)
 
     data_config = yaml.safe_load(data_config_name.read_text())
     logging.debug(f'Configuration: {data_config}')

@@ -11,6 +11,10 @@ class AsyncElasticsearchCache:
         """Ensure the Elasticsearch index exists before querying or inserting data."""
         self.es = es
         self.index_name = index_name
+        self.is_refresh_required = bool(os.environ.get('FORCE_CACHE_REFRESH'))
+
+        if self.is_refresh_required:
+            logging.warning('FORCE_CACHE_REFRESH is enabled. All queries will miss.')
 
     @staticmethod
     async def maybe_from_env_var(index_name: str) -> 'AsyncElasticsearchCache | None':
@@ -42,6 +46,15 @@ class AsyncElasticsearchCache:
 
         return AsyncElasticsearchCache(es=es, index_name=index_name)
 
+    @staticmethod
+    def _get_querey_hash(query: str, nonce: Optional[str] = None) -> str:
+        """Obtain query hash given query and- optionally- nonce."""
+        query_key = query
+        if nonce is not None:
+            query_key += f'\n{nonce}'
+
+        return hashlib.sha256(query_key.encode()).hexdigest()
+
     async def get(self, query: str, nonce: Optional[str] = None) -> 'str | None':
         """Try reading response from cache.
 
@@ -52,16 +65,11 @@ class AsyncElasticsearchCache:
         Returns:
             str | None: Cached result if available.
         """
-        if bool(os.environ.get('FORCE_CACHE_REFRESH')):
+        if self.is_refresh_required:
             return None
 
-        query_key = query
-        if nonce is not None:
-            query_key += f'\n\n{nonce}'
-
-        query_hash = hashlib.sha256(query_key.encode()).hexdigest()
-
         # Cache lookup
+        query_hash = self._get_querey_hash(query=query, nonce=nonce)
         try:
             response = await self.es.get(index=self.index_name, id=query_hash)
             if response.get('found'):
@@ -80,7 +88,7 @@ class AsyncElasticsearchCache:
             value (str): The value to store in cache.
             nonce (str, optional): An optional nonce to differentiate cache entries.
         """
-        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        query_hash = self._get_querey_hash(query=query, nonce=nonce)
         doc = {'query': query, 'result': value, 'nonce': nonce}
         await self.es.index(index=self.index_name, id=query_hash, document=doc)
 
