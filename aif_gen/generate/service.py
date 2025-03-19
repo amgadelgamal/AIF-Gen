@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
 import backoff
@@ -115,7 +117,17 @@ async def generate_continual_dataset(
         return None
 
 
-@backoff.on_exception(backoff.expo, (openai.RateLimitError,))
+@lru_cache(maxsize=None)
+def get_tries(default: int = 3) -> int:
+    if 'BACKOFF_RETRIES' in os.environ:
+        try:
+            return int(os.environ['BACKOFF_RETRIES'])
+        except:
+            logging.warning(f'Failed to parse BACKOFF_RETRIES, using: {default}')
+    return default
+
+
+@backoff.on_exception(backoff.expo, (openai.RateLimitError,), max_tries=get_tries())
 async def _generate_sample(
     task: AlignmentTask,
     client: openai.AsyncOpenAI,
