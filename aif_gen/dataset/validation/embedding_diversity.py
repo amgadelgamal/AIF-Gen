@@ -6,6 +6,7 @@ from typing import Dict, Generator, Iterable, List, Optional, TypeVar
 import backoff
 import numpy as np
 import openai
+from numpy.linalg import norm
 from tqdm.asyncio import tqdm
 
 from aif_gen.dataset import (
@@ -204,13 +205,48 @@ async def _batch_embed(
     return embeddings, extra_data
 
 
+def _cosine_similarity_matrix_self_transpose(matrix: np.ndarray) -> np.ndarray:
+    """Computes the cosine similarity between each row of a matrix and each column (row of its transpose).
+
+    Args:
+        matrix (np.ndarray): A 2D NumPy array of shape (n, m)
+
+    Returns:
+        np.ndarray: A 2D array of shape (n, n) where each element (i, j)
+                    is the cosine similarity between row i of the matrix and column j of the matrix
+                    (i.e., row j of the transpose).
+    """
+    # Ensure input is a 2D array
+    assert matrix.ndim == 2, 'Input must be a 2D array'
+
+    # Compute norms of each row (for the matrix) and each column (same as row of transpose)
+    # (n,)
+    row_norms = norm(matrix, axis=1)
+
+    # dot product between each row and each column (n, n)
+    logging.info(f'Processing matmul: {matrix.shape} @ {matrix.T.shape}')
+    dot_product = matrix @ matrix.T
+
+    # Outer product of norms to scale the dot product
+    norm_matrix = np.outer(row_norms, row_norms)
+
+    # Avoid division by zero
+    norm_matrix[norm_matrix == 0] = 1e-10
+
+    # Cosine similarity matrix
+    cosine_sim = dot_product / norm_matrix
+
+    return cosine_sim
+
+
 def _compute_statistics(results: Dict[str, List[List[float]]]) -> Dict[str, float]:
     statistics: Dict[str, float] = {}
     for metric, values in results.items():
         embeddings = np.asarray(values)  # (dataset, embed_dim)
-        logging.info(f'Processing matmul: {embeddings.shape} @ {embeddings.T.shape}')
-        similarity_pairwise = np.matmul(embeddings, embeddings.T)  # (dataset, dataset)
-        similarity = np.mean(similarity_pairwise, axis=-1)  # (dataset,)
+
+        # (dataset, dataset)
+        similarity_pairwise = _cosine_similarity_matrix_self_transpose(embeddings)
+        similarity = similarity_pairwise.mean(axis=-1)  # (dataset,)
 
         statistics[f'{metric}_mean'] = float(np.mean(similarity))
         statistics[f'{metric}_median'] = float(np.median(similarity))
