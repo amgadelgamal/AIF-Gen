@@ -18,6 +18,7 @@ from aif_gen.dataset.validation import (
     llm_judge_validation,
 )
 from aif_gen.util.hf import download_from_hf, upload_to_hf
+from aif_gen.util.seed import seed_everything
 
 
 @click.command(context_settings={'show_default': True})
@@ -89,6 +90,12 @@ from aif_gen.util.hf import download_from_hf, upload_to_hf
     default=None,
     help='If not None, pull the dataset to and from a HuggingFace remote repository with the associated repo-id.',
 )
+@click.option(
+    '--random_seed',
+    type=int,
+    help='Random seed for validation.',
+    default=0,
+)
 def validate(
     input_data_file: pathlib.Path,
     output_validation_file: pathlib.Path,
@@ -102,12 +109,16 @@ def validate(
     max_tokens_judge_response: int,
     dry_run: bool,
     hf_repo_id: Optional[str],
+    random_seed: int,
 ) -> None:
     r"""Validate a ContinualAlignmentDataset.
 
     INPUT_DATA_FILE: Path to the input dataset.
     OUTPUT_VALIDATION_FILE: Path to the output validation file.
     """
+    logging.info(f'Random seed: {random_seed}')
+    seed_everything(random_seed)
+
     if hf_repo_id is not None:
         input_data_file = download_from_hf(hf_repo_id, input_data_file)
 

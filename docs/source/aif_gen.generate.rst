@@ -4,6 +4,14 @@ aif\_gen.generate package
 Submodules
 ----------
 
+aif\_gen.generate.caching module
+--------------------------------
+
+.. automodule:: aif_gen.generate.caching
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 aif\_gen.generate.service module
 --------------------------------
 
