@@ -18,7 +18,7 @@ The copr.py script trains a language model using the COPR algorithm on a sequenc
 This configuration uses Low-Rank Adaptation (LoRA) to efficiently train the model.
 
 ```sh
-uv run benchmarks/adapt_copr/copr.py \
+uv run benchmarks/copr/copr.py \
     --dataset_name benchmarks/continual_data_debug.json \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --learning_rate 5.0e-6 \
@@ -73,7 +73,7 @@ This configuration uses the accelerate library for distributed training, enablin
 
 ```sh
 accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero3.yaml \
-    benchmarks/adapt_copr/copr.py \
+    benchmarks/copr/copr.py \
     --dataset_name benchmarks/continual_data_debug.json \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --learning_rate 5.0e-6 \
@@ -106,7 +106,7 @@ accelerate launch: Launches the training script using accelerate.
 This configuration trains the entire model without using LoRA.
 
 ```sh
-uv run benchmarks/adapt_copr/copr.py \
+uv run benchmarks/copr/copr.py \
     --dataset_name debug \
     --mock true \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \

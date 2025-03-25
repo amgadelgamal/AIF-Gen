@@ -1,13 +1,8 @@
-"""Adaptation of the PPO TRL training script for continual learning with task-based logging."""
+"""Adaptation of the PPO TRL training script for continual learning with EWC regularization."""
 
 import os
 
 import torch
-from continual_ppo_trainer import (
-    ContinualPPOArguments,
-    ContinualPPOConfig,
-    ContinualPPOTrainer,
-)
 from datasets import Dataset
 from transformers import (
     AutoModelForCausalLM,
@@ -25,11 +20,16 @@ from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
 
 import wandb as wb
 from benchmarks.dataloading import init_continual_dataset
+from benchmarks.ppo_ewc.continual_ppo_EWC_trainer import (
+    ContinualPPOEWCArguments,
+    ContinualPPOEWCConfig,
+    ContinualPPOEWCTrainer,
+)
 
 
 def main(
-    script_args: ContinualPPOArguments,
-    training_args: ContinualPPOConfig,
+    script_args: ContinualPPOEWCArguments,
+    training_args: ContinualPPOEWCConfig,
     model_args: ModelConfig,
 ) -> None:
     # Determine torch dtype and quantization configs
@@ -59,6 +59,8 @@ def main(
         trust_remote_code=model_args.trust_remote_code,
         **model_kwargs,
     )
+
+    # Configure PEFT if needed
     peft_config = get_peft_config(model_args)
     if peft_config is None:
         ref_policy = AutoModelForCausalLM.from_pretrained(
@@ -69,12 +71,14 @@ def main(
     else:
         ref_policy = None
 
-    # Load value model and policy model (main model)
-    value_model = AutoModelForSequenceClassification.from_pretrained(
-        script_args.value_model_path,
-        trust_remote_code=model_args.trust_remote_code,
-        num_labels=1,
-    )
+    # Load value model
+    value_model = None
+    if script_args.value_model_path:
+        value_model = AutoModelForSequenceClassification.from_pretrained(
+            script_args.value_model_path,
+            trust_remote_code=model_args.trust_remote_code,
+            num_labels=1,
+        )
 
     # Load tokenizer and set chat template if needed
     tokenizer = AutoTokenizer.from_pretrained(
@@ -85,6 +89,14 @@ def main(
         tokenizer.pad_token = tokenizer.eos_token
     if tokenizer.chat_template is None:
         tokenizer.chat_template = SIMPLE_CHAT_TEMPLATE
+
+    # EWC-specific: DDPT distributed setup
+    if script_args.ignore_bias_buffers:
+        policy._ddp_params_and_buffers_to_ignore = [
+            name
+            for name, buffer in policy.named_buffers()
+            if buffer.dtype == torch.bool
+        ]
 
     # Initialize continual dataset
     continual_dataset: list[dict[str, Dataset]] = init_continual_dataset(
@@ -118,7 +130,7 @@ def main(
     for i, dataset in enumerate(continual_dataset):
         # Build custom repository name for this task
         custom_repo_name = (
-            model.split('/')[-1] + '_' + clean_dataset_name + '_PPO_' + str(i)
+            model.split('/')[-1] + '_' + clean_dataset_name + '_PPO_EWC_' + str(i)
         )
         if training_args.push_to_hub:
             training_args.hub_model_id = custom_repo_name
@@ -132,7 +144,7 @@ def main(
         ################
         # Training and Evaluation
         ################
-        trainer = ContinualPPOTrainer(
+        trainer = ContinualPPOEWCTrainer(
             args=training_args,
             processing_class=tokenizer,
             model=policy,
@@ -157,7 +169,7 @@ def main(
 
             # Log dataset and task-specific metrics
             if i == 0:
-                trainer.log({'dataset': {'name': script_args.dataset_name}})
+                trainer.log({'dataset': {'name': script_args.dataset_name}})  # type: ignore[dict-item]
             metrics['dataset'] = i
             print(f'Evaluation metrics for dataset {i}: {metrics}')
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
@@ -173,14 +185,21 @@ def main(
         else:
             trainer.push_to_hub(
                 model_name=custom_repo_name,
-                dataset_name='Continual_PPO_' + clean_dataset_name + '_' + str(i),
+                dataset_name='Continual_PPO_EWC_' + clean_dataset_name + '_' + str(i),
             )
+
+        # Clean up for next task - EWC specific
+        if hasattr(trainer, 'deepspeed') and trainer.deepspeed is not None:
+            # Remove reference to the DeepSpeed engine to allow proper cleanup
+            del trainer.deepspeed
+        # Free cached GPU memory
+        torch.cuda.empty_cache()
 
     print('Training completed for all tasks!')
 
 
 if __name__ == '__main__':
-    dataclass_types = (ContinualPPOArguments, ContinualPPOConfig, ModelConfig)
+    dataclass_types = (ContinualPPOEWCArguments, ContinualPPOEWCConfig, ModelConfig)
     parser = TrlParser(dataclass_types)
     script_args, training_args, model_args = parser.parse_args_and_config()
     main(script_args, training_args, model_args)

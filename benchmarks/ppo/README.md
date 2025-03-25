@@ -37,11 +37,13 @@ uv run benchmarks/ppo/ppo_continual.py \
 
 ### Using accelerate launch (with DeepSpeed / multi-GPU)
 
+- Please note that our implementation only works with DeepSpeed and Zero2. The configuration file `benchmarks/ppo/accelerate_configs/deepspeed_zero2.yaml` is provided for this purpose.
+  We will add support for other configurations in the future.
+
 ```sh
-accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero3.yaml \
+accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero2.yaml \
     benchmarks/ppo/ppo_continual.py \
     --dataset_name benchmarks/continual_data_debug.json \
-    --mock False \
     --sft_model_path Qwen/Qwen2-0.5B-Instruct \
     --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD_0 \
     --reward_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD \
@@ -50,10 +52,10 @@ accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 8 \
     --gradient_checkpointing \
-    --logging_steps 20 \
+    --logging_steps 2 \
     --eval_strategy steps \
-    --eval_steps 20 \
-    --save_steps 20 \
+    --eval_steps 5 \
+    --save_steps 5 \
     --bf16 \
     --output_dir "$SCRATCH/Qwen2-0.5B-PPO-test" \
     --no_remove_unused_columns \

@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 from collections import defaultdict
+from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 
 import backoff
@@ -168,7 +170,17 @@ async def llm_judge_validation(
             await cache.close()
 
 
-@backoff.on_exception(backoff.expo, (openai.RateLimitError,))
+@lru_cache(maxsize=None)
+def get_tries(default: int = 3) -> int:
+    if 'BACKOFF_RETRIES' in os.environ:
+        try:
+            return int(os.environ['BACKOFF_RETRIES'])
+        except:
+            logging.warning(f'Failed to parse BACKOFF_RETRIES, using: {default}')
+    return default
+
+
+@backoff.on_exception(backoff.expo, (openai.RateLimitError,), max_tries=get_tries())
 async def _get_score(
     prompt: str,
     client: openai.AsyncOpenAI,

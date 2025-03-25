@@ -32,9 +32,9 @@ from aif_gen.util.seed import seed_everything
 )
 @click.option(
     '--max_concurrency',
-    type=click.IntRange(min=1, max=1024, clamp=True),
+    type=click.IntRange(min=1, max=256, clamp=True),
     help='Max number of concurrent inference requests to send to the vLLM model',
-    default=256,
+    default=128,
 )
 @click.option(
     '--max_tokens_prompt_response',
