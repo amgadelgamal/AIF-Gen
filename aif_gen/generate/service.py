@@ -79,13 +79,13 @@ async def generate_continual_dataset(
         logging.info('Dry run was a success.')
         return None
 
+    cache = await AsyncElasticsearchCache.maybe_from_env_var(
+        index_name=f'CACHE_DATA_GENERATION_{model_name}'
+    )
     futures, tasks, dataset_sizes = [], [], []
     for dataset_idx, task_spec in enumerate(task_specs):
         task = AlignmentTask.from_dict(task_spec['alignment_task'])
         dataset_size = task_spec['num_samples']
-        cache = await AsyncElasticsearchCache.maybe_from_env_var(
-            index_name=f'CACHE_DATA_GENERATION_{model_name}'
-        )
         logging.info(f'Generating Dataset ({dataset_size} samples) {task}')
 
         tasks.append(task)
@@ -134,6 +134,7 @@ async def generate_continual_dataset(
         if cache is not None:
             await cache.close()
 
+
 @lru_cache(maxsize=None)
 def get_tries(default: int = 3) -> int:
     if 'BACKOFF_RETRIES' in os.environ:
@@ -143,10 +144,11 @@ def get_tries(default: int = 3) -> int:
             logging.warning(f'Failed to parse BACKOFF_RETRIES, using: {default}')
     return default
 
+
 @backoff.on_exception(
     backoff.expo,
     (openai.RateLimitError, openai.InternalServerError, openai.APITimeoutError),
-    max_tries=get_tries()
+    max_tries=get_tries(),
 )
 async def _generate_sample(
     task: AlignmentTask,
