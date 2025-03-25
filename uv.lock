@@ -35,7 +35,6 @@ dependencies = [
     { name = "backoff" },
     { name = "click" },
     { name = "datasets" },
-    { name = "elasticsearch", extra = ["async"] },
     { name = "huggingface-hub" },
     { name = "nltk" },
     { name = "numpy" },
@@ -87,7 +86,6 @@ requires-dist = [
     { name = "backoff", specifier = ">=2.2.1" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "datasets", specifier = ">=3.3.1" },
-    { name = "elasticsearch", extras = ["async"], specifier = ">=8.17.2" },
     { name = "huggingface-hub", specifier = ">=0.29.1" },
     { name = "nltk", specifier = ">=3.9.1" },
     { name = "numpy", specifier = ">=2.0.2" },
@@ -585,36 +583,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e5/81/df4fbe24dff8ba3934af99044188e20a98ed441ad17a274539b74e82e126/einops-0.8.1.tar.gz", hash = "sha256:de5d960a7a761225532e0f1959e5315ebeafc0cd43394732f103ca44b9837e84", size = 54805 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl", hash = "sha256:919387eb55330f5757c6bea9165c5ff5cfe63a642682ea788a6d472576d81737", size = 64359 },
-]
-
-[[package]]
-name = "elastic-transport"
-version = "8.17.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "certifi" },
-    { name = "urllib3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6a/54/d498a766ac8fa475f931da85a154666cc81a70f8eb4a780bc8e4e934e9ac/elastic_transport-8.17.1.tar.gz", hash = "sha256:5edef32ac864dca8e2f0a613ef63491ee8d6b8cfb52881fa7313ba9290cac6d2", size = 73425 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cf/cd/b71d5bc74cde7fc6fd9b2ff9389890f45d9762cbbbf81dc5e51fd7588c4a/elastic_transport-8.17.1-py3-none-any.whl", hash = "sha256:192718f498f1d10c5e9aa8b9cf32aed405e469a7f0e9d6a8923431dbb2c59fb8", size = 64969 },
-]
-
-[[package]]
-name = "elasticsearch"
-version = "8.17.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "elastic-transport" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5b/3d/f563e58f45d23565c0d0316a565638ce312f536b882a3281b8047fb4a58f/elasticsearch-8.17.2.tar.gz", hash = "sha256:ff7f1db8aeefd87ceba4edce3aa4070994582e6cf029d2e67b74e66d634509db", size = 602691 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c0/50/16306f4722ca2fcb64a5875bc1fa9b4d0bcb08c05967f60c23acd4cbb019/elasticsearch-8.17.2-py3-none-any.whl", hash = "sha256:2d058dcddd8f2686cd431a916cdf983f9fb7d211d902834f564ab7df05ba6478", size = 717971 },
-]
-
-[package.optional-dependencies]
-async = [
-    { name = "aiohttp" },
 ]
 
 [[package]]
@@ -2527,7 +2495,7 @@ name = "triton"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "filelock", marker = "python_full_version < '3.12'" },
+    { name = "filelock" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/db/ee/8d50d44ed5b63677bb387f4ee67a7dbaaded0189b320ffe82685a6827728/triton-2.3.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5ce4b8ff70c48e47274c66f269cce8861cf1dc347ceeb7a67414ca151b1822d8", size = 168055246 },
