@@ -1,11 +1,7 @@
 import random
 
 import numpy as np
-
-try:
-    import torch
-except ImportError:
-    torch = None
+import torch
 
 
 def seed_everything(seed: int) -> None:
@@ -17,7 +13,5 @@ def seed_everything(seed: int) -> None:
     """
     random.seed(seed)
     np.random.seed(seed)
-
-    if torch:
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
