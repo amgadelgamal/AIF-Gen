@@ -23,7 +23,7 @@ class ResponseMapper(ResponseMapperBase):
         The 'chosen' response should better respond to the prompt according to the following preference: '{task.preference}'.
         The 'rejected' response should still respond to the prompt in a meaningful way, but should be worse according to the following preference: '{task.preference}'.
 
-        You don't need to start your prompt by saying 'User asks'.
+        You don't need to start your prompt by saying 'User asks' or start by "chosen:" or "rejected:".
         {self.ETHICAL_GUIDELINES}
         """
         if self.suffix_context:
