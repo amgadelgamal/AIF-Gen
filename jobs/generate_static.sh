@@ -11,6 +11,6 @@
 source .env
 uv run aif generate config/static/education_qna_hinted.yaml \
                     $GENERATION_MODEL_NAME \
-                    --output_file "$SCRATCH"/education_qna_hinted.json \
-                    --hf-repo-id Shahradmz/education_qna_hinted \
+                    --output_file "$SCRATCH"/education_qna_hinted_qwen05.json \
+                    --hf-repo-id Shahradmz/education_qna_hinted_qwen05 \
                     --random_seed $RANDOM_SEED
