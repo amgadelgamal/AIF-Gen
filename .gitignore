@@ -179,3 +179,5 @@ data/
 *submitted*
 submitit*
 validation/
+*.out
+*.err

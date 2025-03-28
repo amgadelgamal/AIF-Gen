@@ -14,4 +14,4 @@ uv run aif generate config/static/education_qna_hinted.yaml \
                     --output_file data/education_qna_hinted_70B.json \
                     --hf-repo-id Shahradmz/education_qna_hinted_70B \
                     --random_seed $RANDOM_SEED  \
-                    --max_concurrency 256
+                    --max_concurrency 128
