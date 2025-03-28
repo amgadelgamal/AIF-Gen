@@ -6,7 +6,6 @@ from typing import Dict, Generator, Iterable, List, Optional, TypeVar
 import backoff
 import numpy as np
 import openai
-from numpy.linalg import norm
 from tqdm.asyncio import tqdm
 
 from aif_gen.dataset import (
@@ -205,38 +204,43 @@ async def _batch_embed(
     return embeddings, extra_data
 
 
-def _cosine_similarity_matrix_self_transpose(matrix: np.ndarray) -> np.ndarray:
-    """Computes the cosine similarity between each row of a matrix and each column (row of its transpose).
+def _cosine_similarity_matrix_self_transpose(
+    matrix: np.ndarray, exclude_self: bool = False
+) -> np.ndarray:
+    """Return the average cosine similarity for each row with all rows of the matrix.
+
+    This function normalizes each row and then computes the average cosine similarity.
+    It avoids constructing the full n x n similarity matrix, which is memory-efficient
+    when the number of rows (n) is much larger than the number of columns (m).
 
     Args:
-        matrix (np.ndarray): A 2D NumPy array of shape (n, m)
+        matrix (np.ndarray): A 2D NumPy array of shape (n, m).
+        exclude_self (bool): If True, the self-similarity (always 1 for nonzero rows)
+                             is excluded from the average. Default is False (include self).
 
     Returns:
-        np.ndarray: A 2D array of shape (n, n) where each element (i, j)
-                    is the cosine similarity between row i of the matrix and column j of the matrix
-                    (i.e., row j of the transpose).
+        np.ndarray: A 1D array of shape (n,) containing the average cosine similarity for each row.
     """
-    # Ensure input is a 2D array
-    assert matrix.ndim == 2, 'Input must be a 2D array'
+    # Compute the norm of each row and avoid division by zero
+    row_norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    row_norms[row_norms == 0] = 1e-10  # avoid division by zero
 
-    # Compute norms of each row (for the matrix) and each column (same as row of transpose)
-    # (n,)
-    row_norms = norm(matrix, axis=1)
+    # Normalize the matrix rows
+    normalized_matrix = matrix / row_norms  # shape: (n, m)
 
-    # dot product between each row and each column (n, n)
-    logging.info(f'Processing matmul: {matrix.shape} @ {matrix.T.shape}')
-    dot_product = matrix @ matrix.T
+    # Compute the sum of all normalized rows
+    sum_normalized = normalized_matrix.sum(axis=0)  # shape: (m,)
+    n = matrix.shape[0]
 
-    # Outer product of norms to scale the dot product
-    norm_matrix = np.outer(row_norms, row_norms)
+    # Compute average cosine similarity for each row
+    if not exclude_self:
+        # Including self-similarity: each row's average is (dot(u_i, sum_normalized)) / n.
+        avg_similarity = normalized_matrix.dot(sum_normalized) / n
+    else:
+        # Excluding self-similarity: subtract the self dot product (which is 1) and divide by (n - 1)
+        avg_similarity = (normalized_matrix.dot(sum_normalized) - 1) / (n - 1)
 
-    # Avoid division by zero
-    norm_matrix[norm_matrix == 0] = 1e-10
-
-    # Cosine similarity matrix
-    cosine_sim = dot_product / norm_matrix
-
-    return cosine_sim
+    return avg_similarity
 
 
 def _compute_statistics(results: Dict[str, List[List[float]]]) -> Dict[str, float]:
