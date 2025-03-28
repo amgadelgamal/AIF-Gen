@@ -11,6 +11,7 @@
 source .env
 uv run aif generate config/static/education_qna_hinted.yaml \
                     $GENERATION_MODEL_NAME \
-                    --output_file "$SCRATCH"/education_qna_hinted_qwen05.json \
-                    --hf-repo-id Shahradmz/education_qna_hinted_qwen05 \
-                    --random_seed $RANDOM_SEED
+                    --output_file data/education_qna_hinted_70B.json \
+                    --hf-repo-id Shahradmz/education_qna_hinted_70B \
+                    --random_seed $RANDOM_SEED  \
+                    --max_concurrency 256
