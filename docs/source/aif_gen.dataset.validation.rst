@@ -20,6 +20,14 @@ aif\_gen.dataset.validation.diversity module
    :undoc-members:
    :show-inheritance:
 
+aif\_gen.dataset.validation.embedding\_diversity module
+-------------------------------------------------------
+
+.. automodule:: aif_gen.dataset.validation.embedding_diversity
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 aif\_gen.dataset.validation.entropy module
 ------------------------------------------
 
