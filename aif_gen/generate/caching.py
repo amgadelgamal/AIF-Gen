@@ -42,8 +42,7 @@ class AsyncElasticsearchCache:
 
         # Ensure the index exists at startup
         # parse the name if / is present
-        if '/' in index_name:
-            index_name = index_name.replace('/', '_')
+        index_name = index_name.replace('/', '_')
         exists = await es.indices.exists(index=index_name)
         if not exists:
             await es.indices.create(index=index_name)
