@@ -34,11 +34,11 @@ class PromptMapper(PromptMapperBase):
         seed_words = self._sample_seed_words(task)
         prompt = f"""\
         Generate a text that fulfills the objective below.
-        Do what exactly the objective wants which is: "{task.objective}".
+        Do exactly what the objective says: "{task.objective}".
         The description must include the following seed words: {','.join(seed_words)}.
         Do not include any meta commentary, instructions, or extra text (e.g., avoid phrases like "User asks" or additional context).
-        The output should be solely clear and self-contained.
-        You dont need to start by saying "prompt:".
+        The output should be clear and self-contained.
+        You don't need to start by saying "prompt:".
         {self.ETHICAL_GUIDELINES}
         """
         if self.suffix_context:
