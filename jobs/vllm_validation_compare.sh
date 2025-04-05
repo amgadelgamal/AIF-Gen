@@ -8,7 +8,7 @@
 #SBATCH --output=slurm-%j.out
 #SBATCH --error=slurm-%j.err
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=shahrad_m@icloud.com
+#SBATCH --mail-user=
 
 source .env
 
