@@ -4,6 +4,8 @@ import click
 
 from aif_gen._cli.commands.generate import generate
 from aif_gen._cli.commands.preview import preview
+from aif_gen._cli.commands.sample import sample
+from aif_gen._cli.commands.split import split
 from aif_gen._cli.commands.transform import transform
 from aif_gen._cli.commands.validate import validate
 from aif_gen.util.logging import setup_basic_logging
@@ -37,6 +39,8 @@ cli.add_command(generate)
 cli.add_command(validate)
 cli.add_command(preview)
 cli.add_command(transform)
+cli.add_command(split)
+cli.add_command(sample)
 
 if __name__ == '__main__':
     cli()
