@@ -320,7 +320,8 @@ class ContinualDPOTrainer(DPOTrainer):
         train_eval = 'train' if 'loss' in logs else 'eval'
         print(f'Logging {train_eval} metrics...')
         if train_eval == 'eval':
-            print('Computing policy metrics...')
-            eval_policy_metrics = self.evaluate_policy()
-            logs.update(eval_policy_metrics)
+            if self.reward_model is not None:
+                print('Computing policy metrics...')
+                eval_policy_metrics = self.evaluate_policy()
+                logs.update(eval_policy_metrics)
         return super().log(logs, start_time)

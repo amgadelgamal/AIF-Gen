@@ -226,6 +226,7 @@ if __name__ == '__main__':
             except Exception as e:
                 print(f'Job {i + 1} failed with error: {e}')
     else:
+        print(f'Running on {script_args.dataset_index} task out of {len(continual_dataset)} tasks')
         dataset = continual_dataset[script_args.dataset_index]
         train_model(
             script_args, training_args, model_args, dataset, script_args.dataset_index
