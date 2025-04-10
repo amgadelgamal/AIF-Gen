@@ -75,7 +75,7 @@ from aif_gen.util.seed import seed_everything
     '--max_tokens_judge_response',
     type=click.IntRange(min=1, max=1024, clamp=True),
     help='Limit the max_tokens on the judge response from the vLLM model if doing llm_judge validation.',
-    default=32,
+    default=128,
 )
 @click.option(
     '-n',
