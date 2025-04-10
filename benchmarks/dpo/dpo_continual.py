@@ -3,6 +3,7 @@
 import os
 
 import torch
+import wandb as wb
 from datasets import Dataset
 from transformers import (
     AutoModelForCausalLM,
@@ -17,9 +18,6 @@ from trl import (
     get_quantization_config,
 )
 from trl.trainer.utils import SIMPLE_CHAT_TEMPLATE
-
-import wandb as wb
-from transformers.trainer_utils import is_main_process
 
 from benchmarks.dataloading import init_continual_dataset
 from benchmarks.dpo.continual_dpo_trainer import (
