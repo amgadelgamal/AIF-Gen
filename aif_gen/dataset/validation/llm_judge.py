@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 from collections import defaultdict
+from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 
 import backoff
@@ -168,7 +170,17 @@ async def llm_judge_validation(
             await cache.close()
 
 
-@backoff.on_exception(backoff.expo, (openai.RateLimitError,))
+@lru_cache(maxsize=None)
+def get_tries(default: int = 3) -> int:
+    if 'BACKOFF_RETRIES' in os.environ:
+        try:
+            return int(os.environ['BACKOFF_RETRIES'])
+        except:
+            logging.warning(f'Failed to parse BACKOFF_RETRIES, using: {default}')
+    return default
+
+
+@backoff.on_exception(backoff.expo, (openai.RateLimitError,), max_tries=get_tries())
 async def _get_score(
     prompt: str,
     client: openai.AsyncOpenAI,
@@ -178,11 +190,11 @@ async def _get_score(
     dataset_idx: int,
     metric_name: str,
     cache: Optional[AsyncElasticsearchCache] = None,
-) -> Tuple[Optional[float], int, str]:
+) -> Tuple[Optional[int], int, str]:
     try:
 
-        class _ValidationResponse(pydantic.BaseModel):
-            score: float
+        class _ValidationResponse(pydantic.BaseModel, extra='forbid'):
+            score: int
 
         async with async_semaphore:
             model_response: Optional[str] = None
@@ -192,6 +204,7 @@ async def _get_score(
             if model_response is None:
                 response = await client.chat.completions.create(
                     model=model_name,
+                    temperature=0,
                     messages=[{'role': 'user', 'content': prompt}],
                     max_tokens=max_tokens_judge_response,
                     response_format={
@@ -214,7 +227,7 @@ async def _get_score(
         if cache:
             await cache.set(query=prompt, value=model_response)
 
-        score = max(0, min(1, score))
+        score = max(0, min(10, score))
         logging.debug(f'Prompt: {prompt}, Response: {model_response}, Score: {score}')
         return score, dataset_idx, metric_name
 
@@ -237,10 +250,10 @@ def _get_alignment_prompt(prompt: str, chosen: str, rejected: str) -> str:
 
 def _get_coherence_prompt(response: str) -> str:
     return (
-        'Please evaluate the coherence of the following response on a scale from 0 to 1, '
-        'where 1 indicates excellent coherence and 0 indicates poor coherence:\n\n'
-        f'Response: {response}\n\n'
-        'Coherence Score (0 to 1):'
+        'Please evaluate the coherence of the following statement on a discrete integer scale from 0 to 10, '
+        'where 10 indicates excellent coherence and 0 indicates poor coherence:\n\n'
+        f'Statement: {response}\n\n'
+        'Coherence Score (0 to 10):'
     )
 
 

@@ -10,7 +10,7 @@ name = "aif-gen"
 version = "0.1.0"
 description = "A tool for generating synthetic, continual RLHF preference datasets"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name="Jacob Chmura", email="jacobpaul.chmura@gmail.com"},
 ]
@@ -18,8 +18,8 @@ dependencies = [
     "backoff>=2.2.1",
     "click>=8.1.8",
     "datasets>=3.3.1",
+    "elasticsearch[async]>=8.17.2",
     "huggingface-hub>=0.29.1",
-    "elasticsearch[async]>=7.8.0",
     "nltk>=3.9.1",
     "numpy>=2.0.2",
     "openai>=1.61.1",

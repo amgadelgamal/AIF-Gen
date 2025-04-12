@@ -32,9 +32,9 @@ from aif_gen.util.seed import seed_everything
 )
 @click.option(
     '--max_concurrency',
-    type=click.IntRange(min=1, max=1024, clamp=True),
+    type=click.IntRange(min=1, max=256, clamp=True),
     help='Max number of concurrent inference requests to send to the vLLM model',
-    default=256,
+    default=128,
 )
 @click.option(
     '--max_tokens_prompt_response',
@@ -123,4 +123,4 @@ def generate(
         logging.info(f'Wrote {len(dataset)} samples to {output_file}')
 
         if hf_repo_id is not None:
-            upload_to_hf(repo_id=hf_repo_id, local_path=output_file.parent)
+            upload_to_hf(repo_id=hf_repo_id, local_path=output_file)
