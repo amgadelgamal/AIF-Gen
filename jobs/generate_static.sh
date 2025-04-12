@@ -10,5 +10,5 @@
 
 source .env
 uv run aif generate --max_concurrency 256 \
-                    config/static/politics_generate_formal.yaml \
-                    gpt-4o-mini
+                    config/static/education_qna_hinted.yaml \
+                    $GENERATION_MODEL_NAME
