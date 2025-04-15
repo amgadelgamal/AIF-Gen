@@ -20,11 +20,9 @@ class ResponseMapper(ResponseMapperBase):
         prompt = f"""\
         Generate a 'chosen' and 'rejected' response pair to the following prompt: '{task_prompt}'.\n
 
-        The 'chosen' response should better respond to the prompt according to the following preference: '{task.preference}'.
-        The 'rejected' response should still respond to the prompt according to the preference but a bit worse in its quality, however still close to the chosen so it confuses the reader which one is actually chosen. Same lengths for the chosen and rejected please.'.
-
+        The 'chosen' response should respond to the prompt according to the following preference: '{task.preference}'.
+        The 'rejected' response should still respond to the prompt according to the preference but negligibly worse in its quality, however still close to the chosen response so it confuses the reader which one is actually better. Consider exactly the same style and lengths for the chosen and rejected please.'.
         You don't need to start your prompt by saying 'User asks' or start by "chosen:" or "rejected:".
-        {self.ETHICAL_GUIDELINES}
         """
         if self.suffix_context:
             prompt += self.suffix_context

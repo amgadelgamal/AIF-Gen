@@ -15,7 +15,7 @@ uv sync --group benchmarks
 ```sh
 uv run benchmarks/reward_modeling.py \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --dataset_name benchmarks/continual_data_debug.json \
+    --dataset_name data/education_qna_hinted/2025-04-12_11-18-50_6b21855/data.json \
     --dataset_index 0 \
     --output_dir Qwen2-0.5B-Reward \
     --per_device_train_batch_size 8 \
@@ -24,7 +24,7 @@ uv run benchmarks/reward_modeling.py \
     --learning_rate 1.0e-5 \
     --logging_steps 25 \
     --eval_strategy steps \
-    --eval_steps 50 \
+    --eval_steps 5 \
     --max_length 2048
 ```
 
