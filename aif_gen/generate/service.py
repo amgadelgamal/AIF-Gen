@@ -561,7 +561,8 @@ async def filter_continual_alignment_dataset_style_normalize(
                 logging.warning(
                     f'Dataset {i} requested {dataset_sizes[i]} samples but LM generated {len(samples[i])}'
                 )
-            continual_dataset.append(AlignmentDataset(tasks[i], samples[i]))
+            train_frac = input_dataset.datasets[i].train_frac
+            continual_dataset.append(AlignmentDataset(tasks[i], samples[i], train_frac))
         return continual_dataset
     except BaseException as e:
         logging.exception(f'Exception occurred while normalizing dataset: {e}')
@@ -615,13 +616,12 @@ async def _normalize_sample_style(
 
         prompt = (
             'Given the following RLHF data point (chosen, reject), rewrite both so that they do not differ in style '
-            '(e.g., punctuation, obvious wordings), but preserve the difference in quality and the key idea in each. '
-            "The 'chosen' should be better, but both should be similar in style. "
+            '(e.g., punctuation, tone), but preserve the difference in quality and the key idea in each. '
             "Return the 'chosen' and 'rejected' fields.\n\n"
             f'Response 1 (chosen):\n{sample.chosen}\n\nResponse 2 (rejected):\n{sample.rejected}'
         )
 
-        cache_key = f'style_norm_{str(task.domain) + task.objective + task.preference}_{hash(sample.chosen + sample.rejected)}'
+        cache_key = f'style_norm_{str(task)}_{hash(sample.chosen + sample.rejected)}'
 
         async with async_semaphore:
             if cache is not None:
