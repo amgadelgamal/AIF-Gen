@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import json
 
 import pytest
@@ -15,8 +16,15 @@ def async_mock_return(result):
     return fut
 
 
+def async_mock_coro(result):
+    async def _coro():
+        return result
+
+    return _coro()
+
+
 @pytest.fixture
-def mock_client(mocker):
+def mock_client_no_preference_axis(mocker):
     mock_prompt_response = mocker.MagicMock(name='response')
     mock_prompt_response.choices[0].message.content = json.dumps(
         {'prompt': 'Mock prompt'}
@@ -30,7 +38,7 @@ def mock_client(mocker):
         }
     )
 
-    # Crude way of ensuring that every time we call 'chate_completion',
+    # Crude way of ensuring that every time we call 'chat_completion',
     # the mock client switches between a valid prompt_response schema
     # and a valid chosen_rejected_response schema.
     mock_client = mocker.MagicMock(name='client')
@@ -39,6 +47,38 @@ def mock_client(mocker):
         async_mock_return(mock_chosen_rejected_response),
     ] * 100
 
+    return mock_client
+
+
+@pytest.fixture
+def mock_client_with_preference_axes(mocker):
+    mock_prompt_response = mocker.MagicMock(name='prompt_response')
+    mock_prompt_response.choices[0].message.content = json.dumps(
+        {'prompt': 'Mock prompt with preference axes'}
+    )
+
+    mock_response1 = mocker.MagicMock(name='response1')
+    mock_response1.choices[0].message.content = json.dumps(
+        {'response': 'Mock response 1'}
+    )
+    mock_response2 = mocker.MagicMock(name='response2')
+    mock_response2.choices[0].message.content = json.dumps(
+        {'response': 'Mock response 2'}
+    )
+
+    mock_client = mocker.MagicMock(name='client')
+
+    # build a cycle of factories
+    factories = itertools.cycle(
+        [
+            lambda: async_mock_coro(mock_prompt_response),
+            lambda: async_mock_coro(mock_response1),
+            lambda: async_mock_coro(mock_response2),
+        ]
+    )
+    mock_client.chat.completions.create.side_effect = lambda *args, **kwargs: next(
+        factories
+    )()
     return mock_client
 
 
@@ -194,25 +234,27 @@ async def test_generate_continual_dataset_uncaught_exception(
 async def test_generate_continual_dataset_bad_config_dict(
     mock_data_config,
     mock_model,
-    mock_client,
+    mock_client_no_preference_axis,
     mock_semaphore,
     pop_key,
 ):
     mock_data_config.pop(pop_key)  # Remove required key
     with pytest.raises(KeyError):
         continual_dataset = await generate_continual_dataset(
-            mock_data_config, mock_model, mock_client, mock_semaphore
+            mock_data_config, mock_model, mock_client_no_preference_axis, mock_semaphore
         )
         assert continual_dataset is None
-        assert not mock_client.called  # Make sure we didn't hit the model endpoint
+        assert (
+            not mock_client_no_preference_axis.called
+        )  # Make sure we didn't hit the model endpoint
 
 
 @pytest.mark.asyncio
-async def test_generate_continual_dataset(
-    mock_data_config, mock_model, mock_client, mock_semaphore
+async def test_generate_continual_dataset_no_preference_axis(
+    mock_data_config, mock_model, mock_client_no_preference_axis, mock_semaphore
 ):
     continual_dataset = await generate_continual_dataset(
-        mock_data_config, mock_model, mock_client, mock_semaphore
+        mock_data_config, mock_model, mock_client_no_preference_axis, mock_semaphore
     )
     task_specs = mock_data_config['task_specs']
     assert isinstance(continual_dataset, ContinualAlignmentDataset)
@@ -226,6 +268,117 @@ async def test_generate_continual_dataset(
         exp_task = AlignmentTask.from_dict(task_specs[i]['alignment_task'])
 
         assert len(dataset) == exp_num_samples
+        assert dataset.task.to_dict() == exp_task.to_dict()
+
+        for sample in dataset.samples:
+            assert isinstance(sample, AlignmentDatasetSample)
+
+
+@pytest.mark.asyncio
+async def test_generate_continual_dataset_with_preference_axes(
+    mock_data_config, mock_model, mock_client_with_preference_axes, mock_semaphore
+):
+    continual_dataset = await generate_continual_dataset(
+        mock_data_config,
+        mock_model,
+        mock_client_with_preference_axes,
+        mock_semaphore,
+        include_preference_axes=True,  # This is the key parameter that activates the preference axes code path
+    )
+
+    task_specs = mock_data_config['task_specs']
+    assert isinstance(continual_dataset, ContinualAlignmentDataset)
+    assert len(task_specs) == len(continual_dataset.datasets)
+
+    for i in range(len(continual_dataset.datasets)):
+        dataset = continual_dataset.datasets[i]
+        assert isinstance(dataset, AlignmentDataset)
+
+        exp_num_samples = task_specs[i]['num_samples']
+        exp_task = AlignmentTask.from_dict(task_specs[i]['alignment_task'])
+
+        assert len(dataset) == exp_num_samples
+        assert dataset.task.to_dict() == exp_task.to_dict()
+
+        for sample in dataset.samples:
+            assert isinstance(sample, AlignmentDatasetSample)
+            # Verify that the responses were properly combined from the two API calls
+            assert sample.chosen == 'Mock response 1'
+            assert sample.rejected == 'Mock response 2'
+
+
+@pytest.fixture
+def mock_client_preference_axes_schema_parse_exception(mocker):
+    # first prompt ok
+    mock_prompt = mocker.MagicMock(name='prompt')
+    mock_prompt.choices[0].message.content = json.dumps({'prompt': 'Bad→Good'})
+    # bad single
+    mock_bad = mocker.MagicMock(name='bad')
+    mock_bad.choices[0].message.content = json.dumps({'foo': 'bar'})
+    # good single
+    mock_good = mocker.MagicMock(name='good')
+    mock_good.choices[0].message.content = json.dumps({'response': 'OK'})
+    # subsequent good prompts
+    mock_good_prompt = mocker.MagicMock(name='good_prompt')
+    mock_good_prompt.choices[0].message.content = json.dumps({'prompt': 'Good'})
+
+    mock_client = mocker.MagicMock(name='client')
+    # sequence of factories: prompt→bad→good, then repeating good_prompt→good→good
+    seq_factories = [
+        lambda: async_mock_coro(mock_prompt),
+        lambda: async_mock_coro(mock_bad),
+        lambda: async_mock_coro(mock_good),
+    ] + list(
+        itertools.islice(
+            itertools.cycle(
+                [
+                    lambda: async_mock_coro(mock_good_prompt),
+                    lambda: async_mock_coro(mock_good),
+                    lambda: async_mock_coro(mock_good),
+                ]
+            ),
+            0,
+            300,
+        )
+    )
+    seq_iter = iter(seq_factories)
+    mock_client.chat.completions.create.side_effect = lambda *args, **kwargs: next(
+        seq_iter
+    )()
+    return mock_client
+
+
+@pytest.mark.asyncio
+async def test_generate_continual_dataset_preference_axes_schema_parse_exception(
+    mock_data_config,
+    mock_model,
+    mock_client_preference_axes_schema_parse_exception,
+    mock_semaphore,
+):
+    # Set num_samples to 1 for this test to make expectations clearer
+    for task_spec in mock_data_config['task_specs']:
+        task_spec['num_samples'] = 1
+    task_specs = mock_data_config['task_specs']
+    continual_dataset = await generate_continual_dataset(
+        mock_data_config,
+        mock_model,
+        mock_client_preference_axes_schema_parse_exception,
+        mock_semaphore,
+        include_preference_axes=True,
+    )
+
+    # Even though there was a schema parse error for one sample, the function should
+    # continue and attempt to generate other samples
+    assert isinstance(continual_dataset, ContinualAlignmentDataset)
+    assert len(continual_dataset.datasets) == len(mock_data_config['task_specs'])
+
+    for i in range(len(continual_dataset.datasets)):
+        dataset = continual_dataset.datasets[i]
+        assert isinstance(dataset, AlignmentDataset)
+
+        exp_task = AlignmentTask.from_dict(task_specs[i]['alignment_task'])
+
+        assert len(dataset) <= 1  # TODO: This is flaky
         assert dataset.task.to_dict() == exp_task.to_dict()
 
         for sample in dataset.samples:

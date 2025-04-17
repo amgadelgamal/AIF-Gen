@@ -1,6 +1,8 @@
 import asyncio
+import json
 import logging
 import os
+import random
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -28,6 +30,7 @@ async def generate_continual_dataset(
     max_tokens_prompt_response: int = 1024,
     max_tokens_chosen_rejected_response: int = 2048,
     dry_run: bool = False,
+    include_preference_axes: bool = False,
 ) -> Optional[ContinualAlignmentDataset]:
     r"""Generate a ContinualAlignmentDataset dataset given the AlignmentTask, and model.
 
@@ -39,6 +42,7 @@ async def generate_continual_dataset(
         max_tokens_prompt_response (int): Configurable limit on the max_tokens for the generated prompt response.
         max_tokens_chosen_rejected_response (int): Configurable limit on the max_tokens for the generated chosen and rejected response.
         dry_run (bool): If True, ignore the config and generate a dummy sample to ensure the model is setup correctly.
+        include_preference_axes (bool): If True, include the preference axes in the prompt for response mapper.
 
     Returns:
         Optional[ContinualAlignmentDataset]: The synthetically generated dataset.
@@ -91,19 +95,34 @@ async def generate_continual_dataset(
         tasks.append(task)
         dataset_sizes.append(dataset_size)
         for _sample_idx in range(dataset_size):
-            coro = _generate_sample(
-                task,
-                client,
-                model_name,
-                prompt_mapper,
-                response_mapper,
-                async_semaphore,
-                max_tokens_prompt_response,
-                max_tokens_chosen_rejected_response,
-                dataset_idx=dataset_idx,
-                prompt_idx=_sample_idx,
-                cache=cache,
-            )
+            if include_preference_axes:
+                coro = _generate_sample_with_preference_axes(
+                    task,
+                    client,
+                    model_name,
+                    prompt_mapper,
+                    response_mapper,
+                    async_semaphore,
+                    max_tokens_prompt_response,
+                    max_tokens_chosen_rejected_response,
+                    dataset_idx=dataset_idx,
+                    prompt_idx=_sample_idx,
+                    cache=cache,
+                )
+            else:
+                coro = _generate_sample(
+                    task,
+                    client,
+                    model_name,
+                    prompt_mapper,
+                    response_mapper,
+                    async_semaphore,
+                    max_tokens_prompt_response,
+                    max_tokens_chosen_rejected_response,
+                    dataset_idx=dataset_idx,
+                    prompt_idx=_sample_idx,
+                    cache=cache,
+                )
             futures.append(asyncio.create_task(coro))
 
     try:
@@ -262,6 +281,191 @@ async def _generate_sample(
             raise ValueError(f'Received None response to prompt: {prompt}')
 
         structured_response = _ResponsePair.model_validate_json(output)
+        if cache is not None:
+            await cache.set(query=task_prompt, value=output)
+
+        sample = AlignmentDatasetSample(
+            prompt,
+            chosen=structured_response.chosen,
+            rejected=structured_response.rejected,
+        )
+        logging.debug(f'Task Prompt: {task_prompt}, Sample: {sample}')
+        return sample, dataset_idx
+    except pydantic.ValidationError as e:
+        logging.error(f'Failed to bind structured output json schema: {e}')
+        return None
+
+
+@backoff.on_exception(
+    backoff.expo,
+    (openai.RateLimitError, openai.InternalServerError, openai.APITimeoutError),
+    max_tries=get_tries(),
+)
+async def _generate_sample_with_preference_axes(
+    task: AlignmentTask,
+    client: openai.AsyncOpenAI,
+    model_name: str,
+    prompt_mapper: PromptMapper,
+    response_mapper: ResponseMapper,
+    async_semaphore: asyncio.Semaphore,
+    max_tokens_prompt_response: int,
+    max_tokens_chosen_rejected_response: int,
+    dataset_idx: int,
+    prompt_idx: int,
+    cache: 'AsyncElasticsearchCache | None' = None,
+) -> Optional[Tuple[AlignmentDatasetSample, int]]:
+    r"""Generate a AlignmentDataset dataset given the AlignmentTask, and model including the preference axes during response mapping.
+
+    Args:
+        task (AlignmentTask): The AlignmentTask to generate data for.
+        client (openai.AsyncOpenAI): Handle to openAI client.
+        model_name (str): openAI model alias.
+        prompt_mapper (PromptMapper): Creates the 'meta-prompt' for this sample's task prompt.
+        response_mapper (ResponseMapper): Created the 'meta-prompt' for this sample's response prompt.
+        async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
+        max_tokens_prompt_response (int): Configurable limit on the max_tokens for the generated prompt response.
+        max_tokens_chosen_rejected_response (int): Configurable limit on the max_tokens for the generated chosen and rejected response.
+        dataset_idx (int): The idx of the dataset that the sample is requested for to align out-of-order asyn execution.
+        max_tokens (int): Max number of tokens to generate.
+        prompt_idx (int): The idx of the sample, to distinguish between multiple requests for the same task.
+        cache (AsyncElasticsearchCache): Optionally specify a AsyncElasticsearchCache instance for caching.
+
+    Returns:
+        Optional[Tuple[AlignmentDatasetSample, int]]: A single sample of the dataset, and the dataset idx (None if pydantic.ValidationError occurred).
+
+    Raises:
+        openai.NotFoundError: If the openAI model cannot be accessed at the configured endpoint.
+    """
+    try:
+
+        class _PromptProposal(pydantic.BaseModel, extra='forbid'):
+            prompt: str
+
+        class _Response(pydantic.BaseModel, extra='forbid'):
+            response: str
+
+        class ResponsePair(pydantic.BaseModel, extra='forbid'):
+            chosen: str  # no more the semantics of chosen - just for naming
+            rejected: str  # no more the semantics of rejected - just for naming
+
+        meta_prompt = prompt_mapper.generate_prompt(task)
+        meta_prompt_nonce = f'{prompt_idx}'
+
+        async with async_semaphore:
+            if cache is not None:
+                output = await cache.get(meta_prompt, nonce=meta_prompt_nonce)
+            else:
+                output = None
+
+            if output is None:
+                response = await client.chat.completions.create(
+                    model=model_name,
+                    messages=[{'role': 'user', 'content': meta_prompt}],
+                    max_tokens=max_tokens_prompt_response,
+                    response_format={
+                        'type': 'json_schema',
+                        'json_schema': {
+                            'name': 'PromptProposal',
+                            'schema': _PromptProposal.model_json_schema(),
+                            'strict': True,
+                        },
+                    },
+                )
+                output = response.choices[0].message.content
+                assert output is not None  # This is for mypy
+
+        if output is None:
+            raise ValueError(f'Received None response to prompt: {meta_prompt}')
+
+        prompt = _PromptProposal.model_validate_json(output).prompt
+
+        # Update/set cache only after validating output JSON.
+        if cache is not None:
+            await cache.set(query=meta_prompt, value=output, nonce=meta_prompt_nonce)
+
+        # generate a list of randomly generated scores each between 1 and 5
+        scores = [
+            random.randint(1, 5) for _ in range(len(response_mapper.preference_axes))
+        ]
+        task_prompt = response_mapper.generate_no_preference_prompt(
+            task,
+            prompt,
+            scores,
+        )
+        logging.debug(
+            f'Meta Prompt: {meta_prompt} (Nonce: {meta_prompt_nonce}), '
+            f'Model Response: {prompt}'
+        )
+
+        async with async_semaphore:
+            if cache is not None:
+                output = await cache.get(task_prompt)
+            else:
+                output = None
+
+            if output is None:
+                task1 = asyncio.create_task(
+                    client.chat.completions.create(
+                        model=model_name,
+                        messages=[{'role': 'user', 'content': task_prompt}],
+                        max_tokens=max_tokens_chosen_rejected_response,
+                        response_format={
+                            'type': 'json_schema',
+                            'json_schema': {
+                                'name': 'SyntheticPreference',
+                                'schema': _Response.model_json_schema(),
+                                'strict': True,
+                            },
+                        },
+                    )
+                )
+                task2 = asyncio.create_task(
+                    client.chat.completions.create(
+                        model=model_name,
+                        messages=[{'role': 'user', 'content': task_prompt}],
+                        max_tokens=max_tokens_chosen_rejected_response,
+                        response_format={
+                            'type': 'json_schema',
+                            'json_schema': {
+                                'name': 'SyntheticPreference',
+                                'schema': _Response.model_json_schema(),
+                                'strict': True,
+                            },
+                        },
+                    )
+                )
+                resp1 = await task1
+                resp2 = await task2
+                [resp1, resp2]
+                output1 = resp1.choices[0].message.content
+                output2 = resp2.choices[0].message.content
+                # guard against None, then narrow the types
+                if output1 is None or output2 is None:
+                    raise ValueError(
+                        f'Expected two JSON strings, got: {output1!r}, {output2!r}'
+                    )
+                output1_str: str = output1
+                output2_str: str = output2
+
+        if prompt is None:
+            raise ValueError(f'Received None response to prompt: {prompt}')
+
+        structured_response1 = _Response.model_validate_json(output1_str)
+        structured_response2 = _Response.model_validate_json(output2_str)
+        if (
+            structured_response1.response is None
+            or structured_response2.response is None
+        ):
+            raise ValueError(
+                f'Received None response to prompt: {prompt}, '
+                f'Output1: {output1_str}, Output2: {output2_str}'
+            )
+        combined_response: dict[str, str] = {
+            'chosen': structured_response1.response,
+            'rejected': structured_response2.response,
+        }
+        output = json.dumps(combined_response)
+        structured_response = ResponsePair.model_validate_json(output)
         if cache is not None:
             await cache.set(query=task_prompt, value=output)
 
