@@ -464,7 +464,9 @@ async def _generate_sample_with_preference_axes(
 
         async with async_semaphore:
             if cache is not None:
-                output = await cache.get(meta_prompt, nonce=meta_prompt_nonce)
+                output: Optional[str] = await cache.get(
+                    meta_prompt, nonce=meta_prompt_nonce
+                )
             else:
                 output = None
 
@@ -496,12 +498,20 @@ async def _generate_sample_with_preference_axes(
 
         # generate a list of randomly generated scores each between 1 and 5
         scores = [
-            random.randint(1, 5) for _ in range(len(response_mapper.preference_axes))
+            random.randint(1, 5)
+            for _ in range(response_mapper.NUMBER_OF_PREFERENCE_AXES_SAMPLED)
         ]
         task_prompt = response_mapper.generate_no_preference_prompt(
             task,
             prompt,
             scores,
+            parity=0,
+        )
+        task_prompt_second = response_mapper.generate_no_preference_prompt(
+            task,
+            prompt,
+            scores,
+            parity=1,
         )
         logging.debug(
             f'Meta Prompt: {meta_prompt} (Nonce: {meta_prompt_nonce}), '
@@ -510,7 +520,14 @@ async def _generate_sample_with_preference_axes(
 
         async with async_semaphore:
             if cache is not None:
-                output = await cache.get(task_prompt)
+                output = await cache.get(task_prompt + task_prompt_second)
+                if output is None:
+                    raise ValueError(
+                        f'No cached response for task prompt: {task_prompt + task_prompt_second}'
+                    )
+                structured_output = ResponsePair.model_validate_json(output)
+                output1_str: str = structured_output.chosen
+                output2_str: str = structured_output.rejected
             else:
                 output = None
 
@@ -533,7 +550,7 @@ async def _generate_sample_with_preference_axes(
                 task2 = asyncio.create_task(
                     client.chat.completions.create(
                         model=model_name,
-                        messages=[{'role': 'user', 'content': task_prompt}],
+                        messages=[{'role': 'user', 'content': task_prompt_second}],
                         max_tokens=max_tokens_chosen_rejected_response,
                         response_format={
                             'type': 'json_schema',
@@ -555,8 +572,8 @@ async def _generate_sample_with_preference_axes(
                     raise ValueError(
                         f'Expected two JSON strings, got: {output1!r}, {output2!r}'
                     )
-                output1_str: str = output1
-                output2_str: str = output2
+                output1_str = output1
+                output2_str = output2
 
         if prompt is None:
             raise ValueError(f'Received None response to prompt: {prompt}')
@@ -578,7 +595,7 @@ async def _generate_sample_with_preference_axes(
         output = json.dumps(combined_response)
         structured_response = ResponsePair.model_validate_json(output)
         if cache is not None:
-            await cache.set(query=task_prompt, value=output)
+            await cache.set(query=(task_prompt + task_prompt_second), value=output)
 
         sample = AlignmentDatasetSample(
             prompt,

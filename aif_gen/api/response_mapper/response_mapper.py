@@ -1,3 +1,4 @@
+import random
 from textwrap import dedent
 from typing import Optional
 
@@ -13,13 +14,16 @@ class ResponseMapper(ResponseMapperBase):
         suffix_context (Optional[str]=None): Optionally add arbitrary context at the end of the generated prompt.
     """
 
+    NUMBER_OF_PREFERENCE_AXES_SAMPLED: int = 3
+    TASK_PREFERENCE_INCLUSION_PROBABILITY_POSIIVE: float = 0.5
+    TASK_PREFERENCE_INCLUSION_PROBABILITY_NEGATIVE: float = 0.5
+
     def __init__(self, suffix_context: Optional[str] = None) -> None:
         self._suffix_context = suffix_context
         self._preference_axes = [
             ('short', 'long'),
             ('formal', 'causal'),
             ('helpful', 'harmful'),
-            ('angry', 'sad'),
             ('expert', 'eli5'),
             ('direct', 'hinted'),
             ('authoritative', 'tentative'),
@@ -28,11 +32,9 @@ class ResponseMapper(ResponseMapperBase):
             ('serious', 'humorous'),
             ('respectful', 'disrespectful'),
             ('complex', 'simple'),
-            ('supportive', 'challenging'),
             ('neutral', 'biased'),
             ('detailed', 'abstract'),
-            ('urgent', 'relaxed'),
-            ('technical', 'layperson-friendly'),
+            ('technical', 'explain like I am 5'),
         ]  # TODO could be added to the config
 
     def generate_prompt(self, task: AlignmentTask, task_prompt: str) -> str:
@@ -43,7 +45,6 @@ class ResponseMapper(ResponseMapperBase):
         The 'rejected' response should still respond to the prompt in a meaningful way, but should be worse or do not abide by (according to) the following preference: '{task.preference}'.
 
         You don't need to start your prompt by saying 'User asks' or start by "chosen:" or "rejected:".
-        {self.ETHICAL_GUIDELINES}
         """
         if self.suffix_context:
             prompt += self.suffix_context
@@ -52,15 +53,25 @@ class ResponseMapper(ResponseMapperBase):
         return prompt
 
     def generate_no_preference_prompt(
-        self, task: AlignmentTask, task_prompt: str, scores: list[int]
+        self, task: AlignmentTask, task_prompt: str, scores: list[int], parity: int = 0
     ) -> str:
         """Generate prompt without explicitly stating the user preference."""
+        prob1 = random.random()
+        prob2 = random.random()
+        description_positive = ''
+        description_negative = ''
+        if prob1 < self.TASK_PREFERENCE_INCLUSION_PROBABILITY_POSIIVE and parity == 0:
+            description_positive = f'Your response must follow this preference overall: PREFERENCE: {task.preference}: \n'
+        elif (
+            prob2 < self.TASK_PREFERENCE_INCLUSION_PROBABILITY_NEGATIVE and parity == 1
+        ):
+            description_negative = f'Your response must not respect this preference overall: PREFERENCE: {task.preference}: \n'
         prompt = f"""\
         Generate a response to the following prompt: '{task_prompt}'.\n
 
-        {self.preference_axes_scale(scores)}
+        {description_positive}{description_negative}
+        and {self.preference_axes_scale(scores)}
         You don't need to start your response by saying "here is the response" nor to give any meta-explanation. Just provide the response.
-        {self.ETHICAL_GUIDELINES}
         """
         if self.suffix_context:
             prompt += self.suffix_context
@@ -78,7 +89,7 @@ class ResponseMapper(ResponseMapperBase):
         return self._suffix_context
 
     def preference_axes_scale(
-        self, scores: list[int], min_score: int = 1, max_score: int = 5
+        self, scores: list[int], min_score: int = 1, max_score: int = 2
     ) -> str:
         """Generate a guide string for the preference axes scale to paste into the response meta-prompt.
 
@@ -91,7 +102,10 @@ class ResponseMapper(ResponseMapperBase):
             str: Description of the preference axes scale.
         """
         description: str = ''
-        for i, axis in enumerate(self.preference_axes):
+        sampled_axes = random.sample(
+            self.preference_axes, self.NUMBER_OF_PREFERENCE_AXES_SAMPLED
+        )
+        for i, axis in enumerate(sampled_axes):
             description += f'On a scale of {min_score} to {max_score} where {min_score} is {axis[0]} and {max_score} is {axis[1]}, your response should be: {scores[i]} \n'
         description += 'Please ensure your responses align with the provided scores.'
         return description
