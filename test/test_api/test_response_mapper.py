@@ -37,6 +37,7 @@ def test_generate_no_preference_response(suffix_context):
     preference = 'Generate responses that are vividly descriptive and engaging.'
     task = AlignmentTask(domain=domain, objective='mock', preference=preference)
 
+    task_prompt = 'Create a story about how the rise of medicine could make exercise no longer necessary.'
     response_mapper = ResponseMapper(suffix_context=suffix_context)
     # build a scores list at least as long as NUMBER_OF_PREFERENCE_AXES_SAMPLED
     scores = [
