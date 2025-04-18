@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+from collections import defaultdict
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,6 +21,20 @@ from aif_gen.dataset import (
 )
 from aif_gen.generate.caching import AsyncElasticsearchCache
 from aif_gen.task.alignment_task import AlignmentTask
+
+
+def get_judge_model_prompt(
+    prompt: str, chosen: str, rejected: str, preference: str
+) -> str:
+    return (
+        'Please evaluate whether "response 1" is more aligned with the "prompt", compared to "response 2" according to the following preference.'
+        f'Preference: {preference}\n'
+        'Respond with "1" if "response 1" is more aligned, and "0" if "response 2" is more aligned.'
+        f'Prompt: {prompt}\n\n'
+        f'Response 1: {chosen}\n\n'
+        f'Response 2: {rejected}\n\n'
+        'Alignment (1 or 0):'
+    )
 
 
 async def generate_continual_dataset(
@@ -142,9 +157,105 @@ async def generate_continual_dataset(
                     f'Dataset {i} requested {dataset_sizes[i]} samples but LM generated {len(samples[i])}'
                 )
             continual_dataset.append(AlignmentDataset(tasks[i], samples[i]))
+
+        # need to use the judge model if the preference axes are included
+        # will be used to ensure chosen and reject are consistent with the task preference
+        if include_preference_axes:
+            cache_judge = await AsyncElasticsearchCache.maybe_from_env_var(
+                index_name=f'CACHE_DATA_GENERATION_JUDGE_{model_name}'
+            )
+            assert isinstance(continual_dataset, ContinualAlignmentDataset)
+
+            futures = []
+            datasets = continual_dataset.datasets
+            for dataset_idx, dataset in enumerate(datasets):
+                dataset_size = len(dataset)
+                logging.info(
+                    f'Judging preference on Dataset ({dataset_size} samples) {dataset.task}'
+                )
+                dataset_preference = dataset.task.preference
+                for sample in dataset.samples:
+                    prompt = sample.prompt
+                    chosen = sample.chosen
+                    rejected = sample.rejected
+                    from aif_gen.dataset.validation.llm_judge import _get_score
+
+                    alignment_coro = _get_score(
+                        get_judge_model_prompt(
+                            prompt, chosen, rejected, dataset_preference
+                        ),
+                        client,
+                        model_name,
+                        async_semaphore,
+                        64,
+                        dataset_idx=dataset_idx,
+                        metric_name='alignment_generation',
+                        cache=cache_judge,
+                    )
+
+                    futures.append(asyncio.create_task(alignment_coro))  # type: ignore
+
+            try:
+                results: List[Dict[str, List[float]]] = [
+                    defaultdict(list) for _ in range(len(datasets))
+                ]
+                for fut in tqdm.as_completed(futures, total=len(futures)):
+                    result = await fut
+                    if result is None:
+                        continue
+
+                    score, dataset_idx, metric_name = result
+
+                    if score is not None:
+                        results[dataset_idx][metric_name].append(score)
+
+                for dataset_idx, dataset in enumerate(datasets):
+                    if not len(dataset):
+                        logging.warning(
+                            f'Dataset {dataset_idx} is empty, skipping judging preference.'
+                        )
+                        continue
+
+                    dataset_scores = results[dataset_idx]
+                    dataset_samples = dataset.samples
+                    for sample_idx, sample in enumerate(dataset_samples):
+                        # guard against missing / malformed scores
+                        scores = dataset_scores.get('alignment_generation', [])
+                        if sample_idx >= len(scores):
+                            logging.warning(
+                                f'No judge score for sample {sample_idx} in dataset {dataset_idx}, skipping.'
+                            )
+                            continue
+                        sample_score = scores[sample_idx]
+                        if sample_score not in (0.0, 1.0):
+                            logging.warning(
+                                f'Bad judge score {sample_score!r} for sample {sample_idx}, skipping.'
+                            )
+                            continue
+                        if sample_score == 0.0:
+                            sample.chosen, sample.rejected = (
+                                sample.rejected,
+                                sample.chosen,
+                            )
+                            # swap if judge says response 2 is better
+
+                logging.info('Judging preference completed.')
+
+            except BaseException as e:
+                logging.exception(f'Exception occurred while judging preference: {e}')
+                for fut in futures:
+                    fut.cancel()
+                await asyncio.gather(*futures, return_exceptions=True)
+                return None
+            finally:
+                if cache_judge is not None:
+                    await cache_judge.close()
+                if cache is not None:
+                    await cache.close()
+
         return continual_dataset
     except BaseException as e:
-        logging.exception(f'Exception occured while generating dataset: {e}')
+        logging.exception(f'Exception occurred while generating dataset: {e}')
         for fut in futures:
             fut.cancel()
         await tqdm.gather(*futures)

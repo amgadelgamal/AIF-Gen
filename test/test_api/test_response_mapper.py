@@ -26,6 +26,9 @@ def test_generate_response(suffix_context):
 
     assert ResponseMapper.ETHICAL_GUIDELINES in prompt
     assert preference in prompt
+    for pref1, pref2 in response_mapper.preference_axes:
+        assert pref1 in prompt
+        assert pref2 in prompt
     if suffix_context is not None:
         assert suffix_context in prompt
 

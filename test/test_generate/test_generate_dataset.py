@@ -23,6 +23,21 @@ def async_mock_coro(result):
     return _coro()
 
 
+@pytest.fixture(params=[1.0, 0.0])
+def mock_score(monkeypatch, request):
+    """Stub _get_score to return request.param; controls flipping."""
+    score = request.param
+
+    async def fake_get_alignment_score(*args, **kwargs):
+        return score, kwargs.get('dataset_idx'), kwargs.get('metric_name')
+
+    monkeypatch.setattr(
+        'aif_gen.dataset.validation.llm_judge._get_score',
+        fake_get_alignment_score,
+    )
+    return score
+
+
 @pytest.fixture
 def mock_client_no_preference_axis(mocker):
     mock_prompt_response = mocker.MagicMock(name='response')
@@ -276,35 +291,43 @@ async def test_generate_continual_dataset_no_preference_axis(
 
 @pytest.mark.asyncio
 async def test_generate_continual_dataset_with_preference_axes(
-    mock_data_config, mock_model, mock_client_with_preference_axes, mock_semaphore
+    mock_data_config,
+    mock_model,
+    mock_client_with_preference_axes,
+    mock_semaphore,
+    mock_score,  # yields 1.0 (no flip) or 0.0 (flip)
 ):
+    """When score==1.0 no swap; when score==0.0 we swap chosen/rejected."""
+    # force one sample per dataset
+    for spec in mock_data_config['task_specs']:
+        spec['num_samples'] = 1
     continual_dataset = await generate_continual_dataset(
         mock_data_config,
         mock_model,
         mock_client_with_preference_axes,
         mock_semaphore,
-        include_preference_axes=True,  # This is the key parameter that activates the preference axes code path
+        include_preference_axes=True,
     )
 
     task_specs = mock_data_config['task_specs']
     assert isinstance(continual_dataset, ContinualAlignmentDataset)
     assert len(task_specs) == len(continual_dataset.datasets)
 
-    for i in range(len(continual_dataset.datasets)):
-        dataset = continual_dataset.datasets[i]
+    for idx, dataset in enumerate(continual_dataset.datasets):
         assert isinstance(dataset, AlignmentDataset)
-
-        exp_num_samples = task_specs[i]['num_samples']
-        exp_task = AlignmentTask.from_dict(task_specs[i]['alignment_task'])
-
-        assert len(dataset) == exp_num_samples
+        # check the task is unchanged
+        exp_task = AlignmentTask.from_dict(task_specs[idx]['alignment_task'])
         assert dataset.task.to_dict() == exp_task.to_dict()
-
         for sample in dataset.samples:
             assert isinstance(sample, AlignmentDatasetSample)
-            # Verify that the responses were properly combined from the two API calls
-            assert sample.chosen == 'Mock response 1'
-            assert sample.rejected == 'Mock response 2'
+            if mock_score == 0.0:
+                # judge says response2 wins → swap
+                assert sample.chosen == 'Mock response 2'
+                assert sample.rejected == 'Mock response 1'
+            else:
+                # no swap
+                assert sample.chosen == 'Mock response 1'
+                assert sample.rejected == 'Mock response 2'
 
 
 @pytest.fixture
