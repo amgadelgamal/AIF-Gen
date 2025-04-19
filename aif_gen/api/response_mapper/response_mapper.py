@@ -22,7 +22,7 @@ class ResponseMapper(ResponseMapperBase):
         self._suffix_context = suffix_context
         self._preference_axes = [
             ('short', 'long'),
-            ('formal', 'causal'),
+            ('formal', 'casual'),
             ('helpful', 'harmful'),
             ('expert', 'eli5'),
             ('direct', 'hinted'),
@@ -35,7 +35,7 @@ class ResponseMapper(ResponseMapperBase):
             ('neutral', 'biased'),
             ('detailed', 'abstract'),
             ('technical', 'explain like I am 5'),
-        ]  # TODO could be added to the config
+        ]  # TODO could be added to the config - or finalized
 
     def generate_prompt(self, task: AlignmentTask, task_prompt: str) -> str:
         prompt = f"""\

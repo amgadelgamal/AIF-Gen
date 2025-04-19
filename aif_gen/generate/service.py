@@ -46,6 +46,7 @@ async def generate_continual_dataset(
     max_tokens_chosen_rejected_response: int = 2048,
     dry_run: bool = False,
     include_preference_axes: bool = False,
+    temperature: float = 1.0,
 ) -> Optional[ContinualAlignmentDataset]:
     r"""Generate a ContinualAlignmentDataset dataset given the AlignmentTask, and model.
 
@@ -58,6 +59,7 @@ async def generate_continual_dataset(
         max_tokens_chosen_rejected_response (int): Configurable limit on the max_tokens for the generated chosen and rejected response.
         dry_run (bool): If True, ignore the config and generate a dummy sample to ensure the model is setup correctly.
         include_preference_axes (bool): If True, include the preference axes in the prompt for response mapper.
+        temperature (float): Temperature for the model.
 
     Returns:
         Optional[ContinualAlignmentDataset]: The synthetically generated dataset.
@@ -85,6 +87,7 @@ async def generate_continual_dataset(
             dataset_idx=-1,
             prompt_idx=-1,
             cache=cache,
+            temperature=temperature,
         )
         try:
             _ = await coro
@@ -123,6 +126,7 @@ async def generate_continual_dataset(
                     dataset_idx=dataset_idx,
                     prompt_idx=_sample_idx,
                     cache=cache,
+                    temperature=temperature,
                 )
             else:
                 coro = _generate_sample(
@@ -137,6 +141,7 @@ async def generate_continual_dataset(
                     dataset_idx=dataset_idx,
                     prompt_idx=_sample_idx,
                     cache=cache,
+                    temperature=temperature,
                 )
             futures.append(asyncio.create_task(coro))
 
@@ -292,6 +297,7 @@ async def _generate_sample(
     dataset_idx: int,
     prompt_idx: int,
     cache: 'AsyncElasticsearchCache | None' = None,
+    temperature: float = 1.0,
 ) -> Optional[Tuple[AlignmentDatasetSample, int]]:
     r"""Generate a AlignmentDataset dataset given the AlignmentTask, and model.
 
@@ -308,6 +314,7 @@ async def _generate_sample(
         max_tokens (int): Max number of tokens to generate.
         prompt_idx (int): The idx of the sample, to distinguish between multiple requests for the same task.
         cache (AsyncElasticsearchCache): Optionally specify a AsyncElasticsearchCache instance for caching.
+        temperature (float): Temperature for the model.
 
     Returns:
         Optional[Tuple[AlignmentDatasetSample, int]]: A single sample of the dataset, and the dataset idx (None if pydantic.ValidationError occurred).
@@ -346,6 +353,7 @@ async def _generate_sample(
                             'strict': True,
                         },
                     },
+                    temperature=temperature,
                 )
                 output = response.choices[0].message.content
                 assert output is not None  # This is for mypy
@@ -384,6 +392,7 @@ async def _generate_sample(
                             'strict': True,
                         },
                     },
+                    temperature=temperature,
                 )
                 output = response.choices[0].message.content
                 assert output is not None  # This is for mypy
@@ -424,6 +433,7 @@ async def _generate_sample_with_preference_axes(
     dataset_idx: int,
     prompt_idx: int,
     cache: 'AsyncElasticsearchCache | None' = None,
+    temperature: float = 1.0,
 ) -> Optional[Tuple[AlignmentDatasetSample, int]]:
     r"""Generate a AlignmentDataset dataset given the AlignmentTask, and model including the preference axes during response mapping.
 
@@ -440,6 +450,7 @@ async def _generate_sample_with_preference_axes(
         max_tokens (int): Max number of tokens to generate.
         prompt_idx (int): The idx of the sample, to distinguish between multiple requests for the same task.
         cache (AsyncElasticsearchCache): Optionally specify a AsyncElasticsearchCache instance for caching.
+        temperature (float): Temperature for the model.
 
     Returns:
         Optional[Tuple[AlignmentDatasetSample, int]]: A single sample of the dataset, and the dataset idx (None if pydantic.ValidationError occurred).
@@ -483,6 +494,7 @@ async def _generate_sample_with_preference_axes(
                             'strict': True,
                         },
                     },
+                    temperature=temperature,
                 )
                 output = response.choices[0].message.content
                 assert output is not None  # This is for mypy
@@ -545,6 +557,7 @@ async def _generate_sample_with_preference_axes(
                                 'strict': True,
                             },
                         },
+                        temperature=temperature,
                     )
                 )
                 task2 = asyncio.create_task(
@@ -560,6 +573,7 @@ async def _generate_sample_with_preference_axes(
                                 'strict': True,
                             },
                         },
+                        temperature=temperature,
                     )
                 )
                 resp1 = await task1
@@ -616,6 +630,7 @@ async def transmute_continual_dataset(
     async_semaphore: asyncio.Semaphore,
     max_tokens_chosen_rejected_response: int = 2048,
     dry_run: bool = False,
+    temperature: float = 1.0,
 ) -> Optional[ContinualAlignmentDataset]:
     r"""Overriding the 'rejected' responses with the 'chosen' response of a new model.
 
@@ -626,6 +641,7 @@ async def transmute_continual_dataset(
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
         max_tokens_chosen_rejected_response (int): Configurable limit on the max_tokens for the generated chosen and rejected response.
         dry_run (bool): If True, ignore the config and generate a dummy sample to ensure the model is setup correctly.
+        temperature (float): Temperature for the model.
 
     Returns:
         Optional[ContinualAlignmentDataset]: The synthetically generated dataset.
@@ -649,6 +665,7 @@ async def transmute_continual_dataset(
             max_tokens_chosen_rejected_response,
             dataset_idx=-1,
             cache=cache,
+            temperature=temperature,
         )
         try:
             _ = await coro
@@ -684,6 +701,7 @@ async def transmute_continual_dataset(
                 max_tokens_chosen_rejected_response,
                 dataset_idx=dataset_idx,
                 cache=cache,
+                temperature=temperature,
             )
             futures.append(asyncio.create_task(coro))
 
@@ -732,6 +750,7 @@ async def _transmute_sample(
     max_tokens_chosen_rejected_response: int,
     dataset_idx: int,
     cache: 'AsyncElasticsearchCache | None' = None,
+    temperature: float = 1.0,
 ) -> Optional[Tuple[AlignmentDatasetSample, int]]:
     r"""Transmute an AlignmentDatasetSample given the model.
 
@@ -746,6 +765,7 @@ async def _transmute_sample(
         dataset_idx (int): The idx of the dataset that the sample is requested for to align out-of-order asyn execution.
         max_tokens (int): Max number of tokens to generate.
         cache (AsyncElasticsearchCache): Optionally specify a AsyncElasticsearchCache instance for caching.
+        temperature (float): Temperature for the model.
 
     Returns:
         Optional[Tuple[AlignmentDatasetSample, int]]: A single sample of the dataset, and the dataset idx (None if pydantic.ValidationError occurred).
@@ -781,6 +801,7 @@ async def _transmute_sample(
                             'strict': True,
                         },
                     },
+                    temperature=temperature,
                 )
                 output = response.choices[0].message.content
                 assert output is not None  # This is for mypy
@@ -808,6 +829,7 @@ async def filter_continual_alignment_dataset_style_normalize(
     async_semaphore: asyncio.Semaphore,
     max_tokens: int = 4096,
     dry_run: bool = False,
+    temperature: float = 1.0,
 ) -> Optional[ContinualAlignmentDataset]:
     r"""Normalize the style between chosen/rejected responses while preserving quality differences.
 
@@ -818,6 +840,7 @@ async def filter_continual_alignment_dataset_style_normalize(
         async_semaphore (asyncio.Semaphore): Semaphore that manages number of concurrent API requests.
         max_tokens (int): Configurable limit on the max_tokens for the generated responses.
         dry_run (bool): If True, process a single sample to ensure the model is setup correctly.
+        temperature (float): Temperature for the model.
 
     Returns:
         Optional[ContinualAlignmentDataset]: The filtered and normalized dataset.
@@ -838,6 +861,7 @@ async def filter_continual_alignment_dataset_style_normalize(
             max_tokens,
             dataset_idx=-1,
             cache=cache,
+            temperature=temperature,
         )
         try:
             _ = await coro
@@ -874,6 +898,7 @@ async def filter_continual_alignment_dataset_style_normalize(
                 max_tokens,
                 dataset_idx=dataset_idx,
                 cache=cache,
+                temperature=temperature,
             )
             futures.append(asyncio.create_task(coro))
 
@@ -921,6 +946,7 @@ async def _normalize_sample_style(
     max_tokens: int,
     dataset_idx: int,
     cache: 'AsyncElasticsearchCache | None' = None,
+    temperature: float = 1.0,
 ) -> Optional[Tuple[AlignmentDatasetSample, int]]:
     r"""Normalize the style between chosen/rejected responses in a single sample.
 
@@ -933,6 +959,7 @@ async def _normalize_sample_style(
         max_tokens (int): Max number of tokens to generate.
         dataset_idx (int): The idx of the dataset that the sample is from.
         cache (AsyncElasticsearchCache): Optionally specify a cache instance for caching.
+        temperature (float): Temperature for the model.
 
     Returns:
         Optional[Tuple[AlignmentDatasetSample, int]]: The normalized sample and dataset index.
@@ -974,6 +1001,7 @@ async def _normalize_sample_style(
                             'strict': True,
                         },
                     },
+                    temperature=temperature,
                 )
                 output = response.choices[0].message.content
                 assert output is not None  # This is for mypy

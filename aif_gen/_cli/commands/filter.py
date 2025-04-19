@@ -60,6 +60,12 @@ from aif_gen.util.seed import seed_everything
     default=None,
     help='If not None, push the generated input_dataset to a HuggingFace remote repository with the associated repo-id.',
 )
+@click.option(
+    '--temperature',
+    type=click.FloatRange(min=0.0, max=2.0),
+    default=0.99,
+    help='Temperature for sampling from the model.',
+)
 def filter_dataset(
     input_data_file: pathlib.Path,
     output_data_file: pathlib.Path,
@@ -69,6 +75,7 @@ def filter_dataset(
     random_seed: int,
     dry_run: bool,
     hf_repo_id: Optional[str],
+    temperature: float,
 ) -> None:
     r"""Filter a ContinualAlignmentDataset.
 
@@ -107,6 +114,7 @@ def filter_dataset(
         async_semaphore,
         max_tokens,
         dry_run,
+        temperature=temperature,
     )
     dataset = asyncio.get_event_loop().run_until_complete(future)
     if dataset is not None:
