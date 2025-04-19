@@ -67,10 +67,10 @@ class ResponseMapper(ResponseMapperBase):
         ):
             description_negative = f'Your response must not respect this preference overall: PREFERENCE: {task.preference}: \n'
         prompt = f"""\
-        Generate a response to the following prompt: '{task_prompt}'.\n
-
+        Generate a response to the following prompt: '{task_prompt}'.\\n
         {description_positive}{description_negative}
-        and {self.preference_axes_scale(scores)}
+        and
+        {self.preference_axes_scale(scores)}
         You don't need to start your response by saying "here is the response" nor to give any meta-explanation. Just provide the response.
         """
         if self.suffix_context:
