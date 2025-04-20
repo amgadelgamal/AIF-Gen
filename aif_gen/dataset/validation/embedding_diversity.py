@@ -13,7 +13,6 @@ from aif_gen.dataset import (
     AlignmentDatasetSample,
     ContinualAlignmentDataset,
 )
-from aif_gen.generate.caching import AsyncElasticsearchCache
 from aif_gen.typing import Dataset
 
 
@@ -46,10 +45,6 @@ async def llm_embedding_diversity(
     Note:
         - If the dataset is empty, we put None in place of the dictionary.
     """
-    cache = await AsyncElasticsearchCache.maybe_from_env_var(
-        f'CACHE_VALIDATION_{model_name}'
-    )
-
     if dry_run:
         logging.info(f'Doing dry-run data validation on a single sample...')
         mock_sample = AlignmentDatasetSample('Mock', 'Mock', 'Mock')
@@ -65,9 +60,6 @@ async def llm_embedding_diversity(
         except BaseException as e:
             logging.exception(f'Exception occured on dry-run, skipping validation: {e}')
             raise e
-        finally:
-            if cache is not None:
-                await cache.close()
 
         logging.info('Dry run was a success.')
         return None
@@ -152,10 +144,6 @@ async def llm_embedding_diversity(
             fut.cancel()
         await tqdm.gather(*futures)
         return None
-
-    finally:
-        if cache is not None:
-            await cache.close()
 
 
 T = TypeVar('T')
@@ -252,8 +240,8 @@ def _compute_statistics(results: Dict[str, List[List[float]]]) -> Dict[str, floa
         similarity_pairwise = _cosine_similarity_matrix_self_transpose(embeddings)
         similarity = similarity_pairwise.mean(axis=-1)  # (dataset,)
 
-        statistics[f'{metric}_mean'] = float(np.mean(similarity))
-        statistics[f'{metric}_median'] = float(np.median(similarity))
-        statistics[f'{metric}_min'] = float(np.min(similarity))
-        statistics[f'{metric}_max'] = float(np.max(similarity))
+        statistics[f'{metric}_mean'] = float(1 - np.mean(similarity))
+        statistics[f'{metric}_median'] = float(1 - np.median(similarity))
+        statistics[f'{metric}_min'] = float(1 - np.min(similarity))
+        statistics[f'{metric}_max'] = float(1 - np.max(similarity))
     return statistics
