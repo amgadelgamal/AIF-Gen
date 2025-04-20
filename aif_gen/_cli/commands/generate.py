@@ -67,6 +67,18 @@ from aif_gen.util.seed import seed_everything
     default=None,
     help='If not None, push the generated dataset to a HuggingFace remote repository with the associated repo-id.',
 )
+@click.option(
+    '--include-preference-axes',
+    is_flag=True,
+    default=False,
+    help='Include preference axes in the generated dataset.',
+)
+@click.option(
+    '--temperature',
+    type=click.FloatRange(min=0.0, max=2.0, clamp=True),
+    default=0.99,
+    help='Temperature for sampling from the model.',
+)
 def generate(
     data_config_name: pathlib.Path,
     model: str,
@@ -77,6 +89,8 @@ def generate(
     random_seed: int,
     dry_run: bool,
     hf_repo_id: Optional[str],
+    include_preference_axes: bool,
+    temperature: float,
 ) -> None:
     r"""Generate a new ContinualAlignmentDataset.
 
@@ -115,6 +129,8 @@ def generate(
         max_tokens_prompt_response,
         max_tokens_chosen_rejected_response,
         dry_run,
+        include_preference_axes=include_preference_axes,
+        temperature=temperature,
     )
     dataset = asyncio.get_event_loop().run_until_complete(future)
     if dataset is not None:

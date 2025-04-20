@@ -9,7 +9,9 @@ import openai
 from aif_gen.dataset.continual_alignment_dataset import (
     ContinualAlignmentDataset,
 )
-from aif_gen.generate.service import transmute_continual_dataset
+from aif_gen.generate.service import (
+    filter_continual_alignment_dataset_style_normalize,
+)
 from aif_gen.util.hf import download_from_hf, upload_to_hf
 from aif_gen.util.seed import seed_everything
 
@@ -34,10 +36,10 @@ from aif_gen.util.seed import seed_everything
     default=128,
 )
 @click.option(
-    '--max_tokens_chosen_rejected_response',
+    '--max_tokens',
     type=click.IntRange(min=1, max=65536, clamp=True),
-    help='Limit the max_tokens on the chosen/rejected response pair from the vLLM model.',
-    default=2048,
+    help='Limit the max_tokens on the chosen-rejected response pair from the vLLM model.',
+    default=4096,
 )
 @click.option(
     '--random_seed',
@@ -64,22 +66,22 @@ from aif_gen.util.seed import seed_everything
     default=0.99,
     help='Temperature for sampling from the model.',
 )
-def transmute(
+def filter_dataset(
     input_data_file: pathlib.Path,
     output_data_file: pathlib.Path,
     model: str,
     max_concurrency: int,
-    max_tokens_chosen_rejected_response: int,
+    max_tokens: int,
     random_seed: int,
     dry_run: bool,
     hf_repo_id: Optional[str],
     temperature: float,
 ) -> None:
-    r"""Transmute a new ContinualAlignmentDataset.
+    r"""Filter a ContinualAlignmentDataset.
 
     INPUT_DATA_FILE: Path to the input dataset.
     OUTPUT_DATA_FILE: Path to the output dataset.
-    MODEL: vLLM-compatible model to use for data generation.
+    MODEL: vLLM-compatible model to use for data filtering.
     """
     if hf_repo_id is not None:
         input_data_file = download_from_hf(hf_repo_id, input_data_file)
@@ -105,14 +107,14 @@ def transmute(
         return
 
     async_semaphore = asyncio.Semaphore(max_concurrency)
-    future = transmute_continual_dataset(
+    future = filter_continual_alignment_dataset_style_normalize(
         input_dataset,
         model,
         client,
         async_semaphore,
-        max_tokens_chosen_rejected_response,
+        max_tokens,
         dry_run,
-        temperature,
+        temperature=temperature,
     )
     dataset = asyncio.get_event_loop().run_until_complete(future)
     if dataset is not None:
