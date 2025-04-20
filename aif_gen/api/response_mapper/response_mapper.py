@@ -34,7 +34,6 @@ class ResponseMapper(ResponseMapperBase):
             ('complex', 'simple'),
             ('neutral', 'biased'),
             ('detailed', 'abstract'),
-            ('technical', 'explain like I am 5'),
         ]  # TODO could be added to the config - or finalized
 
     def generate_prompt(self, task: AlignmentTask, task_prompt: str) -> str:

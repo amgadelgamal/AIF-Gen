@@ -1,6 +1,6 @@
 ---
 task_specs:
-  - num_samples: 500
+  - num_samples: 10000
     alignment_task:
       objective: "Ask a non-trivial math (you choose randomly what topic in math) or social sciences or physics or chemistry question. The prompt is merely a literal question and nothing else please."
       preference: 'Explain the answer to the question at an expert level. Draw from technical literature when necessary, and add complex examples to further support the student learning.'
