@@ -239,9 +239,10 @@ def _compute_statistics(results: Dict[str, List[List[float]]]) -> Dict[str, floa
         # (dataset, dataset)
         similarity_pairwise = _cosine_similarity_matrix_self_transpose(embeddings)
         similarity = similarity_pairwise.mean(axis=-1)  # (dataset,)
+        diversity: float = 1 - similarity
 
-        statistics[f'{metric}_mean'] = float(1 - np.mean(similarity))
-        statistics[f'{metric}_median'] = float(1 - np.median(similarity))
-        statistics[f'{metric}_min'] = float(1 - np.min(similarity))
-        statistics[f'{metric}_max'] = float(1 - np.max(similarity))
+        statistics[f'{metric}_mean'] = float(np.mean(diversity))
+        statistics[f'{metric}_median'] = float(np.median(diversity))
+        statistics[f'{metric}_min'] = float(np.min(diversity))
+        statistics[f'{metric}_max'] = float(np.max(diversity))
     return statistics
