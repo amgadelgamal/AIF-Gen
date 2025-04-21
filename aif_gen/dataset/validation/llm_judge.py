@@ -3,11 +3,15 @@ import logging
 import os
 from collections import defaultdict
 from functools import lru_cache
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    import opik
 
 import backoff
 import numpy as np
 import openai
+import opik
 import pydantic
 from tqdm.asyncio import tqdm
 
@@ -52,6 +56,15 @@ async def llm_judge_validation(
     cache = await AsyncElasticsearchCache.maybe_from_env_var(
         f'CACHE_VALIDATION_{model_name}'
     )
+    opik_base_url = os.environ.get('OPIK_BASE_URL')
+    if opik_base_url is not None:
+        import opik
+
+        opik_client = opik.Opik(
+            host=opik_base_url,
+            project_name=os.environ.get('OPIK_PROJECT_NAME'),
+            api_key=os.environ.get('OPIK_API_KEY'),
+        )
 
     if dry_run:
         logging.info(f'Doing dry-run data validation on a single sample...')
@@ -67,6 +80,7 @@ async def llm_judge_validation(
             max_tokens_judge_response,
             dataset_idx=-1,
             metric_name='',
+            data_source=mock_sample,
             cache=cache,
         )
         try:
@@ -102,7 +116,9 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='alignment',
+                data_source=sample,
                 cache=cache,
+                opik_client=opik_client,
             )
             coherence_chosen_coro = _get_score(
                 _get_coherence_prompt(sample.chosen),
@@ -112,7 +128,9 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_chosen',
+                data_source=sample,
                 cache=cache,
+                opik_client=opik_client,
             )
             coherence_rejected_coro = _get_score(
                 _get_coherence_prompt(sample.rejected),
@@ -122,7 +140,9 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_rejected',
+                data_source=sample,
                 cache=cache,
+                opik_client=opik_client,
             )
             futures.append(asyncio.create_task(alignment_coro))
             futures.append(asyncio.create_task(coherence_chosen_coro))
@@ -189,9 +209,18 @@ async def _get_score(
     max_tokens_judge_response: int,
     dataset_idx: int,
     metric_name: str,
+    data_source: AlignmentDatasetSample,
     cache: Optional[AsyncElasticsearchCache] = None,
+    opik_client: 'opik.Opik | None' = None,
 ) -> Tuple[Optional[int], int, str]:
     try:
+        trace = None
+        if opik_client is not None:
+            trace = opik_client.trace(
+                name=metric_name,
+                input={'prompt': data_source.prompt},
+                output={'chosen': data_source.chosen, 'rejected': data_source.rejected},
+            )
 
         class _ValidationResponse(pydantic.BaseModel, extra='forbid'):
             score: int
@@ -229,6 +258,14 @@ async def _get_score(
 
         score = max(0, min(10, score))
         logging.debug(f'Prompt: {prompt}, Response: {model_response}, Score: {score}')
+
+        if trace is not None:
+            trace.span(
+                name=model_name,
+                input={'role': 'user', 'content': prompt},
+                output={'role': 'assistant', 'content': model_response},
+                metadata={'score': score},
+            )
         return score, dataset_idx, metric_name
 
     except pydantic.ValidationError as e:

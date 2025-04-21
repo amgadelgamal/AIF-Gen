@@ -195,6 +195,7 @@ async def generate_continual_dataset(
                         64,
                         dataset_idx=dataset_idx,
                         metric_name='alignment_generation',
+                        data_source=sample,
                         cache=cache_judge,
                     )
 
