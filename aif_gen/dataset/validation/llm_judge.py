@@ -6,12 +6,11 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
-    import opik
+    pass
 
 import backoff
 import numpy as np
 import openai
-import opik
 import pydantic
 from tqdm.asyncio import tqdm
 
@@ -80,7 +79,7 @@ async def llm_judge_validation(
             max_tokens_judge_response,
             dataset_idx=-1,
             metric_name='',
-            data_source=mock_sample,
+            source_sample=mock_sample,
             cache=cache,
         )
         try:
@@ -116,9 +115,8 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='alignment',
-                data_source=sample,
+                source_sample=sample,
                 cache=cache,
-                opik_client=opik_client,
             )
             coherence_chosen_coro = _get_score(
                 _get_coherence_prompt(sample.chosen),
@@ -128,9 +126,8 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_chosen',
-                data_source=sample,
+                source_sample=sample,
                 cache=cache,
-                opik_client=opik_client,
             )
             coherence_rejected_coro = _get_score(
                 _get_coherence_prompt(sample.rejected),
@@ -140,9 +137,8 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_rejected',
-                data_source=sample,
+                source_sample=sample,
                 cache=cache,
-                opik_client=opik_client,
             )
             futures.append(asyncio.create_task(alignment_coro))
             futures.append(asyncio.create_task(coherence_chosen_coro))
@@ -155,9 +151,26 @@ async def llm_judge_validation(
             if result is None:
                 continue
 
-            score, dataset_idx, metric_name = result
+            score, dataset_idx, metric_name, source_sample = result
             if score is not None:
                 results[dataset_idx][metric_name].append(score)
+
+        # Log to Opik if provided.
+        for _dataset_idx, (dataset, stats) in enumerate(zip(datasets, results)):
+            for _sample_idx, sample in enumerate(dataset.samples):
+                if opik_client is not None:
+                    opik_client.trace(
+                        name=f'{_dataset_idx}/{_sample_idx}',
+                        input={'prompt': sample.prompt},
+                        output={
+                            'chosen': sample.chosen,
+                            'rejected': sample.rejected,
+                            **{
+                                _metric_name: metrics[_sample_idx]
+                                for _metric_name, metrics in stats.items()
+                            },
+                        },
+                    )
 
         aggregated_results: List[Optional[Dict[str, float]]] = []
         for i, dataset in enumerate(datasets):
@@ -209,18 +222,10 @@ async def _get_score(
     max_tokens_judge_response: int,
     dataset_idx: int,
     metric_name: str,
-    data_source: AlignmentDatasetSample,
+    source_sample: AlignmentDatasetSample,
     cache: Optional[AsyncElasticsearchCache] = None,
-    opik_client: 'opik.Opik | None' = None,
-) -> Tuple[Optional[int], int, str]:
+) -> Tuple[Optional[int], int, str, AlignmentDatasetSample]:
     try:
-        trace = None
-        if opik_client is not None:
-            trace = opik_client.trace(
-                name=metric_name,
-                input={'prompt': data_source.prompt},
-                output={'chosen': data_source.chosen, 'rejected': data_source.rejected},
-            )
 
         class _ValidationResponse(pydantic.BaseModel, extra='forbid'):
             score: int
@@ -258,19 +263,11 @@ async def _get_score(
 
         score = max(0, min(10, score))
         logging.debug(f'Prompt: {prompt}, Response: {model_response}, Score: {score}')
-
-        if trace is not None:
-            trace.span(
-                name=model_name,
-                input={'role': 'user', 'content': prompt},
-                output={'role': 'assistant', 'content': model_response},
-                metadata={'score': score},
-            )
-        return score, dataset_idx, metric_name
+        return score, dataset_idx, metric_name, source_sample
 
     except pydantic.ValidationError as e:
         logging.error(f'Failed to bind structured output json schema: {e}')
-        return None, dataset_idx, metric_name
+        return None, dataset_idx, metric_name, source_sample
 
 
 def _get_alignment_prompt(prompt: str, chosen: str, rejected: str) -> str:
