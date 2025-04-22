@@ -56,6 +56,7 @@ async def llm_judge_validation(
         f'CACHE_VALIDATION_{model_name}'
     )
     opik_base_url = os.environ.get('OPIK_BASE_URL')
+    opik_client = None
     if opik_base_url is not None:
         import opik
 
