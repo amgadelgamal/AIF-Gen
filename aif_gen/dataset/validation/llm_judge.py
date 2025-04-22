@@ -80,7 +80,6 @@ async def llm_judge_validation(
             max_tokens_judge_response,
             dataset_idx=-1,
             metric_name='',
-            source_sample=mock_sample,
             cache=cache,
         )
         try:
@@ -116,7 +115,6 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='alignment',
-                source_sample=sample,
                 cache=cache,
             )
             coherence_chosen_coro = _get_score(
@@ -127,7 +125,6 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_chosen',
-                source_sample=sample,
                 cache=cache,
             )
             coherence_rejected_coro = _get_score(
@@ -138,7 +135,6 @@ async def llm_judge_validation(
                 max_tokens_judge_response,
                 dataset_idx=dataset_idx,
                 metric_name='coherence_rejected',
-                source_sample=sample,
                 cache=cache,
             )
             futures.append(asyncio.create_task(alignment_coro))
@@ -152,7 +148,7 @@ async def llm_judge_validation(
             if result is None:
                 continue
 
-            score, dataset_idx, metric_name, source_sample = result
+            score, dataset_idx, metric_name = result
             if score is not None:
                 results[dataset_idx][metric_name].append(score)
 
@@ -223,9 +219,8 @@ async def _get_score(
     max_tokens_judge_response: int,
     dataset_idx: int,
     metric_name: str,
-    source_sample: AlignmentDatasetSample,
     cache: Optional[AsyncElasticsearchCache] = None,
-) -> Tuple[Optional[int], int, str, AlignmentDatasetSample]:
+) -> Tuple[Optional[int], int, str]:
     try:
 
         class _ValidationResponse(pydantic.BaseModel, extra='forbid'):
@@ -264,11 +259,11 @@ async def _get_score(
 
         score = max(0, min(10, score))
         logging.debug(f'Prompt: {prompt}, Response: {model_response}, Score: {score}')
-        return score, dataset_idx, metric_name, source_sample
+        return score, dataset_idx, metric_name
 
     except pydantic.ValidationError as e:
         logging.error(f'Failed to bind structured output json schema: {e}')
-        return None, dataset_idx, metric_name, source_sample
+        return None, dataset_idx, metric_name
 
 
 def _get_alignment_prompt(prompt: str, chosen: str, rejected: str) -> str:
