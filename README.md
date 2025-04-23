@@ -98,6 +98,9 @@ export OPIK_PROJECT_NAME="..."
 
 # optional for self-hosted installation
 export OPIK_API_KEY="..."
+
+# optionally, specify dataset name sent to Opik
+export DATASET_NAME="education_qna_direct"
 ```
 
 ### Transform Data
