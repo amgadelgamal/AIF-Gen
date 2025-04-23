@@ -55,6 +55,7 @@ async def llm_judge_validation(
     cache = await AsyncElasticsearchCache.maybe_from_env_var(
         f'CACHE_VALIDATION_{model_name}'
     )
+    dataset_name = os.environ.get('DATASET_NAME', 'unspecified')
     opik_base_url = os.environ.get('OPIK_BASE_URL')
     opik_client = None
     if opik_base_url is not None:
@@ -157,7 +158,7 @@ async def llm_judge_validation(
             for _sample_idx, sample in enumerate(dataset.samples):
                 if opik_client is not None:
                     opik_client.trace(
-                        name=f'{_dataset_idx}/{_sample_idx}',
+                        name=f'{_sample_idx:05d} of dataset {dataset_name}/{_dataset_idx:02d}',
                         input={'prompt': sample.prompt},
                         output={
                             'chosen': sample.chosen,
