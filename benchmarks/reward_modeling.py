@@ -129,6 +129,7 @@ def train_model(
         trust_remote_code=model_args.trust_remote_code,
         **model_kwargs,
     )
+
     # Align padding tokens between tokenizer and model
     model.config.pad_token_id = tokenizer.pad_token_id
 
@@ -227,7 +228,7 @@ if __name__ == '__main__':
                 print(f'Job {i + 1} failed with error: {e}')
     else:
         print(
-            f'Running on {script_args.dataset_index} task out of {len(continual_dataset)} tasks'
+            f'Running on {script_args.dataset_index+1} task out of {len(continual_dataset)} tasks'
         )
         dataset = continual_dataset[script_args.dataset_index]
         train_model(
