@@ -92,8 +92,10 @@ def init_continual_dataset(
                 # json_name = dataset.split('/', )[-1]
                 # print(f'Downloading {json_name} from Hugging Face Hub...')
                 local_path = hf_hub_download(
-                        repo_id=f"LifelongAlignment/{dataset}", filename='dataset.json', repo_type='dataset'
-                    )
+                    repo_id=f'LifelongAlignment/{dataset}',
+                    filename='dataset.json',
+                    repo_type='dataset',
+                )
                 # local_path = hf_hub_download(
                 #         repo_id=f"LifelongAlignment/{dataset}", filename=f'{dataset}.json', repo_type='dataset'
                 #     )
