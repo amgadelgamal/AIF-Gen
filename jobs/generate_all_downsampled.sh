@@ -34,13 +34,6 @@ done
 # helper to run one job
 () { echo "➡️  $*"; eval "$*"; }
 
-# 2) run all generation jobs sequentially
- uv run aif generate \
-    --include-preference-axes \
-    --max_concurrency 256 \
-    --output_file "data/70B_generation/education_qna_direct/data.json" \
-    config/static_copy/education_qna_direct.yaml \
-    Meta-Llama-3.1-70B-Instruct
 
 # 2) run all generation jobs sequentially
  uv run aif generate \
