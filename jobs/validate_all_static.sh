@@ -32,6 +32,7 @@ tasks=(
   tech_healthcare_qna_expert
   tech_physics_summary_eli5
   tech_physics_summary_expert
+  tech_physics_summary_highschool
 )
 
 for t in "${tasks[@]}"; do
