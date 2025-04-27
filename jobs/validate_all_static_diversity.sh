@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=validate_static_all
+#SBATCH --job-name=validate_static_all_diversity
 #SBATCH --partition=unkillable-cpu
 #SBATCH --cpus-per-task=2
 #SBATCH --time=24:00:00
@@ -9,9 +9,6 @@
 #SBATCH --mail-user=
 
 source .env
-
-MODEL="gpt-4o-mini"
-MAX_CONC=256
 
 # list all sub‐tasks
 tasks=(
@@ -37,12 +34,15 @@ tasks=(
 for t in "${tasks[@]}"; do
   echo "Validating $t..."
   uv run aif validate \
-    --max_concurrency "$MAX_CONC" \
     "data/4omini_generation/$t/data.json" \
     "data/4omini_validation_no_diversity/$t/validate.json" \
     --no-validate-diversity \
-    --no-validate-embedding-diversity \
-    --model "$MODEL" \
+    --no-validate-count \
+    --no-validate-entropy \
+    --no-validate-llm-judge \
+    --embedding-model "bge-m3" \
+    --embedding-batch-size 256 \
+    --max-concurrency 16 \
     || { echo "Validation failed on $t"; exit 1; }
 done
 
