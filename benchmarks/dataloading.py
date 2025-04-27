@@ -93,7 +93,7 @@ def init_continual_dataset(
                 # print(f'Downloading {json_name} from Hugging Face Hub...')
                 local_path = hf_hub_download(
                     repo_id=f'LifelongAlignment/{dataset}',
-                    filename='dataset.json',
+                    filename='data.json',
                     repo_type='dataset',
                 )
                 # local_path = hf_hub_download(
