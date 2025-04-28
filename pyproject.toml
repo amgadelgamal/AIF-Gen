@@ -26,6 +26,7 @@ dependencies = [
     "pydantic>=2.10.4",
     "pytest-asyncio>=0.25.3",
     "pytest-mock>=3.14.0",
+    "setuptools>=75.8.2",
     "torch==2.3.0",
     "types-pyyaml>=6.0.12.20241230",
 ]
@@ -40,6 +41,8 @@ dev = [
     "ruff>=0.7.3",
     "sphinx>=7.4.7",
     "sphinx-rtd-theme>=3.0.2",
+    "ipykernel>=6.29.5",
+    "matplotlib>=3.10.1",
 ]
 benchmarks-dpo = [
     "datasets>=3.2.0",
