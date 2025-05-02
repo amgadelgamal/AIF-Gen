@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Union
 
+import deepspeed
 import torch
 import torch.nn as nn
 from transformers import PreTrainedModel
@@ -119,7 +120,13 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
         # Calculate the EWC penalty for each parameter
         model = self.accelerator.unwrap_model(self.model)
+
         for name, param in model.named_parameters():
+            if name not in ContinualDPOEWCTrainer.class_fisher_information:
+                continue
+            if not param.requires_grad:
+                continue
+
             if (
                 name in ContinualDPOEWCTrainer.class_fisher_information
                 and param.requires_grad
@@ -128,13 +135,15 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                 fisher = ContinualDPOEWCTrainer.class_fisher_information[name].to(
                     param.device
                 )
-                old_param = ContinualDPOEWCTrainer.class_old_params[name].to(
-                    param.device
-                )
 
-                # Calculate squared distance weighted by Fisher information
-                delta = param - old_param
-                ewc_loss += (fisher * delta.pow(2)).sum()
+            with deepspeed.zero.GatheredParameters([param], modifier_rank=0):
+                if self.accelerator.is_main_process:
+                    old_param = ContinualDPOEWCTrainer.class_old_params[name].to(
+                        param.device
+                    )
+                    # Calculate squared distance weighted by Fisher information
+                    delta = param - old_param
+                    ewc_loss = ewc_loss + (fisher * delta.pow(2)).sum()
 
         # Apply the EWC lambda coefficient and return
         return 0.5 * self.ewc_lambda * ewc_loss
@@ -237,9 +246,12 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         """
         model = self.accelerator.unwrap_model(self.model)
         old_params = {}
+
         for name, param in model.named_parameters():
-            if param.requires_grad:
-                old_params[name] = param.data.clone().detach()
+            with deepspeed.zero.GatheredParameters([param], modifier_rank=0):
+                if self.accelerator.is_main_process:
+                    if param.requires_grad:
+                        old_params[name] = param.data.clone().detach()
         return old_params
 
     def train(self) -> Any:
