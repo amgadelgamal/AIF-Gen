@@ -32,7 +32,7 @@ uv run benchmarks/ppo/ppo_continual.py \
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16 \
-    --push_to_hub True
+    --push_to_hub False
 ```
 
 ### Using accelerate launch (with DeepSpeed / multi-GPU)
@@ -62,7 +62,7 @@ accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero
     --use_peft \
     --lora_r 32 \
     --lora_alpha 16 \
-    --push_to_hub True
+    --push_to_hub False
 ```
 
 *Make sure you do not add the dataset index to the reward model name as the script itself iterates over the dataset indices.*

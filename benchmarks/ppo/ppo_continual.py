@@ -144,8 +144,8 @@ def main(
             peft_config=peft_config,
         )
 
-        if i == 0:
-            trainer.save_model(os.path.join(training_args.output_dir, 'checkpoint-0'))
+        # if i == 0:
+        #     trainer.save_model(os.path.join(training_args.output_dir, 'checkpoint-0'))
 
         # Set current task in trainer for task-based logging
         trainer.set_task(f'task_{i}')
