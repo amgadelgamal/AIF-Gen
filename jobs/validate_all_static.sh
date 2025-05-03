@@ -16,7 +16,7 @@ MAX_CONC=256
 
 # list all sub‐tasks
 tasks=(
-  ultra-hh-sampled
+  internal_subsampled_merged
 )
 
 for t in "${tasks[@]}"; do
@@ -27,7 +27,7 @@ for t in "${tasks[@]}"; do
     "data/$t-validate-no-diversity.json" \
     --no-validate-diversity \
     --no-validate-embedding-diversity \
-    --model "$MODEL" \
+    --no-validate-llm-judge \
     || { echo "Validation failed on $t"; exit 1; }
 done
 

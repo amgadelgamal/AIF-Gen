@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=validate_static_all_diversity_external
-#SBATCH --partition=main
-#SBATCH --gres=gpu:a100l:1
-#SBATCH --mem=48G
-#SBATCH --cpus-per-task=8
+#SBATCH --job-name=validate_static_diversity
+#SBATCH --tasks=1
+#SBATCH --cpus-per-task=6
+#SBATCH --gres=gpu:a100l:4
+#SBATCH --mem=128G
 #SBATCH --time=24:00:00
 #SBATCH --output=slurm-%j.out
 #SBATCH --error=slurm-%j.err
@@ -11,11 +11,20 @@
 #SBATCH --mail-user=
 
 cd
-module load python/3.10
+module load python/3.9
 module load cuda/12.6.0
 source .venv/bin/activate
 echo "Starting vLLM server..."
-uv run vllm serve intfloat/e5-mistral-7b-instruct --quantization int8 --api-key openai --task embed --trust-remote-code --max-model-len 4096 &
+uv run vllm serve Salesforce/SFR-Embedding-Mistral \
+            --load-format bitsandbytes \
+            --quantization bitsandbytes \
+            --dtype half \
+            --api-key openai \
+            --kv-cache-dtype fp8 \
+            --task embed \
+            --trust-remote-code \
+            --tensor_parallel_size 4 \
+            --max-model-len 4096 &
 
 # Save server process ID
 SERVER_PID=$!
@@ -52,6 +61,8 @@ tasks=(
   merged_qna_summary
   hh
   ultra
+  cppo-rl-sampled
+  cppo-reward-sampled
 )
 
 for t in "${tasks[@]}"; do
@@ -63,10 +74,10 @@ for t in "${tasks[@]}"; do
     --no-validate-count \
     --no-validate-entropy \
     --no-validate-llm-judge \
-    --embedding-model "intfloat/e5-mistral-7b-instruct" \
-    --embedding-batch-size 64 \
-    --max_concurrency 8 \
-    # || { echo "Validation failed on $t"; exit 1; }
+    --embedding-model "Salesforce/SFR-Embedding-Mistral" \
+    --embedding-batch-size 128 \
+    --max_concurrency 16 \
+    || { echo "Validation failed on $t"; exit 1; }
 done
 
 echo "All validations completed successfully."
