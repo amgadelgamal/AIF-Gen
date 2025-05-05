@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import random
 from collections import defaultdict
 from functools import lru_cache
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
@@ -56,6 +57,7 @@ async def llm_judge_validation(
         f'CACHE_VALIDATION_{model_name}'
     )
     dataset_name = os.environ.get('DATASET_NAME', 'unspecified')
+    source_model_name = os.environ.get('MODEL_NAME', 'unspecified')
     opik_base_url = os.environ.get('OPIK_BASE_URL')
     opik_client = None
     if opik_base_url is not None:
@@ -155,14 +157,23 @@ async def llm_judge_validation(
 
         # Log to Opik if provided.
         for _dataset_idx, (dataset, stats) in enumerate(zip(datasets, results)):
-            for _sample_idx, sample in enumerate(dataset.samples):
+            for _sample_idx, sample in list(enumerate(dataset.samples)):
+                responses = [sample.chosen, sample.rejected]
+                random.shuffle(responses)
+
                 if opik_client is not None:
                     opik_client.trace(
                         name=f'{_sample_idx:05d} of dataset {dataset_name}/{_dataset_idx:02d}',
                         input={'prompt': sample.prompt},
                         output={
+                            'task': str(dataset.task),
+                            **{f'response {k}': v for k, v in enumerate(responses)},
+                        },
+                        metadata={
                             'chosen': sample.chosen,
                             'rejected': sample.rejected,
+                            'responses': responses,
+                            'source_model_name': source_model_name,
                             **{
                                 _metric_name: metrics[_sample_idx]
                                 for _metric_name, metrics in stats.items()
