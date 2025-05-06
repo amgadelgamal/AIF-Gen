@@ -23,7 +23,7 @@ dependencies = [
     "numpy>=2.0.2",
     "openai>=1.61.1",
     "pydantic>=2.10.4",
-    "torch==2.3.0",
+    "torch>=2.6.0",
 ]
 
 [dependency-groups]
@@ -39,7 +39,6 @@ dev = [
 ]
 benchmarks = [
     "setuptools>=75.8.0",
-    "huggingface-hub==0.29.2",
     "peft>=0.14.0",
     "submitit>=1.5.2",
     "transformers>=4.49.0",
