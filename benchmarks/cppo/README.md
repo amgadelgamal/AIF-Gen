@@ -42,7 +42,7 @@ uv run benchmarks/cppo/cppo.py \
 
 ```sh
 accelerate launch --config_file benchmarks/cppo/accelerate_configs/deepspeed_zero2.yaml \
-    benchmarks/cppo/cppo_continual.py \
+    benchmarks/cppo/cppo.py \
     --dataset_name benchmarks/continual_data_debug.json \
     --sft_model_path Qwen/Qwen2-0.5B-Instruct \
     --value_model_path Shahradmz/Qwen2-0.5B-Instruct_continual_data_debug_REWARD_0 \
