@@ -3,11 +3,11 @@ requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
 [project.scripts]
-aif = "aif_gen._cli.main:cli"
+aif = "aif_gen.cli.main:cli"
 
 [project]
 name = "aif-gen"
-version = "0.1.0"
+version = "0.0.1-alpha"
 description = "A tool for generating synthetic, continual RLHF preference datasets"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,16 +20,14 @@ dependencies = [
     "datasets>=3.3.1",
     "elasticsearch[async]>=8.17.2",
     "huggingface-hub>=0.29.1",
-    "nltk>=3.9.1",
     "numpy>=2.0.2",
     "openai>=1.61.1",
     "pydantic>=2.10.4",
     "pytest-asyncio>=0.25.3",
     "pytest-mock>=3.14.0",
-    "torch==2.3.0",
-#    "torch @ https://download.pytorch.org/whl/rocm6.0/torch-2.3.0%2Brocm6.0-cp312-cp312-linux_x86_64.whl#sha256=992c1ffb65c773a5848e4bbe22235c0386a7915690615ad68a45609228c13269",
 #    "torch @ https://download.pytorch.org/whl/rocm6.0/torch-2.3.0%2Brocm6.0-cp310-cp310-linux_x86_64.whl#sha256=266af54cf4704aae08719305c205f0d12f40874006d3b8058f38e2f8ed08f56d",
     "types-pyyaml>=6.0.12.20241230",
+    "torch>=2.6.0",
 ]
 
 [dependency-groups]
@@ -37,34 +35,27 @@ dev = [
     "isort>=5.13.2",
     "mypy>=1.13.0",
     "pre-commit>=4.0.1",
+    "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
     "pytest>=8.3.3",
     "ruff>=0.7.3",
-    "sphinx>=7.4.7",
-    "sphinx-rtd-theme>=3.0.2",
-]
-benchmarks-dpo = [
-    "datasets>=3.2.0",
-    "deepspeed>=0.16.3",
-    "peft>=0.14.0",
-    "submitit>=1.5.2",
-    "transformers>=4.48.3",
-    "trl>=0.14.0",
-    "wandb>=0.19.6",
-]
-benchmarks-ppo = [
-    "accelerate==0.34.2",
-    "datasets>=3.2.0",
-    "deepspeed==0.16.3",
-    "peft>=0.14.0",
-    "submitit>=1.5.2",
-    "transformers>=4.48.3",
-    "trl>=0.14.0",
-    "wandb>=0.19.6",
 ]
 benchmarks = [
     "setuptools>=75.8.0",
-    "huggingface-hub==0.29.2",
+    "peft>=0.14.0",
+    "submitit>=1.5.2",
+    "transformers>=4.49.0",
+    "trl>=0.15.2",
+    "wandb>=0.19.8",
+    "accelerate==0.34.2",
+    "datasets>=3.2.0",
+    "deepspeed==0.16.3",
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.12",
+    "mkdocstrings[python]>=0.29.1",
 ]
 
 [tool.mypy]
