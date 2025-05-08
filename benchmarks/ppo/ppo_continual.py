@@ -100,6 +100,7 @@ def main(
     if '.' in clean_dataset_name:
         clean_dataset_name = clean_dataset_name.split('.')[0]
 
+    print(f'Training PPO on {len(continual_dataset)} tasks')
     # check if the reward models are present either in the path or in the hub
     if training_args.reward_model_path is not None:
         for i in range(len(continual_dataset)):
