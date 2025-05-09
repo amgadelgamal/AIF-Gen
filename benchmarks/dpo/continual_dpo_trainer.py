@@ -406,7 +406,7 @@ class ContinualDPOTrainer(DPOTrainer):
 
         df = pd.DataFrame(table)
 
-        if self.accelerator.is_main_process:
+        if self.accelerator.is_main_process or self.accelerator is None:
             print_rich_table(df.iloc[0 : 0 + 5])
             if wb.run is not None:
                 wb.log({'completions': wb.Table(dataframe=df)})
