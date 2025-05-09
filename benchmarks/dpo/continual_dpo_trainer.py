@@ -13,6 +13,8 @@ import wandb as wb
 from accelerate import Accelerator, PartialState
 from accelerate.utils import gather_object
 from datasets import Dataset
+from rich.console import Console
+from rich.table import Table
 from torch.utils.data import DataLoader
 from transformers import (
     BaseImageProcessor,
@@ -328,23 +330,31 @@ class ContinualDPOTrainer(DPOTrainer):
                 eval_policy_metrics = self.evaluate_policy()
                 logs.update(eval_policy_metrics)
 
-            # TODO: Only generation sample completions every x steps
-            do_generate_completions = True
-            if do_generate_completions:
-                self._generate_completions()
-                torch.cuda.empty_cache()
+        # TODO: Only generation sample completions every x steps
+        do_generate_completions = True
+        if do_generate_completions:
+            self._generate_completions()
+            torch.cuda.empty_cache()
 
         return super().log(logs, start_time)
 
     def _generate_completions(self) -> None:
         # Config from: https://github.com/huggingface/trl/blob/56e57662053e2d0cc6302dad404820b0c0ec6a91/trl/trainer/ppo_trainer.py#L688
+        # generation_config = GenerationConfig(
+        #     max_new_tokens=53,
+        #     temperature=(0.01 + 1e-7),
+        #     top_k=0.0,
+        #     top_p=1.0,
+        #     do_sample=True,
+        # )
         generation_config = GenerationConfig(
-            max_new_tokens=53,
-            temperature=(0.01 + 1e-7),
+            max_new_tokens=self.args.response_length,
+            temperature=(self.args.temperature + 1e-7),
             top_k=0.0,
             top_p=1.0,
             do_sample=True,
         )
+
         table = defaultdict(list)
         with torch.no_grad():
             with unwrap_model_for_generation(
@@ -352,44 +362,61 @@ class ContinualDPOTrainer(DPOTrainer):
                 self.accelerator,
                 gather_deepspeed3_params=None,
             ) as unwrapped_model:
-                for batch in self.eval_dataloader:
-                    query = batch['input_ids']
-                    context_length = query.shape[1]
-                    query_response, _ = batch_generation(
-                        unwrapped_model,
-                        query,
-                        query.shape[0],
-                        self.processing_class.pad_token_id,
-                        generation_config,
-                    )
-                    response = query_response[:, context_length:]
-                    postprocessed_response = response
-                    postprocessed_query_response = torch.cat(
-                        (query, postprocessed_response), 1
-                    )
-                    _, score, _ = get_reward(
-                        self.reward_model,
-                        postprocessed_query_response,
-                        self.processing_class.pad_token_id,
-                        context_length,
-                    )
-
-                    queries = gather_object(
-                        self.processing_class.batch_decode(
-                            query, skip_special_tokens=True
+                if self.eval_policy_dataloader is not None:
+                    for batch in self.eval_policy_dataloader:
+                        query = batch['input_ids']
+                        context_length = query.shape[1]
+                        query_response, _ = batch_generation(
+                            unwrapped_model,
+                            query,
+                            query.shape[0],
+                            self.processing_class.pad_token_id,
+                            generation_config,
                         )
-                    )
-                    responses = gather_object(
-                        self.processing_class.batch_decode(postprocessed_response)
-                    )
-                    scores = (
-                        self.accelerator.gather_for_metrics(score).float().cpu().numpy()
-                    )
-                    table['query'].extend(queries)
-                    table['model response'].extend(responses)
-                    table['score'].extend(scores)
-                    break
+                        response = query_response[:, context_length:]
+                        postprocessed_response = response
+                        postprocessed_query_response = torch.cat(
+                            (query, postprocessed_response), 1
+                        )
+                        _, score, _ = get_reward(
+                            self.reward_model,
+                            postprocessed_query_response,
+                            self.processing_class.pad_token_id,
+                            context_length,
+                        )
+
+                        queries = gather_object(
+                            self.processing_class.batch_decode(
+                                query, skip_special_tokens=True
+                            )
+                        )
+                        responses = gather_object(
+                            self.processing_class.batch_decode(postprocessed_response)
+                        )
+                        scores = (
+                            self.accelerator.gather_for_metrics(score)
+                            .float()
+                            .cpu()
+                            .numpy()
+                        )
+                        table['query'].extend(queries)
+                        table['model response'].extend(responses)
+                        table['score'].extend(scores)
+                        break
 
         df = pd.DataFrame(table)
-        if self.accelerator.is_main_process and wb.run is not None:
-            wb.log({'completions': wb.Table(dataframe=df)})
+
+        if self.accelerator.is_main_process:
+            print_rich_table(df.iloc[0 : 0 + 5])
+            if wb.run is not None:
+                wb.log({'completions': wb.Table(dataframe=df)})
+
+
+def print_rich_table(df: pd.DataFrame) -> Table:
+    console = Console()
+    table = Table(show_lines=True)
+    for column in df.columns:
+        table.add_column(column)
+    for _, row in df.iterrows():
+        table.add_row(*row.astype(str).tolist())
+    console.print(table)

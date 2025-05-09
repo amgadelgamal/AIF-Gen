@@ -89,22 +89,12 @@ def init_continual_dataset(
             data = ContinualAlignmentDataset.from_json(dataset)
         except OSError:  # need to try downloading from hub
             try:
-                # json_name = dataset.split('/', )[-1]
                 # print(f'Downloading {json_name} from Hugging Face Hub...')
                 local_path = hf_hub_download(
                     repo_id=f'LifelongAlignment/{dataset}',
                     filename='data.json',
                     repo_type='dataset',
                 )
-                # local_path = hf_hub_download(
-                #         repo_id=f"LifelongAlignment/{dataset}", filename=f'{dataset}.json', repo_type='dataset'
-                #     )
-                # local_path = hf_hub_download(
-                #         repo_id=f"LifelongAlignment/{dataset}", filename=f'{json_name}.json', repo_type='dataset'
-                #     )
-                # local_path = hf_hub_download(
-                #     repo_id=dataset, filename='dataset.json', repo_type='dataset'
-                # )
                 data = ContinualAlignmentDataset.from_json(local_path)
             except Exception as e:
                 raise ValueError(f'Error loading dataset: {e}')
