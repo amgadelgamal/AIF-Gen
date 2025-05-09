@@ -286,7 +286,10 @@ class ContinualDPOTrainer(DPOTrainer):
 
         with torch.no_grad():
             if self.eval_policy_dataloader is not None:
-                for batch in self.eval_policy_dataloader:
+                for idx, batch in enumerate(self.eval_policy_dataloader):
+                    print(
+                        f'Processing batch {idx} out of {len(self.eval_policy_dataloader)}'
+                    )
                     query = batch['input_ids'].to(self.accelerator.device)
                     context_length = query.shape[1]
                     with unwrap_model_for_generation(
@@ -333,6 +336,7 @@ class ContinualDPOTrainer(DPOTrainer):
         # TODO: Only generation sample completions every x steps
         do_generate_completions = True
         if do_generate_completions:
+            print('Generating completions...')
             self._generate_completions()
             torch.cuda.empty_cache()
 
@@ -355,6 +359,7 @@ class ContinualDPOTrainer(DPOTrainer):
             do_sample=True,
         )
 
+        self.model.eval()
         table = defaultdict(list)
         with torch.no_grad():
             with unwrap_model_for_generation(
@@ -404,6 +409,7 @@ class ContinualDPOTrainer(DPOTrainer):
                         table['score'].extend(scores)
                         break
 
+        self.model.train()
         df = pd.DataFrame(table)
 
         if self.accelerator.is_main_process or self.accelerator is None:

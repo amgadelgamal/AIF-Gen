@@ -146,6 +146,15 @@ def main(
             ev_metrics = trainer.evaluate()
             ev_metrics = {f'dataset-{i}/' + k: v for k, v in ev_metrics.items()}
             metrics.update(ev_metrics)
+            if training_args.local_rank in (None, -1, 0):
+                wb.log({f'task/{dataset_name}/{k}': v for k, v in ev_metrics.items()})
+
+            # If using DeepSpeed through Accelerate, tear down the engine after training.
+            if hasattr(trainer, 'deepspeed') and trainer.deepspeed is not None:
+                # Remove reference to the DeepSpeed engine to allow proper cleanup.
+                del trainer.deepspeed
+            # Free cached GPU memory.
+            torch.cuda.empty_cache()
 
         if training_args.local_rank in (None, -1, 0):
             wb.log(metrics)  # type: ignore[attr-defined]
