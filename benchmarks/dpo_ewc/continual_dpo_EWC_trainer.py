@@ -101,7 +101,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                     fisher = ContinualDPOEWCTrainer.fisher[name].to(param.device)
                     old_param = ContinualDPOEWCTrainer.old_params[name].to(param.device)
                     delta = param - old_param
-                    print('delta: ', delta)
                     ewc_loss += (fisher * delta.pow(2)).sum()
         return 0.5 * self.ewc_lambda * ewc_loss
 
@@ -109,6 +108,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         model = self.accelerator.unwrap_model(self.model)
         model.train()
         model.gradient_checkpointing_disable()
+
         fisher_dataloader = self.get_train_dataloader()
         fisher = {}
 
@@ -131,14 +131,15 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
             model.zero_grad(set_to_none=True)
             batch = self.accelerator.prepare(batch)
-            loss, _ = self.compute_loss(model, batch, return_outputs=True)
+
+            # Use DPO loss here
+            loss, _ = super().compute_loss(model, batch, return_outputs=True)
 
             # Detach loss to avoid backprop into graph
-            loss = loss.clone().detach().requires_grad_(True)
+            # loss = loss.clone().detach().requires_grad_(True)
             self.accelerator.backward(loss)
 
             for name, param in model.named_parameters():
-                print('Computing fisher: ', name, param.requires_grad, param.grad)
                 if param.requires_grad:
                     ctx = (
                         zero.GatheredParameters([param], modifier_rank=None)
@@ -156,10 +157,8 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
         # Normalize by the number of samples
         for name in fisher:
-            print(name)
             fisher[name] /= sample_count
-
-        print(f'Computed Fisher information for {sample_count} examples')
+        print(len(fisher))
         input()
         ContinualDPOEWCTrainer.fisher = fisher
 
