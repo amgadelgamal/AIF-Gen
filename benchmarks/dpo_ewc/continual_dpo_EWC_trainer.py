@@ -10,7 +10,7 @@ from benchmarks.dpo.continual_dpo_trainer import (
     ContinualDPOConfig,
     ContinualDPOTrainer,
 )
-from deepspeed import zero
+import deepspeed
 from contextlib import nullcontext
 
 
@@ -77,6 +77,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
         # Calculate EWC regularization loss
         ewc_loss = self.compute_ewc_loss()
+        print('EWC Loss: ', ewc_loss)
         total_loss = dpo_loss + ewc_loss
         self.log(
             {
@@ -92,12 +93,11 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         model = self.accelerator.unwrap_model(self.model)
         for name, param in model.named_parameters():
             if name in ContinualDPOEWCTrainer.fisher and param.requires_grad:
-                ctx = (
-                    zero.GatheredParameters([param], modifier_rank=None)
+                with (
+                    deepspeed.zero.GatheredParameters([param], modifier_rank=None)
                     if hasattr(param, 'ds_id')
                     else nullcontext()
-                )
-                with ctx:
+                ):
                     fisher = ContinualDPOEWCTrainer.fisher[name].to(param.device)
                     old_param = ContinualDPOEWCTrainer.old_params[name].to(param.device)
                     delta = param - old_param
@@ -109,12 +109,15 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         model.train()
         model.gradient_checkpointing_disable()
 
-        fisher_dataloader = self.get_train_dataloader()
-        fisher = {}
+        fisher = {
+            name: torch.zeros_like(param, device=self.accelerator.device)
+            for name, param in model.named_parameters()
+            if param.requires_grad
+        }
 
         # Collect samples for Fisher estimation
         sample_count = 0
-        for batch in fisher_dataloader:
+        for batch in self.get_train_dataloader():
             if sample_count >= num_samples:
                 break
 
@@ -134,32 +137,24 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
             # Use DPO loss here
             loss, _ = super().compute_loss(model, batch, return_outputs=True)
-
-            # Detach loss to avoid backprop into graph
-            # loss = loss.clone().detach().requires_grad_(True)
             self.accelerator.backward(loss)
 
             for name, param in model.named_parameters():
                 if param.requires_grad:
-                    ctx = (
-                        zero.GatheredParameters([param], modifier_rank=None)
+                    with (
+                        deepspeed.zero.GatheredParameters([param], modifier_rank=None)
                         if hasattr(param, 'ds_id')
                         else nullcontext()
-                    )
-                    with ctx:
-                        if param.grad is not None:
-                            grad_sq = param.grad.detach().clone().pow(2)
-                            if name not in fisher:
-                                fisher[name] = grad_sq
-                            else:
-                                fisher[name] += grad_sq
+                    ):
+                        grad = deepspeed.utils.safe_get_full_grad(param)
+                        if grad is not None:
+                            fisher[name] += grad.detach().clone().pow(2)
             sample_count += batch_size
 
         # Normalize by the number of samples
         for name in fisher:
             fisher[name] /= sample_count
-        print(len(fisher))
-        input()
+        print('# Parameters in fisher: ', len(fisher))
         ContinualDPOEWCTrainer.fisher = fisher
 
     def save_old_params(self) -> None:
