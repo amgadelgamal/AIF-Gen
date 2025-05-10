@@ -41,7 +41,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
     fisher: Dict[str, torch.Tensor] = {}
     old_params: Dict[str, torch.Tensor] = {}
-    previous_dataloader: Any = None
     is_first_task: bool = True
 
     def __init__(
@@ -56,14 +55,19 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         self.ewc_lambda = args.ewc_lambda if args is not None else 100.0
 
     def train(self) -> Any:
-        if not ContinualDPOEWCTrainer.is_first_task:
-            self.compute_fisher()
-            self.save_old_params()
-            self.model.zero_grad(set_to_none=True)
-            torch.cuda.empty_cache()
-
+        result = super().train()
         ContinualDPOEWCTrainer.is_first_task = False
-        return super().train()
+        ContinualDPOEWCTrainer.fisher = self.compute_fisher()
+        ContinualDPOEWCTrainer.old_params = {
+            name: param.detach().cpu().clone()
+            for name, param in self.accelerator.unwrap_model(
+                self.model
+            ).named_parameters()
+            if param.requires_grad
+        }
+        self.model.zero_grad(set_to_none=True)
+        torch.cuda.empty_cache()
+        return result
 
     def compute_loss(
         self,
@@ -81,7 +85,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
         # Calculate EWC regularization loss
         ewc_loss = self.compute_ewc_loss()
-        print('EWC Loss: ', ewc_loss)
         total_loss = dpo_loss + ewc_loss
         self.log(
             {
@@ -105,25 +108,19 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                     fisher = ContinualDPOEWCTrainer.fisher[name].to(param.device)
                     old_param = ContinualDPOEWCTrainer.old_params[name].to(param.device)
                     delta = param - old_param
-                    print('delta', delta, fisher)
                     ewc_loss += (fisher * delta.pow(2)).sum()
         return 0.5 * self.ewc_lambda * ewc_loss
 
-    def compute_fisher(self, num_samples: int = 120) -> None:
-        # model = self.accelerator.unwrap_model(self.model)
-        model = self.model
-        model.train()
-        model.gradient_checkpointing_disable()
+    def compute_fisher(self, num_samples: int = 120) -> Any:
+        self.model.train()
 
         fisher = {
             name: torch.zeros_like(param, device=self.accelerator.device)
-            for name, param in model.named_parameters()
+            for name, param in self.model.named_parameters()
             if param.requires_grad
         }
-
-        # Collect samples for Fisher estimation
         sample_count = 0
-        for batch in ContinualDPOEWCTrainer.previous_dataloader:
+        for batch in self.get_train_dataloader():
             if sample_count >= num_samples:
                 break
 
@@ -138,11 +135,11 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                     batch_size = batch[key].shape[0]
                     break
 
-            model.zero_grad(set_to_none=True)
+            self.model.zero_grad(set_to_none=True)
             batch = self.accelerator.prepare(batch)
 
             # Use DPO loss here
-            loss, _ = super().compute_loss(model, batch, return_outputs=True)
+            loss, _ = super().compute_loss(self.model, batch, return_outputs=True)
             self.accelerator.backward(loss)
 
             for name, param in self.accelerator.unwrap_model(
@@ -154,22 +151,11 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                         if hasattr(param, 'ds_id')
                         else nullcontext()
                     ):
-                        # grad = deepspeed.utils.safe_get_full_grad(param)
-                        grad = param.grad
-                        if grad is not None:
-                            fisher[name] += grad.detach().clone().pow(2)
+                        if param.grad is not None:
+                            fisher[name] += param.grad.detach().clone().pow(2)
             sample_count += batch_size
 
         # Normalize by the number of samples
         for name in fisher:
             fisher[name] /= sample_count
-        ContinualDPOEWCTrainer.fisher = fisher
-
-    def save_old_params(self) -> None:
-        model = self.accelerator.unwrap_model(self.model)
-        ContinualDPOEWCTrainer.old_params = {
-            name: param.detach().cpu().clone()
-            for name, param in model.named_parameters()
-            if param.requires_grad
-        }
-        ContinualDPOEWCTrainer.previous_dataloader = self.get_train_dataloader()
+        return fisher
