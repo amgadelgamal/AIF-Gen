@@ -41,7 +41,8 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
     fisher: Dict[str, torch.Tensor] = {}
     old_params: Dict[str, torch.Tensor] = {}
-    task_index: int = 0
+    previous_dataloader: Any = None
+    is_first_task: bool = True
 
     def __init__(
         self,
@@ -55,11 +56,14 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         self.ewc_lambda = args.ewc_lambda if args is not None else 100.0
 
     def train(self) -> Any:
-        result = super().train()
-        self.compute_fisher()
-        self.save_old_params()
-        ContinualDPOEWCTrainer.task_index += 1
-        return result
+        if not ContinualDPOEWCTrainer.is_first_task:
+            self.compute_fisher()
+            self.save_old_params()
+            self.model.zero_grad(set_to_none=True)
+            torch.cuda.empty_cache()
+
+        ContinualDPOEWCTrainer.is_first_task = False
+        return super().train()
 
     def compute_loss(
         self,
@@ -72,7 +76,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch
         )
         # Skip EWC loss on first task since there's nothing to preserve yet
-        if ContinualDPOEWCTrainer.task_index == 0:
+        if ContinualDPOEWCTrainer.is_first_task:
             return (dpo_loss, outputs) if return_outputs else dpo_loss
 
         # Calculate EWC regularization loss
@@ -101,11 +105,13 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                     fisher = ContinualDPOEWCTrainer.fisher[name].to(param.device)
                     old_param = ContinualDPOEWCTrainer.old_params[name].to(param.device)
                     delta = param - old_param
+                    print('delta', delta, fisher)
                     ewc_loss += (fisher * delta.pow(2)).sum()
         return 0.5 * self.ewc_lambda * ewc_loss
 
     def compute_fisher(self, num_samples: int = 120) -> None:
-        model = self.accelerator.unwrap_model(self.model)
+        # model = self.accelerator.unwrap_model(self.model)
+        model = self.model
         model.train()
         model.gradient_checkpointing_disable()
 
@@ -117,7 +123,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
         # Collect samples for Fisher estimation
         sample_count = 0
-        for batch in self.get_train_dataloader():
+        for batch in ContinualDPOEWCTrainer.previous_dataloader:
             if sample_count >= num_samples:
                 break
 
@@ -139,14 +145,17 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             loss, _ = super().compute_loss(model, batch, return_outputs=True)
             self.accelerator.backward(loss)
 
-            for name, param in model.named_parameters():
+            for name, param in self.accelerator.unwrap_model(
+                self.model
+            ).named_parameters():
                 if param.requires_grad:
                     with (
                         deepspeed.zero.GatheredParameters([param], modifier_rank=None)
                         if hasattr(param, 'ds_id')
                         else nullcontext()
                     ):
-                        grad = deepspeed.utils.safe_get_full_grad(param)
+                        # grad = deepspeed.utils.safe_get_full_grad(param)
+                        grad = param.grad
                         if grad is not None:
                             fisher[name] += grad.detach().clone().pow(2)
             sample_count += batch_size
@@ -154,7 +163,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         # Normalize by the number of samples
         for name in fisher:
             fisher[name] /= sample_count
-        print('# Parameters in fisher: ', len(fisher))
         ContinualDPOEWCTrainer.fisher = fisher
 
     def save_old_params(self) -> None:
@@ -164,3 +172,4 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             for name, param in model.named_parameters()
             if param.requires_grad
         }
+        ContinualDPOEWCTrainer.previous_dataloader = self.get_train_dataloader()
