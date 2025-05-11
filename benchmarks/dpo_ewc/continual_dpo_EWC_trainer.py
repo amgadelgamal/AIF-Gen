@@ -110,11 +110,12 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         return (total_loss, outputs) if return_outputs else total_loss
 
     def compute_fisher(self, num_samples: int = 120):
-        model = self.accelerator.unwrap_model(self.model)
-        model.train()
+        from copy import deepcopy
+
+        model = deepcopy(self.accelerator.unwrap_model(self.model)).to('cuda:0')
 
         fisher = {
-            name: torch.zeros_like(param, device=self.accelerator.device)
+            name: torch.zeros_like(param, device='cuda:0')
             for name, param in model.named_parameters()
             if param.requires_grad
         }
@@ -147,7 +148,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                     if hasattr(param, 'ds_id')
                     else nullcontext()
                 ):
-                    if param.grad is not None:  # Never fires
+                    if param.grad is not None:
                         fisher[name] += param.grad.detach().clone().pow(2)
 
         for name in fisher:
