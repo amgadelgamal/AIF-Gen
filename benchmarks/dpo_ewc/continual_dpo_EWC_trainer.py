@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
-from transformers import PreTrainedModel
+from transformers import PreTrainedModel, AutoModelForCausalLM
 
 from benchmarks.dpo.continual_dpo_trainer import (
     ContinualDPOArguments,
@@ -57,15 +57,15 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
     def train(self) -> Any:
         result = super().train()
         ContinualDPOEWCTrainer.is_first_task = False
-        # ContinualDPOEWCTrainer.fisher = self.compute_fisher()
-        # ContinualDPOEWCTrainer.old_params = {
-        #    name: param.detach().clone()
-        #    for name, param in self.accelerator.unwrap_model(
-        #        self.model
-        #    ).named_parameters()
-        #    if param.requires_grad
-        # }
-        # torch.cuda.empty_cache()
+        ContinualDPOEWCTrainer.fisher = self.compute_fisher()
+        ContinualDPOEWCTrainer.old_params = {
+            name: param.detach().clone()
+            for name, param in self.accelerator.unwrap_model(
+                self.model
+            ).named_parameters()
+            if param.requires_grad
+        }
+        torch.cuda.empty_cache()
         return result
 
     def compute_loss(
@@ -85,19 +85,16 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             ewc_loss = torch.tensor(0.0, device=self.accelerator.device)
             model = self.accelerator.unwrap_model(self.model)
             for name, param in model.named_parameters():
-                # if name in ContinualDPOEWCTrainer.fisher and param.requires_grad:
-                if param.requires_grad:
+                if name in ContinualDPOEWCTrainer.fisher and param.requires_grad:
                     with (
                         deepspeed.zero.GatheredParameters([param], modifier_rank=None)
                         if hasattr(param, 'ds_id')
                         else nullcontext()
                     ):
-                        # fisher = ContinualDPOEWCTrainer.fisher[name].to(param.device)
-                        fisher = 1
-                        old_param = param
-                        # old_param = ContinualDPOEWCTrainer.old_params[name].to(
-                        #    param.device
-                        # )
+                        fisher = ContinualDPOEWCTrainer.fisher[name].to(param.device)
+                        old_param = ContinualDPOEWCTrainer.old_params[name].to(
+                            param.device
+                        )
                         ewc_loss += (fisher * (param - old_param).pow(2)).sum()
             return 0.5 * self.ewc_lambda * ewc_loss
 
@@ -113,49 +110,47 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         return (total_loss, outputs) if return_outputs else total_loss
 
     def compute_fisher(self, num_samples: int = 120):
-        # from transformers import AutoModelForCausalLM
-
         # Load weights from original unwrapped model
-        # new_model = AutoModelForCausalLM.from_config(self.model.config)
-        # new_model.load_state_dict(
-        #     self.accelerator.unwrap_model(self.model).state_dict()
-        # )
-        # new_model.to('cuda:0')
-        # new_model.train()
+        new_model = AutoModelForCausalLM.from_config(self.model.config)
+        new_model.load_state_dict(
+            self.accelerator.unwrap_model(self.model).state_dict()
+        )
+        new_model.to('cuda:0')
+        new_model.train()
 
-        # fisher = {
-        #    name: torch.zeros_like(param, device=new_model.device)
-        #    for name, param in new_model.named_parameters()
-        #    if param.requires_grad
-        # }
+        fisher = {
+            name: torch.zeros_like(param, device=new_model.device)
+            for name, param in new_model.named_parameters()
+            if param.requires_grad
+        }
 
-        # sample_count = 0
-        # dataloader = self.get_train_dataloader()
-        # for batch in dataloader:
-        #    if sample_count >= num_samples:
-        #        break
+        sample_count = 0
+        dataloader = self.get_train_dataloader()
+        for batch in dataloader:
+            if sample_count >= num_samples:
+                break
 
-        #    batch_size = 1
-        #    for key in ['input_ids', 'chosen_input_ids', 'policy_input_ids']:
-        #        if (
-        #            key in batch
-        #            and hasattr(batch[key], 'shape')
-        #            and len(batch[key].shape) > 0
-        #        ):
-        #            batch_size = batch[key].shape[0]
-        #            break
-        #    sample_count += batch_size
+            batch_size = 1
+            for key in ['input_ids', 'chosen_input_ids', 'policy_input_ids']:
+                if (
+                    key in batch
+                    and hasattr(batch[key], 'shape')
+                    and len(batch[key].shape) > 0
+                ):
+                    batch_size = batch[key].shape[0]
+                    break
 
-        #    batch = {k: v.to('cuda:0') for k, v in batch.items()}
-        #    new_model.zero_grad(set_to_none=True)
-        #    loss = super().compute_loss(new_model, batch)
-        #    loss.backward()
-        #    for name, param in new_model.named_parameters():
-        #        if param.grad is not None:
-        #            fisher[name] += param.grad.detach().clone().pow(2)
+            sample_count += batch_size
+            batch = {k: v.to('cuda:0') for k, v in batch.items()}
 
-        # for name in fisher:
-        #    fisher[name] /= sample_count
+            new_model.zero_grad(set_to_none=True)
+            loss = super().compute_loss(new_model, batch)
+            loss.backward()
 
-        fisher = None
+            for name, param in new_model.named_parameters():
+                if param.grad is not None:
+                    fisher[name] += param.grad.detach().clone().pow(2)
+
+        for name in fisher:
+            fisher[name] /= sample_count
         return fisher
