@@ -64,7 +64,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             ).named_parameters()
             if param.requires_grad
         }
-        torch.cuda.empty_cache()
         return result
 
     def compute_loss(
@@ -131,17 +130,27 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                     break
             return batch_size
 
+        def move_to_device(batch: Any) -> Any:
+            if isinstance(batch, dict):
+                return {
+                    k: v.to(device) if hasattr(v, 'to') else v for k, v in batch.items()
+                }
+            elif isinstance(batch, (list, tuple)):
+                return type(batch)(move_to_device(x) for x in batch)
+            else:
+                return batch.to(device) if hasattr(batch, 'to') else batch
+
         sample_count = 0
         for batch in self.get_train_dataloader():
             if sample_count >= num_samples:
                 break
 
             sample_count += guess_batch_size(batch)
-            model.zero_grad(set_to_none=True)
-            batch = self.accelerator.prepare(batch)
+            batch = move_to_device(batch)
 
+            model.zero_grad(set_to_none=True)
             loss = super().compute_loss(model, batch)
-            self.accelerator.backward(loss)
+            loss.backward()
 
             for name, param in model.named_parameters():
                 with (
