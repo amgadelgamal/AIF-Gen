@@ -142,8 +142,13 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             loss = super().compute_loss(model, batch)
             self.accelerator.backward(loss)
             for name, param in model.named_parameters():
-                if param.grad is not None:
-                    fisher[name] += param.grad.detach().clone().pow(2)
+                with (
+                    deepspeed.zero.GatheredParameters([param], modifier_rank=None)
+                    if hasattr(param, 'ds_id')
+                    else nullcontext()
+                ):
+                    if param.grad is not None:  # Never fires
+                        fisher[name] += param.grad.detach().clone().pow(2)
 
         for name in fisher:
             fisher[name] /= sample_count
