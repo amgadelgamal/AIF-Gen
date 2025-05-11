@@ -58,14 +58,14 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         result = super().train()
         ContinualDPOEWCTrainer.is_first_task = False
         # ContinualDPOEWCTrainer.fisher = self.compute_fisher()
-        ContinualDPOEWCTrainer.old_params = {
-            name: param.detach().clone()
-            for name, param in self.accelerator.unwrap_model(
-                self.model
-            ).named_parameters()
-            if param.requires_grad
-        }
-        torch.cuda.empty_cache()
+        # ContinualDPOEWCTrainer.old_params = {
+        #    name: param.detach().clone()
+        #    for name, param in self.accelerator.unwrap_model(
+        #        self.model
+        #    ).named_parameters()
+        #    if param.requires_grad
+        # }
+        # torch.cuda.empty_cache()
         return result
 
     def compute_loss(
@@ -94,9 +94,10 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                     ):
                         # fisher = ContinualDPOEWCTrainer.fisher[name].to(param.device)
                         fisher = 1
-                        old_param = ContinualDPOEWCTrainer.old_params[name].to(
-                            param.device
-                        )
+                        old_param = param
+                        # old_param = ContinualDPOEWCTrainer.old_params[name].to(
+                        #    param.device
+                        # )
                         ewc_loss += (fisher * (param - old_param).pow(2)).sum()
             return 0.5 * self.ewc_lambda * ewc_loss
 
