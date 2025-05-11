@@ -1,7 +1,10 @@
+from contextlib import nullcontext
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Union
-from copy import deepcopy
 
+import accelerate
+import deepspeed
 import torch
 import torch.nn as nn
 from transformers import PreTrainedModel
@@ -11,8 +14,6 @@ from benchmarks.dpo.continual_dpo_trainer import (
     ContinualDPOConfig,
     ContinualDPOTrainer,
 )
-import deepspeed
-from contextlib import nullcontext
 
 
 @dataclass
@@ -56,7 +57,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
     def train(self) -> Any:
         result = super().train()
-        ContinualDPOEWCTrainer.fisher = self.compute_fisher()
+
         ContinualDPOEWCTrainer.old_params = {
             name: param.detach().clone()
             for name, param in self.accelerator.unwrap_model(
@@ -64,6 +65,12 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             ).named_parameters()
             if param.requires_grad
         }
+
+        fisher = {}
+        if self.accelerator.is_main_process:
+            fisher = self.compute_fisher()
+
+        ContinualDPOEWCTrainer.fisher = accelerate.utils.broadcast(fisher)
         return result
 
     def compute_loss(
@@ -149,7 +156,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             batch = move_to_device(batch)
 
             model.zero_grad(set_to_none=True)
-            loss = super().compute_loss(model, batch)
+            loss = self.compute_dpo_loss(model, batch)
             loss.backward()
 
             for name, param in model.named_parameters():
@@ -164,3 +171,38 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         for name in fisher:
             fisher[name] /= sample_count
         return fisher
+
+    def compute_dpo_loss(
+        self,
+        model: Union[PreTrainedModel, nn.Module],
+        batch: dict[str, Union[torch.Tensor, Any]],
+    ) -> torch.Tensor:
+        # The following is a patch of super().compute_loss (https://github.com/huggingface/trl/blob/eab175d434b9bb9badee20335c7945991a26dfac/trl/trainer/dpo_trainer.py#L1307) which avoids metrics computation and can be run outside of the accelerate context.
+        # It primarily specializes the implementation of get_batch_loss_metrics (https://github.com/huggingface/trl/blob/eab175d434b9bb9badee20335c7945991a26dfac/trl/trainer/dpo_trainer.py#L1245) to skip calls to `self.accelerator.gather_for_metrics`.
+
+        with (
+            torch.amp.autocast('cuda')
+            if self._peft_has_been_casted_to_bf16
+            else nullcontext()
+        ):
+            model_output = self.concatenated_forward(model, batch)
+
+            if 'ref_chosen_logps' in batch and 'ref_rejected_logps' in batch:
+                ref_chosen_logps = batch['ref_chosen_logps']
+                ref_rejected_logps = batch['ref_rejected_logps']
+            else:
+                ref_chosen_logps, ref_rejected_logps = self.compute_ref_log_probs(batch)
+
+            losses, _, _ = self.dpo_loss(
+                model_output['chosen_logps'],
+                model_output['rejected_logps'],
+                ref_chosen_logps,
+                ref_rejected_logps,
+            )
+            if self.args.rpo_alpha is not None:
+                losses = losses + self.args.rpo_alpha * model_output['nll_loss']
+            if self.use_weighting:
+                losses = losses * model_output['policy_weights']
+            if self.aux_loss_enabled:
+                losses = losses + self.aux_loss_coef * model_output['aux_loss']
+            return losses.mean().to(self.args.device)
