@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Union
 
 import torch
 import torch.nn as nn
-from transformers import PreTrainedModel, AutoModelForCausalLM
+from transformers import PreTrainedModel
 
 from benchmarks.dpo.continual_dpo_trainer import (
     ContinualDPOArguments,
@@ -110,17 +110,12 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         return (total_loss, outputs) if return_outputs else total_loss
 
     def compute_fisher(self, num_samples: int = 120):
-        # Load weights from original unwrapped model
-        new_model = AutoModelForCausalLM.from_config(self.model.config)
-        new_model.load_state_dict(
-            self.accelerator.unwrap_model(self.model).state_dict()
-        )
-        new_model.to('cuda:0')
-        new_model.train()
+        model = self.accelerator.unwrap_model(self.model)
+        model.train()
 
         fisher = {
-            name: torch.zeros_like(param, device=new_model.device)
-            for name, param in new_model.named_parameters()
+            name: torch.zeros_like(param, device=self.accelerator.device)
+            for name, param in model.named_parameters()
             if param.requires_grad
         }
 
@@ -139,15 +134,14 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                 ):
                     batch_size = batch[key].shape[0]
                     break
-
             sample_count += batch_size
-            batch = {k: v.to('cuda:0') for k, v in batch.items()}
 
-            new_model.zero_grad(set_to_none=True)
-            loss = super().compute_loss(new_model, batch)
-            loss.backward()
+            model.zero_grad(set_to_none=True)
+            batch = self.accelerator.prepare(batch)
 
-            for name, param in new_model.named_parameters():
+            loss = super().compute_loss(model, batch)
+            self.accelerator.backward(loss)
+            for name, param in model.named_parameters():
                 if param.grad is not None:
                     fisher[name] += param.grad.detach().clone().pow(2)
 
