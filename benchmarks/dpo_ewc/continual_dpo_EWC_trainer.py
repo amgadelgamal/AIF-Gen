@@ -66,9 +66,16 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             if param.requires_grad
         }
 
-        fisher = {}
         if self.accelerator.is_main_process:
             fisher = self.compute_fisher()
+        else:
+            fisher = {
+                name: torch.zeros_like(param, device=self.accelerator.device)
+                for name, param in self.accelerator.unwrap_model(
+                    self.model
+                ).named_parameters()
+                if param.requires_grad
+            }
 
         ContinualDPOEWCTrainer.fisher = accelerate.utils.broadcast(fisher)
         return result
