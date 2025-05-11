@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Union
+from copy import deepcopy
 
 import torch
 import torch.nn as nn
@@ -41,7 +42,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
     fisher: Dict[str, torch.Tensor] = {}
     old_params: Dict[str, torch.Tensor] = {}
-    is_first_task: bool = True
 
     def __init__(
         self,
@@ -56,7 +56,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
     def train(self) -> Any:
         result = super().train()
-        ContinualDPOEWCTrainer.is_first_task = False
         ContinualDPOEWCTrainer.fisher = self.compute_fisher()
         ContinualDPOEWCTrainer.old_params = {
             name: param.detach().clone()
@@ -78,8 +77,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         dpo_loss, outputs = super().compute_loss(
             model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch
         )
-        if ContinualDPOEWCTrainer.is_first_task:
-            return (dpo_loss, outputs) if return_outputs else dpo_loss
 
         def compute_ewc_loss() -> torch.Tensor:
             ewc_loss = torch.tensor(0.0, device=self.accelerator.device)
@@ -109,23 +106,20 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         )
         return (total_loss, outputs) if return_outputs else total_loss
 
-    def compute_fisher(self, num_samples: int = 120):
-        from copy import deepcopy
-
-        model = deepcopy(self.accelerator.unwrap_model(self.model)).to('cuda:0')
+    def compute_fisher(
+        self, num_samples: int = 120, device: str = 'cuda:0'
+    ) -> Dict[str, torch.Tensor]:
+        # Computing fisher outside the deepspeed context
+        model = deepcopy(self.accelerator.unwrap_model(self.model)).to(device)
+        model.eval()
 
         fisher = {
-            name: torch.zeros_like(param, device='cuda:0')
+            name: torch.zeros_like(param, device=device)
             for name, param in model.named_parameters()
             if param.requires_grad
         }
 
-        sample_count = 0
-        dataloader = self.get_train_dataloader()
-        for batch in dataloader:
-            if sample_count >= num_samples:
-                break
-
+        def guess_batch_size(batch: Any) -> int:
             batch_size = 1
             for key in ['input_ids', 'chosen_input_ids', 'policy_input_ids']:
                 if (
@@ -135,13 +129,20 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                 ):
                     batch_size = batch[key].shape[0]
                     break
-            sample_count += batch_size
+            return batch_size
 
+        sample_count = 0
+        for batch in self.get_train_dataloader():
+            if sample_count >= num_samples:
+                break
+
+            sample_count += guess_batch_size(batch)
             model.zero_grad(set_to_none=True)
             batch = self.accelerator.prepare(batch)
 
             loss = super().compute_loss(model, batch)
             self.accelerator.backward(loss)
+
             for name, param in model.named_parameters():
                 with (
                     deepspeed.zero.GatheredParameters([param], modifier_rank=None)
