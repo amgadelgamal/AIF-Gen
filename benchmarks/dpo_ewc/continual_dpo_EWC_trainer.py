@@ -69,6 +69,9 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         if self.accelerator.is_main_process:
             fisher = self.compute_fisher()
         else:
+            # The secondary processes need to have a dictionary initialized
+            # on the current device, and with the corrct tensor shapes to enable
+            # broadcast to _copy() the tensors.
             fisher = {
                 name: torch.zeros_like(param, device=self.accelerator.device)
                 for name, param in self.accelerator.unwrap_model(
@@ -77,6 +80,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
                 if param.requires_grad
             }
 
+        # TODO: Double check that this broadcast is actually correct
         ContinualDPOEWCTrainer.fisher = accelerate.utils.broadcast(fisher)
         return result
 
@@ -184,9 +188,9 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         model: Union[PreTrainedModel, nn.Module],
         batch: dict[str, Union[torch.Tensor, Any]],
     ) -> torch.Tensor:
-        # The following is a patch of super().compute_loss (https://github.com/huggingface/trl/blob/eab175d434b9bb9badee20335c7945991a26dfac/trl/trainer/dpo_trainer.py#L1307) which avoids metrics computation and can be run outside of the accelerate context.
-        # It primarily specializes the implementation of get_batch_loss_metrics (https://github.com/huggingface/trl/blob/eab175d434b9bb9badee20335c7945991a26dfac/trl/trainer/dpo_trainer.py#L1245) to skip calls to `self.accelerator.gather_for_metrics`.
-
+        # The following is a patch of super().compute_loss which avoid metrics computation
+        # and can be run outside of the accelerate context. It primarily specializes the
+        # implementation of get_batch_loss_metrics to skip calls to `self.accelerator.gather_for_metrics`.
         with (
             torch.amp.autocast('cuda')
             if self._peft_has_been_casted_to_bf16
