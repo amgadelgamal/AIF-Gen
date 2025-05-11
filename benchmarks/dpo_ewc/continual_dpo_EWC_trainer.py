@@ -57,15 +57,14 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
     def train(self) -> Any:
         result = super().train()
         ContinualDPOEWCTrainer.is_first_task = False
-        ContinualDPOEWCTrainer.fisher = self.compute_fisher()
+        # ContinualDPOEWCTrainer.fisher = self.compute_fisher()
         ContinualDPOEWCTrainer.old_params = {
-            name: param.detach().cpu().clone()
+            name: param.detach().clone()
             for name, param in self.accelerator.unwrap_model(
                 self.model
             ).named_parameters()
             if param.requires_grad
         }
-        self.model.zero_grad(set_to_none=True)
         torch.cuda.empty_cache()
         return result
 
@@ -79,12 +78,29 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         dpo_loss, outputs = super().compute_loss(
             model, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch
         )
-        # Skip EWC loss on first task since there's nothing to preserve yet
         if ContinualDPOEWCTrainer.is_first_task:
             return (dpo_loss, outputs) if return_outputs else dpo_loss
 
-        # Calculate EWC regularization loss
-        ewc_loss = self.compute_ewc_loss()
+        def compute_ewc_loss() -> torch.Tensor:
+            ewc_loss = torch.tensor(0.0, device=self.accelerator.device)
+            model = self.accelerator.unwrap_model(self.model)
+            for name, param in model.named_parameters():
+                # if name in ContinualDPOEWCTrainer.fisher and param.requires_grad:
+                if param.requires_grad:
+                    with (
+                        deepspeed.zero.GatheredParameters([param], modifier_rank=None)
+                        if hasattr(param, 'ds_id')
+                        else nullcontext()
+                    ):
+                        # fisher = ContinualDPOEWCTrainer.fisher[name].to(param.device)
+                        fisher = 1
+                        old_param = ContinualDPOEWCTrainer.old_params[name].to(
+                            param.device
+                        )
+                        ewc_loss += (fisher * (param - old_param).pow(2)).sum()
+            return 0.5 * self.ewc_lambda * ewc_loss
+
+        ewc_loss = compute_ewc_loss()
         total_loss = dpo_loss + ewc_loss
         self.log(
             {
@@ -95,67 +111,50 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         )
         return (total_loss, outputs) if return_outputs else total_loss
 
-    def compute_ewc_loss(self) -> torch.Tensor:
-        ewc_loss = torch.tensor(0.0, device=self.accelerator.device)
-        model = self.accelerator.unwrap_model(self.model)
-        for name, param in model.named_parameters():
-            if name in ContinualDPOEWCTrainer.fisher and param.requires_grad:
-                with (
-                    deepspeed.zero.GatheredParameters([param], modifier_rank=None)
-                    if hasattr(param, 'ds_id')
-                    else nullcontext()
-                ):
-                    fisher = ContinualDPOEWCTrainer.fisher[name].to(param.device)
-                    old_param = ContinualDPOEWCTrainer.old_params[name].to(param.device)
-                    delta = param - old_param
-                    ewc_loss += (fisher * delta.pow(2)).sum()
-        return 0.5 * self.ewc_lambda * ewc_loss
+    def compute_fisher(self, num_samples: int = 120):
+        # from transformers import AutoModelForCausalLM
 
-    def compute_fisher(self, num_samples: int = 120) -> Any:
-        self.model.train()
+        # Load weights from original unwrapped model
+        # new_model = AutoModelForCausalLM.from_config(self.model.config)
+        # new_model.load_state_dict(
+        #     self.accelerator.unwrap_model(self.model).state_dict()
+        # )
+        # new_model.to('cuda:0')
+        # new_model.train()
 
-        fisher = {
-            name: torch.zeros_like(param, device=self.accelerator.device)
-            for name, param in self.model.named_parameters()
-            if param.requires_grad
-        }
-        sample_count = 0
-        for batch in self.get_train_dataloader():
-            if sample_count >= num_samples:
-                break
+        # fisher = {
+        #    name: torch.zeros_like(param, device=new_model.device)
+        #    for name, param in new_model.named_parameters()
+        #    if param.requires_grad
+        # }
 
-            # Try to determine the batch size from available keys
-            batch_size = 1
-            for key in ['input_ids', 'chosen_input_ids', 'policy_input_ids']:
-                if (
-                    key in batch
-                    and hasattr(batch[key], 'shape')
-                    and len(batch[key].shape) > 0
-                ):
-                    batch_size = batch[key].shape[0]
-                    break
+        # sample_count = 0
+        # dataloader = self.get_train_dataloader()
+        # for batch in dataloader:
+        #    if sample_count >= num_samples:
+        #        break
 
-            self.model.zero_grad(set_to_none=True)
-            batch = self.accelerator.prepare(batch)
+        #    batch_size = 1
+        #    for key in ['input_ids', 'chosen_input_ids', 'policy_input_ids']:
+        #        if (
+        #            key in batch
+        #            and hasattr(batch[key], 'shape')
+        #            and len(batch[key].shape) > 0
+        #        ):
+        #            batch_size = batch[key].shape[0]
+        #            break
+        #    sample_count += batch_size
 
-            # Use DPO loss here
-            loss, _ = super().compute_loss(self.model, batch, return_outputs=True)
-            self.accelerator.backward(loss)
+        #    batch = {k: v.to('cuda:0') for k, v in batch.items()}
+        #    new_model.zero_grad(set_to_none=True)
+        #    loss = super().compute_loss(new_model, batch)
+        #    loss.backward()
+        #    for name, param in new_model.named_parameters():
+        #        if param.grad is not None:
+        #            fisher[name] += param.grad.detach().clone().pow(2)
 
-            for name, param in self.accelerator.unwrap_model(
-                self.model
-            ).named_parameters():
-                if param.requires_grad:
-                    with (
-                        deepspeed.zero.GatheredParameters([param], modifier_rank=None)
-                        if hasattr(param, 'ds_id')
-                        else nullcontext()
-                    ):
-                        if param.grad is not None:
-                            fisher[name] += param.grad.detach().clone().pow(2)
-            sample_count += batch_size
+        # for name in fisher:
+        #    fisher[name] /= sample_count
 
-        # Normalize by the number of samples
-        for name in fisher:
-            fisher[name] /= sample_count
+        fisher = None
         return fisher
