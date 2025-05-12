@@ -2,7 +2,7 @@
 #SBATCH --job-name=aif-gen-cppo-piecewise-preference-shift
 #SBATCH --partition=main
 #SBATCH --cpus-per-task=6
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:8
 #SBATCH --mem=32G
 #SBATCH --time=24:00:00
 #SBATCH --output=out/%j.out
