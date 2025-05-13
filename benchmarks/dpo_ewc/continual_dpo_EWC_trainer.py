@@ -116,37 +116,50 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             # No previous tasks, so no regularization needed
             return torch.tensor(0.0, device=self.accelerator.device)
 
-        ewc_loss = torch.tensor(0.0, device=self.accelerator.device)
-
         # Calculate the EWC penalty for each parameter
         model = self.accelerator.unwrap_model(self.model)
-
+        ewc_loss = torch.tensor(0.0, device=self.accelerator.device)
         for name, param in model.named_parameters():
-            if name not in ContinualDPOEWCTrainer.class_fisher_information:
+            if not param.requires_grad or name not in self.class_fisher_information:
                 continue
-            if not param.requires_grad:
-                continue
-
-            if (
-                name in ContinualDPOEWCTrainer.class_fisher_information
-                and param.requires_grad
-            ):
-                # Get the Fisher information and old parameter values
-                fisher = ContinualDPOEWCTrainer.class_fisher_information[name].to(
-                    param.device
-                )
-
+            # self.accelerator.print(name, param.shape)
             with deepspeed.zero.GatheredParameters([param], modifier_rank=0):
                 if self.accelerator.is_main_process:
-                    old_param = ContinualDPOEWCTrainer.class_old_params[name].to(
-                        param.device
+                    # Get the Fisher information and old parameter values
+                    fisher = ContinualDPOEWCTrainer.class_fisher_information[name].to(
+                        self.accelerator.device
                     )
+                    old_param = ContinualDPOEWCTrainer.class_old_params[name].to(
+                        self.accelerator.device
+                    )
+
                     # Calculate squared distance weighted by Fisher information
                     delta = param - old_param
                     ewc_loss = ewc_loss + (fisher * delta.pow(2)).sum()
 
-        # Apply the EWC lambda coefficient and return
-        return 0.5 * self.ewc_lambda * ewc_loss
+                    # Apply the EWC lambda coefficient and return
+                    ewc_loss = 0.5 * self.ewc_lambda * ewc_loss
+                else:
+                    # Non-main processes should not compute EWC loss
+                    ewc_loss = torch.tensor(0.0, device=self.accelerator.device)
+
+        ewc_loss = self.accelerator.reduce(ewc_loss, 'mean')
+        return ewc_loss
+
+    def store_current_parameters(self) -> Dict[str, torch.Tensor]:
+        """Store the current model parameters.
+
+        Returns:
+            Dictionary mapping parameter names to their current values
+        """
+        model = self.accelerator.unwrap_model(self.model)
+        old_params = {}
+        for name, param in model.named_parameters():
+            with deepspeed.zero.GatheredParameters([param], modifier_rank=0):
+                if self.accelerator.is_main_process:
+                    if param.requires_grad:
+                        old_params[name] = param.data.clone().detach()
+        return old_params
 
     def compute_fisher_information(
         self, num_samples: int = 120
@@ -161,11 +174,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         """
         # Get unwrapped model for computing Fisher
         model = self.accelerator.unwrap_model(self.model)
-        self.accelerator.device
-
-        # Make sure parameters require gradients
-        for param in model.parameters():
-            param.requires_grad_(True)
 
         # Initialize fisher information dictionary
         fisher_info = {}
@@ -206,7 +214,9 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             model.zero_grad()
 
             try:
-                loss, _ = self.compute_loss(model, batch, return_outputs=True)
+                loss, _ = super(ContinualDPOEWCTrainer, self).compute_loss(
+                    model, batch, return_outputs=True
+                )
 
                 # Check if loss requires gradient
                 if not loss.requires_grad:
@@ -237,22 +247,6 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
 
         print(f'Computed Fisher information for {sample_count} examples')
         return fisher_info
-
-    def store_current_parameters(self) -> Dict[str, torch.Tensor]:
-        """Store the current model parameters.
-
-        Returns:
-            Dictionary mapping parameter names to their current values
-        """
-        model = self.accelerator.unwrap_model(self.model)
-        old_params = {}
-
-        for name, param in model.named_parameters():
-            with deepspeed.zero.GatheredParameters([param], modifier_rank=0):
-                if self.accelerator.is_main_process:
-                    if param.requires_grad:
-                        old_params[name] = param.data.clone().detach()
-        return old_params
 
     def train(self) -> Any:
         """Override train method to incorporate EWC regularization."""

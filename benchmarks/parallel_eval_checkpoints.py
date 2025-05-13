@@ -9,6 +9,7 @@ from dpo.continual_dpo_trainer import (
     ContinualDPOConfig,
     ContinualDPOTrainer,
 )
+from safetensors import safe_open
 from transformers import (
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
@@ -30,6 +31,7 @@ def main(
     model_args: ModelConfig,
 ) -> None:
     # Determine torch dtype and quantization configs
+
     torch_dtype = (
         model_args.torch_dtype
         if model_args.torch_dtype in ['auto', None]
@@ -52,7 +54,11 @@ def main(
 
     # Checkpoint loop
     checkpoint_path = script_args.checkpoint_dir
-    dataset_name = checkpoint_path.split('/')[-2].replace('.', '')
+    if 'PPO' in checkpoint_path:
+        dataset_name = 'dataset-' + checkpoint_path.split('/')[-2].split('_')[-1]
+    else:
+        dataset_name = checkpoint_path.split('/')[-2].replace('.', '')
+
     checkpoint_step = checkpoint_path.split('/')[-1].replace('.', '')
     print(
         f'Evaluating checkpoint: {checkpoint_step} trained on dataset: {dataset_name} on all tasks'
@@ -60,11 +66,32 @@ def main(
     checkpoint_name = dataset_name + '_' + checkpoint_step
     print('checkpoint_name', checkpoint_name)
 
-    model = AutoModelForCausalLM.from_pretrained(
-        checkpoint_path,
-        trust_remote_code=model_args.trust_remote_code,
-        **model_kwargs,
-    )
+    if 'PPO' in checkpoint_path:
+        # remove the prefix 'policy.' from the keys to load the model; skip the critic and value model
+        prefix = 'policy.'
+        with safe_open(
+            checkpoint_path + '/model.safetensors', framework='pt', device='cpu'
+        ) as f:
+            clean_sd = {
+                k[len(prefix) :] if k.startswith(prefix) else k: f.get_tensor(k)
+                for k in f.keys()
+                if not (
+                    k.startswith('critic_backbone.') or k.startswith('value_model.')
+                )
+            }
+
+        model = AutoModelForCausalLM.from_pretrained(
+            checkpoint_path,
+            trust_remote_code=model_args.trust_remote_code,
+            state_dict=clean_sd,
+            **model_kwargs,
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            checkpoint_path,
+            trust_remote_code=model_args.trust_remote_code,
+            **model_kwargs,
+        )
     peft_config = get_peft_config(model_args)
 
     ref_model = AutoModelForCausalLM.from_pretrained(
