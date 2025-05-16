@@ -163,9 +163,10 @@ def main(
             trainer.log_metrics(f'eval/dataset/{i}', metrics)
             trainer.save_metrics('eval', metrics)
 
-            # Log metrics to WandB
-            wb.log({'eval': {'last': metrics}})
-            wb.log({f'task/{custom_repo_name}/last': metrics})
+            if training_args.local_rank in (None, -1, 0):
+                # Log metrics to WandB
+                wb.log({'eval': {'dataset': i, 'last': metrics}})
+                wb.log({f'task/{custom_repo_name}/dataset/{i}': metrics})
 
         # Save model checkpoint and optionally push
         if not training_args.push_to_hub:
@@ -178,6 +179,9 @@ def main(
 
         ref_policy = None
         old_logprobs, old_rewards = trainer.old_logprobs, trainer.old_rewards
+        if hasattr(trainer, 'deepspeed') and trainer.deepspeed is not None:
+            del trainer.deepspeed
+            torch.cuda.empty_cache()
 
     print('Training completed for all tasks!')
 

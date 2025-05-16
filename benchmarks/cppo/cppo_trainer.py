@@ -356,6 +356,7 @@ class CPPOTrainer(PPOTrainer):
             CPPOTrainer.policy_value_models = self.model
             self.model.config = self.policy_model.config  # needed for pushing to hub
         else:
+            disable_dropout_in_model(self.reward_model)
             # Subsequent tasks: Reuse existing model
             self.model = CPPOTrainer.policy_value_models
             self.model.config = self.policy_model.config  # needed for pushing to hub
