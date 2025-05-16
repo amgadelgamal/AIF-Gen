@@ -270,8 +270,9 @@ class ContinualPPOTrainer(PPOTrainer):
                 gradient_accumulation_steps=args.gradient_accumulation_steps
             )
             self.accelerator = accelerator
+            self.gather_function = self.accelerator.gather_for_metrics
             ContinualPPOTrainer.shared_accelerator = accelerator
-        else:
+        elif False:
             self.accelerator = ContinualPPOTrainer.shared_accelerator
             self.gather_function = self.accelerator.gather_for_metrics
             if (
@@ -336,7 +337,7 @@ class ContinualPPOTrainer(PPOTrainer):
             self.model = PolicyAndValueWrapper(self.policy_model, self.value_model)
             ContinualPPOTrainer.policy_value_models = self.model
             self.model.config = self.policy_model.config  # needed for pushing to hub
-        else:
+        elif False:
             # Subsequent tasks: Reuse existing model
             self.model = ContinualPPOTrainer.policy_value_models
             self.model.config = self.policy_model.config  # needed for pushing to hub
@@ -407,7 +408,7 @@ class ContinualPPOTrainer(PPOTrainer):
                 self.model, self.optimizer, self.dataloader
             )
             ContinualPPOTrainer.ds_wrapped_models = self.model
-        else:
+        elif False:
             # For subsequent tasks, only prepare optimizer and dataloader
             self.optimizer, self.dataloader = self.accelerator.prepare(
                 self.optimizer, self.dataloader
@@ -971,6 +972,7 @@ class ContinualPPOTrainer(PPOTrainer):
             ContinualPPOTrainer.class_ref_model = original_ref_model
 
         # Ensure the class variable is updated
+        # TODO: Double check this is fine to keep
         ContinualPPOTrainer.class_ref_model = self.ref_model
         if self.is_deepspeed_enabled:
             ContinualPPOTrainer.ds_wrapped_models = self.deepspeed
