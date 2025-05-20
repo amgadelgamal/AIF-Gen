@@ -18,7 +18,7 @@ dataset_name='aifgen-long-piecewise'
 accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero2.yaml \
     benchmarks/ppo_ewc/ppo_EWC_continual.py \
     --wandb_project "$dataset_name-post-May-19" \
-    --wandb_run_name "Qwen2-0.5B-PPO-${dataset_name}-multi-gpu" \
+    --wandb_run_name "Qwen2-0.5B-PPO-EWC-${dataset_name}-multi-gpu" \
     --dataset_name $dataset_name \
     --sft_model_path Qwen/Qwen2-0.5B-Instruct \
     --value_model_path LifelongAlignment/Qwen2-0.5B-Instruct_${dataset_name}_REWARD_0 \
@@ -35,5 +35,5 @@ accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero
     --eval_steps 200 \
     --save_steps 300 \
     --bf16 \
-    --output_dir "$SCRATCH/Qwen2-0.5B-PPO-${dataset_name}" \
+    --output_dir "$SCRATCH/Qwen2-0.5B-PPO-EWC-${dataset_name}" \
     --no_remove_unused_columns
