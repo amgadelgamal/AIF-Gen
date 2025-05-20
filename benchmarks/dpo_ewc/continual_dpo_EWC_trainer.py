@@ -167,7 +167,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             batch = move_to_device(batch)
 
             model.zero_grad(set_to_none=True)
-            loss = self.compute_dpo_loss(model, batch)
+            loss = self.compute_dpo_loss_for_fisher(model, batch)
             loss.backward()
 
             for name, param in model.named_parameters():
@@ -183,7 +183,7 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
             fisher[name] /= sample_count
         return fisher
 
-    def compute_dpo_loss(
+    def compute_dpo_loss_for_fisher(
         self,
         model: Union[PreTrainedModel, nn.Module],
         batch: dict[str, Union[torch.Tensor, Any]],
