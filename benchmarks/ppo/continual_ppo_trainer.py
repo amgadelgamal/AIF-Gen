@@ -113,7 +113,6 @@ class ContinualPPOConfig(PPOConfig):
 
 
 class ContinualPPOTrainer(PPOTrainer):
-
     def __init__(
         self,
         args: Optional[PPOConfig] = None,
@@ -142,7 +141,9 @@ class ContinualPPOTrainer(PPOTrainer):
         self.shared_accelerator: Optional[Accelerator] = None
         self.current_task_index: Optional[int] = None
         self.policy_value_models: Any = None  # the policy and value model wrapper
-        self.ds_wrapped_models: Any = None # TODO work with this after deepspeed is initialized
+        self.ds_wrapped_models: Any = (
+            None  # TODO work with this after deepspeed is initialized
+        )
         self.accelerator: Accelerator = None  # now non-optional after creation
 
         # Basic setup and validation
@@ -1192,13 +1193,12 @@ class ContinualPPOTrainer(PPOTrainer):
         return self
 
     def save_model(self, output_dir: str, _internal_call=True) -> None:
-        """
-        Manually save the model (and training state) to a specified directory.
+        """Manually save the model (and training state) to a specified directory.
         This follows a similar procedure as _save_checkpoint.
         """
-
         # Save the model files to output_dir (marking _internal_call True)
         from transformers import Trainer  # ensure Trainer is imported
+
         Trainer.save_model(self, output_dir, _internal_call=True)
 
         # If not saving only the model, save optimizer, scheduler, and RNG state
@@ -1208,7 +1208,7 @@ class ContinualPPOTrainer(PPOTrainer):
             self._save_rng_state(output_dir)
 
         # Save the trainer state
-        trainer_state_path = os.path.join(output_dir, "trainer_state.json")
+        trainer_state_path = os.path.join(output_dir, 'trainer_state.json')
         self.state.save_to_json(trainer_state_path)
 
         # Optionally push to hub if that option is enabled

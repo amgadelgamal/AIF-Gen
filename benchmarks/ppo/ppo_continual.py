@@ -4,11 +4,6 @@ import os
 
 import torch
 import wandb as wb
-from continual_ppo_trainer import (
-    ContinualPPOArguments,
-    ContinualPPOConfig,
-    ContinualPPOTrainer,
-)
 from datasets import Dataset
 from transformers import (
     AutoModelForCausalLM,
@@ -21,10 +16,15 @@ from trl import (
     get_kbit_device_map,
     get_peft_config,
     get_quantization_config,
+    setup_chat_format,
 )
-from trl import setup_chat_format
 
 from benchmarks.dataloading import init_continual_dataset
+from benchmarks.ppo.continual_ppo_trainer import (
+    ContinualPPOArguments,
+    ContinualPPOConfig,
+    ContinualPPOTrainer,
+)
 
 
 def main(
@@ -106,7 +106,9 @@ def main(
             value_model_path = script_args.value_model_path
         else:
             model_path = os.path.join(training_args.output_dir, 'last')
-            value_model_path = os.path.join(training_args.output_dir, 'last', 'value_model')
+            value_model_path = os.path.join(
+                training_args.output_dir, 'last', 'value_model'
+            )
         policy = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path=model_path,
             trust_remote_code=model_args.trust_remote_code,
@@ -126,7 +128,7 @@ def main(
                 value_model_path,
                 trust_remote_code=model_args.trust_remote_code,
                 num_labels=1,
-                from_tf=True,            # or use `subfolder="safetensors"` if you saved a .safetensors file
+                from_tf=True,  # or use `subfolder="safetensors"` if you saved a .safetensors file
             )
 
         # Build custom repository name for this task
@@ -173,9 +175,6 @@ def main(
             peft_config=peft_config,
         )
 
-        # if i == 0:
-        #     trainer.save_model(os.path.join(training_args.output_dir, 'checkpoint-0'))
-
         # Set current task in trainer for task-based logging
         trainer.set_task(f'task_{i}')
 
@@ -208,9 +207,8 @@ def main(
 
         value_model_dir = os.path.join(last_dir, 'value_model')
         os.makedirs(value_model_dir, exist_ok=True)
-        value_model.save_pretrained(value_model_dir,
-                                    safe_serialization=False)
-        
+        value_model.save_pretrained(value_model_dir, safe_serialization=False)
+
         trainer.accelerator.wait_for_everyone()
 
         if training_args.push_to_hub:
