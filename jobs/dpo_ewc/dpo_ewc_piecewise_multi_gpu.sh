@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=aif-gen-dpo-piecewise-preference-shift
+#SBATCH --job-name=aif-gen-dpo-ewc-piecewise-preference-shift
 #SBATCH --nodes=1                 # Request 2 nodes
 #SBATCH --gpus-per-node=h100:4     # Request 4 H100 GPUs per node
 #SBATCH --ntasks-per-node=4        # One task per GPU
@@ -16,8 +16,8 @@ source .env
 
 dataset_name='aifgen-piecewise-preference-shift'
 
-accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero3.yaml \
-    benchmarks/dpo/dpo_continual.py \
+accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero2.yaml \
+    benchmarks/dpo_ewc/dpo_EWC_continual.py \
     --dataset_name $dataset_name \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
     --reward_model_path LifelongAlignment/Qwen2.5-0.5B-Instruct_${dataset_name}_REWARD \
@@ -31,7 +31,7 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
     --eval_steps 500 \
     --save_steps 500 \
     --bf16 \
-    --output_dir "$SCRATCH/projects/Qwen2-0.5B-DPO-${dataset_name}" \
+    --output_dir "$SCRATCH/projects/Qwen2-0.5B-DPO-EWC-${dataset_name}" \
     --no_remove_unused_columns \
     --wandb_project $dataset_name   \
-    --wandb_run_name "Qwen2-0.5B-DPO-${dataset_name}-multi-gpu"
+    --wandb_run_name "Qwen2-0.5B-DPO-EWC-${dataset_name}-multi-gpu"

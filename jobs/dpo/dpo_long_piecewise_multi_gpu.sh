@@ -7,7 +7,7 @@
 #SBATCH --mem=64G
 #SBATCH --time=24:00:00
 #SBATCH --output=out/%x.%j.out     # Include job name + job ID
-#SBATCH --error=out/%x.%j.err      # Include job name + job ID 
+#SBATCH --error=out/%x.%j.err      # Include job name + job ID
 #SBATCH --mail-type=ALL
 #SBATCH --account=aip-rrabba
 #SBATCH --mail-user=shahrad_m@icloud.com  # Update with your email
@@ -20,7 +20,7 @@ accelerate launch --config_file benchmarks/dpo/accelerate_configs/deepspeed_zero
     benchmarks/dpo/dpo_continual.py \
     --dataset_name $dataset_name \
     --model_name_or_path Qwen/Qwen2-0.5B-Instruct \
-    --reward_model_path LifelongAlignment/Qwen2.5-0.5B-Instruct_CPPO_REWARD \
+    --reward_model_path LifelongAlignment/Qwen2.5-0.5B-Instruct_${dataset_name}_REWARD \
     --learning_rate 5.0e-6 \
     --num_train_epochs 4 \
     --per_device_train_batch_size 8 \
