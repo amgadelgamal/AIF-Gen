@@ -22,8 +22,8 @@ accelerate launch --config_file benchmarks/ppo/accelerate_configs/deepspeed_zero
     --wandb_run_name "Qwen2-0.5B-PPO-${dataset_name}-multi-gpu" \
     --dataset_name "$dataset_name" \
     --sft_model_path Qwen/Qwen2-0.5B-Instruct \
-    --value_model_path LifelongAlignment/Qwen2-0.5B-Instruct_${dataset_name}_REWARD_0 \
-    --reward_model_path LifelongAlignment/Qwen2-0.5B-Instruct_${dataset_name}_REWARD \
+    --value_model_path LifelongAlignment/Qwen2-0.5B-Instruct_CPPO_REWARD_0 \
+    --reward_model_path LifelongAlignment/Qwen2-0.5B-Instruct_CPPO_REWARD \
     --learning_rate 1.0e-6 \
     --kl_coef 0.37 \
     --cliprange 0.1 \
