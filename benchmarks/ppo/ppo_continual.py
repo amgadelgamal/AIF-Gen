@@ -103,8 +103,10 @@ def main(
         # Load main model and (optionally) reference model
         if i == 0:
             model_path = training_args.sft_model_path
+            value_model_path = script_args.value_model_path
         else:
             model_path = os.path.join(training_args.output_dir, 'last')
+            value_model_path = os.path.join(training_args.output_dir, 'last', 'value_model')
         policy = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path=model_path,
             trust_remote_code=model_args.trust_remote_code,
@@ -112,11 +114,20 @@ def main(
         )
 
         # Load value model and policy model (main model)
-        value_model = AutoModelForSequenceClassification.from_pretrained(
-            script_args.value_model_path,
-            trust_remote_code=model_args.trust_remote_code,
-            num_labels=1,
-        )
+        try:
+            value_model = AutoModelForSequenceClassification.from_pretrained(
+                value_model_path,
+                trust_remote_code=model_args.trust_remote_code,
+                num_labels=1,
+            )
+        except OSError:
+            # Maybe it was saved as safetensors?
+            value_model = AutoModelForSequenceClassification.from_pretrained(
+                value_model_path,
+                trust_remote_code=model_args.trust_remote_code,
+                num_labels=1,
+                from_tf=True,            # or use `subfolder="safetensors"` if you saved a .safetensors file
+            )
 
         # Build custom repository name for this task
         custom_repo_name = (
@@ -191,7 +202,17 @@ def main(
                 wb.log({f'task/{custom_repo_name}/last': metrics})  # type: ignore[attr-defined]
 
         # Save model checkpoint and optionally push
-        trainer.save_model(os.path.join(training_args.output_dir, 'last'))
+        last_dir = os.path.join(training_args.output_dir, 'last')
+        policy.save_pretrained(last_dir)
+        tokenizer.save_pretrained(last_dir)
+
+        value_model_dir = os.path.join(last_dir, 'value_model')
+        os.makedirs(value_model_dir, exist_ok=True)
+        value_model.save_pretrained(value_model_dir,
+                                    safe_serialization=False)
+        
+        trainer.accelerator.wait_for_everyone()
+
         if training_args.push_to_hub:
             trainer.push_to_hub(
                 model_name=custom_repo_name,
