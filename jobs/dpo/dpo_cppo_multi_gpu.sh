@@ -7,7 +7,7 @@
 #SBATCH --mem=64G
 #SBATCH --time=24:00:00
 #SBATCH --output=out/%x.%j.out     # Include job name + job ID
-#SBATCH --error=out/%x.%j.err      # Include job name + job ID 
+#SBATCH --error=out/%x.%j.err      # Include job name + job ID
 #SBATCH --mail-type=ALL
 #SBATCH --account=aip-rrabba
 #SBATCH --mail-user=shahrad_m@icloud.com  # Update with your email
