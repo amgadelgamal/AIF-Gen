@@ -52,8 +52,9 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         args: Optional[ContinualDPOEWCConfig] = None,
         **kwargs: Any,
     ):
-        super().__init__(model, ref_model, reward_model, args, **kwargs)
+        self.model_copy = deepcopy(model)  # Copy before deepspeed initialization
         self.ewc_lambda = args.ewc_lambda if args is not None else 100.0
+        super().__init__(model, ref_model, reward_model, args, **kwargs)
 
     def train(self) -> Any:
         result = super().train()
@@ -127,7 +128,11 @@ class ContinualDPOEWCTrainer(ContinualDPOTrainer):
         self, num_samples: int = 120, device: str = 'cuda:0'
     ) -> Dict[str, torch.Tensor]:
         # Computing fisher outside the deepspeed context
-        model = deepcopy(self.accelerator.unwrap_model(self.model)).to(device)
+        model = deepcopy(self.model_copy)
+        model.load_state_dict(
+            self.accelerator.unwrap_model(self.model).state_dict(), strict=False
+        )
+        model = model.to(device)
         model.eval()
 
         fisher = {
