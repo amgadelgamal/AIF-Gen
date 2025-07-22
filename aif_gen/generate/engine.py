@@ -271,9 +271,11 @@ async def _generate_sample(
         meta_prompt_nonce = f'{prompt_idx}'
 
         async with async_semaphore:
+            output = None
             if cache is not None:
                 output = await cache.get(meta_prompt, nonce=meta_prompt_nonce)
-            else:
+
+            if output is None:  # Cache miss or no cache - make API call
                 response = await client.chat.completions.create(
                     model=model_name,
                     messages=[{'role': 'user', 'content': meta_prompt}],
@@ -306,9 +308,11 @@ async def _generate_sample(
             task_prompt = task_prompt1 + task_prompt2
 
             async with async_semaphore:
+                output = None
                 if cache is not None:
                     output = await cache.get(task_prompt1 + task_prompt2)
-                else:
+
+                if output is None:  # Cache miss or no cache - make API calls
                     futures = []
                     for response_prompt in [task_prompt1, task_prompt2]:
                         coro = client.chat.completions.create(
@@ -346,9 +350,11 @@ async def _generate_sample(
         else:
             task_prompt = response_mapper.generate_prompt(task, prompt)
             async with async_semaphore:
+                output = None
                 if cache is not None:
                     output = await cache.get(task_prompt)
-                else:
+
+                if output is None:  # Cache miss or no cache - make API call
                     response = await client.chat.completions.create(
                         model=model_name,
                         messages=[{'role': 'user', 'content': task_prompt}],
