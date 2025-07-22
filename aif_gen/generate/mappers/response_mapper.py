@@ -15,8 +15,8 @@ class ResponseMapper(ResponseMapperBase):
     """
 
     NUM_PREFERENCE_AXES_SAMPLES: int = 3
-    PREFERENCE_INCLUSION_PROB_POS: float = 0.5
-    PREFERENCE_INCLUSION_PROB_NEG: float = 0.5
+    PREFERENCE_INCLUSION_PROB_POS: float = 0.8
+    PREFERENCE_INCLUSION_PROB_NEG: float = 0.8
 
     def __init__(self, suffix_context: Optional[str] = None) -> None:
         self._suffix_context = suffix_context
